@@ -1,0 +1,86 @@
+{
+  "pottery_heal": {
+    "name": "破瓦罐",
+    "symbol": "罐",
+    "type": "container",
+    "value": 0,
+    "rarity": 0.25,
+    "duration": 0,
+    "description": "古老的陶罐，不知里面装着什么",
+    "contains": ["heal_scroll", "heal_scroll", "desert_spring"]
+  },
+  "pottery_trap": {
+    "name": "破瓦罐",
+    "symbol": "罐",
+    "type": "container",
+    "value": 0,
+    "rarity": 0.25,
+    "duration": 0,
+    "description": "古老的陶罐，打开后可能有危险",
+    "contains": ["heal_scroll", "heal_scroll", "heal_scroll", "trap_scorpion"]
+  },
+  "pottery_loot": {
+    "name": "破瓦罐",
+    "symbol": "罐",
+    "type": "container",
+    "value": 0,
+    "rarity": 0.20,
+    "duration": 0,
+    "description": "装饰精美的陶罐，可能藏有宝物",
+    "contains": ["piercing_arrow", "iron_talisman", "heal_scroll", "heal_scroll"]
+  },
+  "trap_scorpion": {
+    "name": "毒蝎",
+    "symbol": "!!",
+    "type": "trap",
+    "value": 3,
+    "rarity": 0.0,
+    "duration": 0,
+    "description": "罐中藏着一只毒蝎！被蜇了！"
+  },
+  "heal_scroll": {
+    "name": "疗伤卷",
+    "symbol": "卷",
+    "type": "heal",
+    "value": 8,
+    "rarity": 0.0,
+    "duration": 0,
+    "description": "古老的疗伤秘方，展开即可止血"
+  },
+  "desert_spring": {
+    "name": "沙漠清泉",
+    "symbol": "泉",
+    "type": "heal",
+    "value": 15,
+    "rarity": 0.0,
+    "duration": 0,
+    "description": "沙漠深处涌出的清泉，饮用可恢复大半体力"
+  },
+  "iron_talisman": {
+    "name": "铁甲符",
+    "symbol": "甲",
+    "type": "defense",
+    "value": 3,
+    "rarity": 0.0,
+    "duration": 5,
+    "description": "敦煌守将遗留的护甲符文，可抵挡数次攻击"
+  },
+  "piercing_arrow": {
+    "name": "破甲矢",
+    "symbol": "矢",
+    "type": "attack",
+    "value": 3,
+    "rarity": 0.0,
+    "duration": 5,
+    "description": "以精铁打造的箭矢，可穿透敌人护甲"
+  },
+  "ancient_key": {
+    "name": "家人",
+    "symbol": "人",
+    "type": "key",
+    "value": 1,
+    "rarity": 0.0,
+    "duration": 0,
+    "description": "失散的家人，找到他们一起离开"
+  }
+}

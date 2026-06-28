@@ -1,0 +1,42 @@
+{
+  "sand": {
+    "name": "沙蝎",
+    "symbol": "蝎",
+    "hp": 6,
+    "atk": 2,
+    "color": [0.7, 0.5, 0.2],
+    "xp": 2
+  },
+  "desert": {
+    "name": "沙虫",
+    "symbol": "虫",
+    "hp": 8,
+    "atk": 3,
+    "color": [0.6, 0.45, 0.3],
+    "xp": 3
+  },
+  "grotto": {
+    "name": "石魔",
+    "symbol": "魔",
+    "hp": 12,
+    "atk": 4,
+    "color": [0.4, 0.35, 0.3],
+    "xp": 5
+  },
+  "oasis": {
+    "name": "水妖",
+    "symbol": "妖",
+    "hp": 7,
+    "atk": 3,
+    "color": [0.3, 0.55, 0.6],
+    "xp": 3
+  },
+  "ancient_road": {
+    "name": "盗匪",
+    "symbol": "匪",
+    "hp": 10,
+    "atk": 3,
+    "color": [0.5, 0.2, 0.15],
+    "xp": 4
+  }
+}

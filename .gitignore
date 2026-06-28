@@ -1,0 +1,18 @@
+# Godot
+.godot/
+*.import
+*.uid
+
+# macOS
+.DS_Store
+
+# Web export (regenerate locally)
+web/cert.pem
+web/key.pem
+
+# IDE
+.vscode/
+.cursor/
+
+# Exported files (regenerate locally)
+.godot/exported/

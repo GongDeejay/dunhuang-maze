@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏地图底部行显示问题 - 开发故事</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/night.css">
+    <style>
+        .reveal h1, .reveal h2, .reveal h3 {
+            color: #e6d3a7;
+        }
+        .reveal .slides section {
+            text-align: left;
+        }
+        .reveal .slides section h1 {
+            text-align: center;
+        }
+        .reveal .slides section h2 {
+            border-bottom: 2px solid #e6d3a7;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .reveal code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+        }
+        .reveal pre {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .reveal pre code {
+            background: transparent;
+            padding: 0;
+        }
+        .attempt-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 10px 0;
+        }
+        .attempt-card h4 {
+            margin: 0 0 8px 0;
+            color: #f0c040;
+        }
+        .result-fail {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+        .result-success {
+            color: #51cf66;
+            font-weight: bold;
+        }
+        .lesson-box {
+            background: rgba(81, 207, 102, 0.1);
+            border-left: 4px solid #51cf66;
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .root-cause-box {
+            background: rgba(255, 107, 107, 0.1);
+            border-left: 4px solid #ff6b6b;
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .benefit-list {
+            list-style: none;
+            padding: 0;
+        }
+        .benefit-list li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+        .benefit-list li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #51cf66;
+            font-weight: bold;
+        }
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+        }
+        .timeline-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        .marker-fail { background: #ff6b6b; }
+        .marker-success { background: #51cf66; }
+        .center-content {
+            text-align: center !important;
+        }
+        .subtitle {
+            color: #a0a0a0;
+            font-size: 0.7em;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+            <!-- 幻灯片1: 封面 -->
+            <section class="center-content">
+                <h1>🔍 游戏地图显示问题</h1>
+                <h3>一次调试之旅的经验教训</h3>
+                <p class="subtitle">敦煌迷宫游戏 · Godot 4.7 · 2026-06-26</p>
+            </section>
+
+            <!-- 幻灯片2: 问题描述 -->
+            <section>
+                <h2>❓ 问题描述</h2>
+                <div class="attempt-card">
+                    <p>在敦煌迷宫游戏中，<strong>地图最底部的2行格子始终不可见</strong>。</p>
+                    <p>玩家无法看到完整的迷宫区域，影响游戏体验。</p>
+                </div>
+                <p style="margin-top: 30px;">🎯 目标：让整个迷宫在任何分辨率下都能完整显示</p>
+            </section>
+
+            <!-- 幻灯片3: 调试历程概览 -->
+            <section>
+                <h2>📜 调试历程</h2>
+                <div class="timeline-item">
+                    <div class="timeline-marker marker-fail"></div>
+                    <span>尝试1: 修改相机Y轴钳制</span>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-marker marker-fail"></div>
+                    <span>尝试2: 修复缩放计算</span>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-marker marker-fail"></div>
+                    <span>尝试3: 添加底部边距</span>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-marker marker-fail"></div>
+                    <span>尝试4: 全局缩小10%</span>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-marker marker-success"></div>
+                    <span>尝试5: 相对坐标自适应缩放 ✅</span>
+                </div>
+                <p style="margin-top: 30px; color: #a0a0a0;">5次尝试，4次失败，最终找到根本原因</p>
+            </section>
+
+            <!-- 幻灯片4: 尝试1-2 -->
+            <section>
+                <h2>❌ 尝试1 & 2</h2>
+                <div class="attempt-card">
+                    <h4>尝试1: 修改GameCamera的Y轴钳制</h4>
+                    <p>在 <code>game_camera.gd</code> 中增加20px偏移量</p>
+                    <p class="result-fail">结果：无效 — 问题不在相机钳制</p>
+                </div>
+                <div class="attempt-card">
+                    <h4>尝试2: 修复非滚动模式的缩放计算</h4>
+                    <p>在 <code>main.gd</code> 中修复缩放因子计算，添加居中逻辑</p>
+                    <p class="result-fail">结果：无效 — 根本原因是视口尺寸计算错误</p>
+                </div>
+            </section>
+
+            <!-- 幻灯片5: 尝试3-4 -->
+            <section>
+                <h2>❌ 尝试3 & 4</h2>
+                <div class="attempt-card">
+                    <h4>尝试3: 添加底部边距</h4>
+                    <p>为Godot编辑器底部工具栏预留40px空间</p>
+                    <p class="result-fail">结果：无效 — 问题不在编辑器工具栏遮挡</p>
+                </div>
+                <div class="attempt-card">
+                    <h4>尝试4: 全局缩放0.9</h4>
+                    <p>将整个地图缩小10%</p>
+                    <p class="result-fail">结果：无效 — 缩小后底部行仍然被裁剪</p>
+                </div>
+            </section>
+
+            <!-- 幻灯片6: 尝试5 - 成功方案 -->
+            <section>
+                <h2>✅ 尝试5: 相对坐标自适应缩放</h2>
+                <div class="attempt-card" style="border: 2px solid #51cf66;">
+                    <h4>最终方案</h4>
+                    <p>从窗口四角计算相对坐标，自动缩放确保完整显示</p>
+                    <pre><code>var scale_x = game_w / maze_pixel_w
+var scale_y = game_h / maze_pixel_h
+var draw_scale = min(scale_x, scale_y)
+var offset = Vector2((game_w - scaled_w) / 2, 
+                     (game_h - scaled_h) / 2)</code></pre>
+                    <p class="result-success">结果：成功！整个迷宫完整显示</p>
+                </div>
+            </section>
+
+            <!-- 幻灯片7: 根本原因 -->
+            <section>
+                <h2>🔍 根本原因分析</h2>
+                <div class="root-cause-box">
+                    <p><strong>1. 视口尺寸误解</strong></p>
+                    <p><code>get_viewport_rect().size</code> 返回完整视口大小，但实际可用游戏区域更小</p>
+                </div>
+                <div class="root-cause-box">
+                    <p><strong>2. 坐标系混淆</strong></p>
+                    <p>使用绝对坐标而非相对坐标，导致边界计算错误</p>
+                </div>
+                <div class="root-cause-box">
+                    <p><strong>3. 过度复杂化</strong></p>
+                    <p>引入GameCamera滚动机制增加了复杂度，但没有解决核心问题</p>
+                </div>
+            </section>
+
+            <!-- 幻灯片8: 教训1-2 -->
+            <section>
+                <h2>💡 关键教训</h2>
+                <div class="lesson-box">
+                    <h4>教训1: 优先使用相对坐标</h4>
+                    <pre><code># ❌ 错误：绝对坐标
+var offset = Vector2.ZERO
+
+# ✅ 正确：从窗口角落计算相对坐标
+var offset = Vector2((game_w - scaled_w) / 2, 
+                     (game_h - scaled_h) / 2)</code></pre>
+                </div>
+                <div class="lesson-box">
+                    <h4>教训2: 先计算可用区域再绘制</h4>
+                    <p>1. 计算可用宽度 → 2. 计算可用高度 → 3. 计算缩放 → 4. 计算居中偏移</p>
+                </div>
+            </section>
+
+            <!-- 幻灯片9: 教训3-4 -->
+            <section>
+                <h2>💡 关键教训</h2>
+                <div class="lesson-box">
+                    <h4>教训3: 避免过早优化</h4>
+                    <ul>
+                        <li>不要一开始就引入复杂机制（如Camera滚动）</li>
+                        <li>先用最简单的方法验证可行性</li>
+                        <li>只有在简单方法不够时才增加复杂度</li>
+                    </ul>
+                </div>
+                <div class="lesson-box">
+                    <h4>教训4: 测试时关注边界情况</h4>
+                    <ul>
+                        <li>始终测试地图的最大尺寸</li>
+                        <li>检查四角和边缘是否完整显示</li>
+                        <li>使用不同分辨率的窗口测试</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 幻灯片10: 最终方案优势 -->
+            <section>
+                <h2>🎯 最终方案优势</h2>
+                <ul class="benefit-list">
+                    <li><strong>简单</strong> — 不需要Camera滚动机制</li>
+                    <li><strong>可靠</strong> — 从窗口角落计算，确保完整显示</li>
+                    <li><strong>自适应</strong> — 自动计算最佳缩放比例</li>
+                    <li><strong>可维护</strong> — 代码清晰，易于理解和修改</li>
+                </ul>
+                <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                    <p><strong>适用场景：</strong></p>
+                    <p>✓ 需要完整显示整个地图的游戏 · ✓ 地图尺寸可能变化的场景 · ✓ 需要自适应不同分辨率</p>
+                </div>
+            </section>
+
+            <!-- 幻灯片11: 总结 -->
+            <section class="center-content">
+                <h1>🎓 总结</h1>
+                <p style="font-size: 1.2em; margin: 40px 0;">有时候，<strong>最简单的解决方案</strong>才是最好的</p>
+                <p style="color: #a0a0a0;">与其修补复杂系统，不如回归本质</p>
+                <p style="margin-top: 60px; color: #e6d3a7;">谢谢！</p>
+            </section>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            slideNumber: true,
+            transition: 'slide',
+            width: 1200,
+            height: 700
+        });
+    </script>
+</body>
+</html>

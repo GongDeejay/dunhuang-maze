@@ -1,0 +1,9 @@
+{
+  "max_hp": 18,
+  "base_atk": 5,
+  "move_speed": 1.0,
+  "reveal_radius": 4,
+  "crit_chance": 0.10,
+  "crit_multiplier": 2,
+  "dodge_chance": 0.08
+}

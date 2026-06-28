@@ -1,0 +1,52 @@
+{
+  "levels": [
+    {
+      "name": "汉唐古道",
+      "description": "古老的商道，还有人走过的痕迹",
+      "maze_width": 25,
+      "maze_height": 20,
+      "monster_density": 0.08,
+      "difficulty": 1,
+      "monster_scale": 1.0,
+      "waypoints": 3,
+      "key_count": 2,
+      "terrain_effect": {
+        "desert": {"move_damage": 1, "description": "沙暴侵蚀"},
+        "grotto": {"reveal_penalty": -2, "description": "洞窟黑暗"},
+        "oasis": {"move_heal": 2, "description": "泉水恢复"}
+      }
+    },
+    {
+      "name": "无人区",
+      "description": "没有路，没有方向，只有沙丘",
+      "maze_width": 30,
+      "maze_height": 25,
+      "monster_density": 0.10,
+      "difficulty": 2,
+      "monster_scale": 1.2,
+      "waypoints": 4,
+      "key_count": 3,
+      "terrain_effect": {
+        "desert": {"move_damage": 1, "description": "沙暴肆虐"},
+        "grotto": {"reveal_penalty": -2, "description": "洞窟黑暗"},
+        "oasis": {"move_heal": 2, "description": "泉水恢复"}
+      }
+    },
+    {
+      "name": "三危山",
+      "description": "石窟深处，有什么在等着你",
+      "maze_width": 35,
+      "maze_height": 30,
+      "monster_density": 0.12,
+      "difficulty": 3,
+      "monster_scale": 1.4,
+      "waypoints": 5,
+      "key_count": 4,
+      "terrain_effect": {
+        "desert": {"move_damage": 2, "description": "沙暴肆虐"},
+        "grotto": {"reveal_penalty": -3, "description": "洞窟黑暗"},
+        "oasis": {"move_heal": 3, "description": "泉水恢复"}
+      }
+    }
+  ]
+}
