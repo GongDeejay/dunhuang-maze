@@ -305,3 +305,19 @@ func can_move(cx: int, cy: int, dir: int) -> bool:
 
 func _in_bounds(x: int, y: int) -> bool:
 	return x >= 0 and x < width and y >= 0 and y < height
+
+func get_reachable_cells() -> Dictionary:
+	var reachable: Dictionary = {}
+	var queue: Array = [Vector2i(0, 0)]
+	reachable[Vector2i(0, 0)] = true
+
+	while queue.size() > 0:
+		var current: Vector2i = queue.pop_front()
+		for d in [N, S, E, W]:
+			if can_move(current.x, current.y, d):
+				var next: Vector2i = current + Vector2i(DX[d], DY[d])
+				if _in_bounds(next.x, next.y) and not reachable.has(next):
+					reachable[next] = true
+					queue.append(next)
+
+	return reachable

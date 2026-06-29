@@ -40,6 +40,10 @@ window/size/override_controls_size=true
 
 enabled=PackedStringArray("res://addons/beckett/plugin.cfg")
 
+[gui]
+
+theme/custom_font="res://assets/fonts/NotoSansSC-Regular.ttf"
+
 [input]
 
 move_up={
@@ -79,7 +83,3 @@ regenerate={
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
-
-[gui]
-
-theme/custom_font="res://assets/fonts/NotoSansSC-Regular.ttf"
