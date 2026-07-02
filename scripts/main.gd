@@ -574,6 +574,144 @@ func _draw() -> void:
 		return
 
 	var vp = get_viewport_rect().size
+	var is_mobile_view = mobile_controls.is_mobile
+
+	if is_mobile_view:
+		_draw_mobile_view(vp)
+	else:
+		_draw_pc_view(vp)
+
+func _draw_mobile_view(vp: Vector2) -> void:
+	var view_size: int = 8
+	var panel_w: float = 0
+	var game_w: float = vp.x
+	var game_h: float = vp.y - 80
+
+	var cell_w: float = game_w / view_size
+	var cell_h: float = game_h / view_size
+	var cell_sz: float = minf(cell_w, cell_h)
+
+	var center_x: int = player.pos.x
+	var center_y: int = player.pos.y
+	var half: int = view_size / 2
+
+	var start_x: int = center_x - half
+	var start_y: int = center_y - half
+
+	draw_rect(Rect2(0, 0, game_w, game_h + 80), Color(0.12, 0.10, 0.08))
+
+	for vy in view_size:
+		for vx in view_size:
+			var gx: int = start_x + vx
+			var gy: int = start_y + vy
+
+			var screen_x: float = vx * cell_sz
+			var screen_y: float = vy * cell_sz
+
+			if gx < 0 or gx >= maze_width or gy < 0 or gy >= maze_height:
+				draw_rect(Rect2(screen_x, screen_y, cell_sz, cell_sz), Color(0.15, 0.12, 0.10))
+				continue
+
+			var t = maze.get_terrain(gx, gy)
+			var t_key = MazeGenerator.TERRAIN_KEY[t]
+			var cfg = DataLoader.get_terrain_config(t_key)
+			var floor_color = DataLoader.color_from_array(cfg.get("floor_color", [0.8, 0.8, 0.8]))
+
+			if not _is_revealed(Vector2i(gx, gy)) and not visited.get(Vector2i(gx, gy), false):
+				floor_color = Color(0.15, 0.12, 0.10)
+
+			draw_rect(Rect2(screen_x + 1, screen_y + 1, cell_sz - 2, cell_sz - 2), floor_color)
+
+			var cell = maze.grid[gy][gx]
+			var wall_color = Color(0.12, 0.08, 0.05)
+			if (cell & MazeGenerator.N) == 0 and gy > 0:
+				draw_rect(Rect2(screen_x, screen_y, cell_sz, 2), wall_color)
+			if (cell & MazeGenerator.S) == 0 and gy < maze_height - 1:
+				draw_rect(Rect2(screen_x, screen_y + cell_sz - 2, cell_sz, 2), wall_color)
+			if (cell & MazeGenerator.W) == 0 and gx > 0:
+				draw_rect(Rect2(screen_x, screen_y, 2, cell_sz), wall_color)
+			if (cell & MazeGenerator.E) == 0 and gx < maze_width - 1:
+				draw_rect(Rect2(screen_x + cell_sz - 2, screen_y, 2, cell_sz), wall_color)
+
+			if gx == exit_pos.x and gy == exit_pos.y and (game_won or _is_revealed(exit_pos)):
+				draw_rect(Rect2(screen_x + cell_sz * 0.2, screen_y + cell_sz * 0.2,
+					cell_sz * 0.6, cell_sz * 0.6), Color(0.1, 0.8, 0.3))
+
+			for it in items:
+				if is_instance_valid(it) and it.pos == Vector2i(gx, gy) and _is_revealed(it.pos):
+					if it.item_type == "key":
+						_draw_mini_character(Vector2(screen_x, screen_y), cell_sz, 0)
+					else:
+						draw_rect(Rect2(screen_x + cell_sz * 0.3, screen_y + cell_sz * 0.3,
+							cell_sz * 0.4, cell_sz * 0.4), it.color.darkened(0.2))
+
+			for m in monsters:
+				if is_instance_valid(m) and m.pos == Vector2i(gx, gy) and _is_revealed(m.pos):
+					draw_rect(Rect2(screen_x + cell_sz * 0.2, screen_y + cell_sz * 0.2,
+						cell_sz * 0.6, cell_sz * 0.6), m.color.darkened(0.3))
+
+	var player_screen_x: float = half * cell_sz
+	var player_screen_y: float = half * cell_sz
+	_draw_mini_character(Vector2(player_screen_x, player_screen_y), cell_sz, 1)
+
+	_draw_mobile_hud(vp, cell_sz)
+
+func _draw_mini_character(o: Vector2, s: float, char_type: int) -> void:
+	var robe: Color
+	var hair: Color
+	var skin: Color = Color(1.0, 0.85, 0.72)
+
+	match char_type:
+		0:
+			robe = Color(0.86, 0.24, 0.24)
+			hair = Color(0.2, 0.2, 0.2)
+		1:
+			robe = Color(0.27, 0.51, 0.71)
+			hair = Color(0.85, 0.65, 0.13)
+		_:
+			robe = Color(0.31, 0.71, 0.31)
+			hair = Color(0.39, 0.27, 0.16)
+
+	var p: float = s / 16.0
+	draw_rect(Rect2(o.x + 4*p, o.y + 1*p, 8*p, 5*p), hair)
+	draw_rect(Rect2(o.x + 5*p, o.y + 4*p, 6*p, 4*p), skin)
+	draw_rect(Rect2(o.x + 6*p, o.y + 5*p, 1*p, 1*p), Color.WHITE)
+	draw_rect(Rect2(o.x + 9*p, o.y + 5*p, 1*p, 1*p), Color.WHITE)
+	draw_rect(Rect2(o.x + 6*p, o.y + 6*p, 1*p, 1*p), Color.BLACK)
+	draw_rect(Rect2(o.x + 9*p, o.y + 6*p, 1*p, 1*p), Color.BLACK)
+	draw_rect(Rect2(o.x + 4*p, o.y + 8*p, 8*p, 6*p), robe)
+	draw_rect(Rect2(o.x + 4*p, o.y + 10*p, 8*p, 1*p), hair)
+	draw_rect(Rect2(o.x + 2*p, o.y + 9*p, 2*p, 3*p), skin)
+	draw_rect(Rect2(o.x + 12*p, o.y + 9*p, 2*p, 3*p), skin)
+	draw_rect(Rect2(o.x + 5*p, o.y + 14*p, 2*p, 2*p), hair.darkened(0.2))
+	draw_rect(Rect2(o.x + 9*p, o.y + 14*p, 2*p, 2*p), hair.darkened(0.2))
+
+func _draw_mobile_hud(vp: Vector2, cell_sz: float) -> void:
+	var y: float = vp.y - 75
+	var lx: float = 10
+
+	draw_rect(Rect2(0, vp.y - 80, vp.x, 80), Color(0.12, 0.10, 0.08, 0.9))
+
+	var hp_ratio: float = float(player.hp) / float(player.max_hp)
+	draw_rect(Rect2(lx, y, 150, 16), Color(0.3, 0.1, 0.1))
+	draw_rect(Rect2(lx, y, 150 * hp_ratio, 16),
+		Color(0.2, 0.7, 0.3) if hp_ratio > 0.3 else Color(0.9, 0.15, 0.1))
+	draw_string(ThemeDB.fallback_font, Vector2(lx + 5, y + 13),
+		"%d/%d" % [player.hp, player.max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)
+
+	draw_string(ThemeDB.fallback_font, Vector2(lx + 160, y + 13),
+		"步:%d" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.8, 0.8, 0.8))
+
+	if key_tracker.get_remaining() > 0:
+		draw_string(ThemeDB.fallback_font, Vector2(lx + 250, y + 13),
+			"家人:%s" % key_tracker.get_progress(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
+			Color(1.0, 0.8, 0.3))
+
+	if combat_log.size() > 0:
+		draw_string(ThemeDB.fallback_font, Vector2(lx, y + 35),
+			combat_log[-1], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.7, 0.7, 0.7))
+
+func _draw_pc_view(vp: Vector2) -> void:
 	var panel_w: float = 220
 	var game_w: float = vp.x - panel_w
 	var game_h: float = vp.y - 40
