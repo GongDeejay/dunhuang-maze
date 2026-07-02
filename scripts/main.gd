@@ -583,9 +583,8 @@ func _draw() -> void:
 
 func _draw_mobile_view(vp: Vector2) -> void:
 	var view_size: int = 8
-	var panel_w: float = 0
 	var game_w: float = vp.x
-	var game_h: float = vp.y - 80
+	var game_h: float = vp.y
 
 	var cell_w: float = game_w / view_size
 	var cell_h: float = game_h / view_size
@@ -598,7 +597,9 @@ func _draw_mobile_view(vp: Vector2) -> void:
 	var start_x: int = center_x - half
 	var start_y: int = center_y - half
 
-	draw_rect(Rect2(0, 0, game_w, game_h + 80), Color(0.12, 0.10, 0.08))
+	var wall_w: float = maxf(cell_sz * 0.08, 3.0)
+
+	draw_rect(Rect2(0, 0, game_w, game_h), Color(0.12, 0.10, 0.08))
 
 	for vy in view_size:
 		for vx in view_size:
@@ -620,18 +621,19 @@ func _draw_mobile_view(vp: Vector2) -> void:
 			if not _is_revealed(Vector2i(gx, gy)) and not visited.get(Vector2i(gx, gy), false):
 				floor_color = Color(0.15, 0.12, 0.10)
 
-			draw_rect(Rect2(screen_x + 1, screen_y + 1, cell_sz - 2, cell_sz - 2), floor_color)
+			draw_rect(Rect2(screen_x + wall_w, screen_y + wall_w,
+				cell_sz - wall_w * 2, cell_sz - wall_w * 2), floor_color)
 
 			var cell = maze.grid[gy][gx]
 			var wall_color = Color(0.12, 0.08, 0.05)
 			if (cell & MazeGenerator.N) == 0 and gy > 0:
-				draw_rect(Rect2(screen_x, screen_y, cell_sz, 2), wall_color)
+				draw_rect(Rect2(screen_x, screen_y, cell_sz, wall_w), wall_color)
 			if (cell & MazeGenerator.S) == 0 and gy < maze_height - 1:
-				draw_rect(Rect2(screen_x, screen_y + cell_sz - 2, cell_sz, 2), wall_color)
+				draw_rect(Rect2(screen_x, screen_y + cell_sz - wall_w, cell_sz, wall_w), wall_color)
 			if (cell & MazeGenerator.W) == 0 and gx > 0:
-				draw_rect(Rect2(screen_x, screen_y, 2, cell_sz), wall_color)
+				draw_rect(Rect2(screen_x, screen_y, wall_w, cell_sz), wall_color)
 			if (cell & MazeGenerator.E) == 0 and gx < maze_width - 1:
-				draw_rect(Rect2(screen_x + cell_sz - 2, screen_y, 2, cell_sz), wall_color)
+				draw_rect(Rect2(screen_x + cell_sz - wall_w, screen_y, wall_w, cell_sz), wall_color)
 
 			if gx == exit_pos.x and gy == exit_pos.y and (game_won or _is_revealed(exit_pos)):
 				draw_rect(Rect2(screen_x + cell_sz * 0.2, screen_y + cell_sz * 0.2,
@@ -654,7 +656,7 @@ func _draw_mobile_view(vp: Vector2) -> void:
 	var player_screen_y: float = half * cell_sz
 	_draw_mini_character(Vector2(player_screen_x, player_screen_y), cell_sz, 1)
 
-	_draw_mobile_hud(vp, cell_sz)
+	_draw_mobile_hud_overlay(vp)
 
 func _draw_mini_character(o: Vector2, s: float, char_type: int) -> void:
 	var robe: Color
@@ -686,30 +688,35 @@ func _draw_mini_character(o: Vector2, s: float, char_type: int) -> void:
 	draw_rect(Rect2(o.x + 5*p, o.y + 14*p, 2*p, 2*p), hair.darkened(0.2))
 	draw_rect(Rect2(o.x + 9*p, o.y + 14*p, 2*p, 2*p), hair.darkened(0.2))
 
-func _draw_mobile_hud(vp: Vector2, cell_sz: float) -> void:
-	var y: float = vp.y - 75
-	var lx: float = 10
+func _draw_mobile_hud_overlay(vp: Vector2) -> void:
+	var margin: float = 8
+	var bar_w: float = 120
+	var bar_h: float = 14
 
-	draw_rect(Rect2(0, vp.y - 80, vp.x, 80), Color(0.12, 0.10, 0.08, 0.9))
+	draw_rect(Rect2(margin, margin, bar_w + 10, bar_h + 6), Color(0, 0, 0, 0.6))
 
 	var hp_ratio: float = float(player.hp) / float(player.max_hp)
-	draw_rect(Rect2(lx, y, 150, 16), Color(0.3, 0.1, 0.1))
-	draw_rect(Rect2(lx, y, 150 * hp_ratio, 16),
+	draw_rect(Rect2(margin + 5, margin + 3, bar_w, bar_h), Color(0.3, 0.1, 0.1))
+	draw_rect(Rect2(margin + 5, margin + 3, bar_w * hp_ratio, bar_h),
 		Color(0.2, 0.7, 0.3) if hp_ratio > 0.3 else Color(0.9, 0.15, 0.1))
-	draw_string(ThemeDB.fallback_font, Vector2(lx + 5, y + 13),
-		"%d/%d" % [player.hp, player.max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)
+	draw_string(ThemeDB.fallback_font, Vector2(margin + 8, margin + 14),
+		"%d/%d" % [player.hp, player.max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.WHITE)
 
-	draw_string(ThemeDB.fallback_font, Vector2(lx + 160, y + 13),
-		"步:%d" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.8, 0.8, 0.8))
+	draw_rect(Rect2(vp.x - 100, margin, 92, 22), Color(0, 0, 0, 0.6))
+	draw_string(ThemeDB.fallback_font, Vector2(vp.x - 95, margin + 15),
+		"步:%d" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.8, 0.8, 0.8))
 
 	if key_tracker.get_remaining() > 0:
-		draw_string(ThemeDB.fallback_font, Vector2(lx + 250, y + 13),
-			"家人:%s" % key_tracker.get_progress(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
+		draw_rect(Rect2(margin, margin + 24, 80, 18), Color(0, 0, 0, 0.6))
+		draw_string(ThemeDB.fallback_font, Vector2(margin + 5, margin + 37),
+			"家人:%s" % key_tracker.get_progress(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10,
 			Color(1.0, 0.8, 0.3))
 
 	if combat_log.size() > 0:
-		draw_string(ThemeDB.fallback_font, Vector2(lx, y + 35),
-			combat_log[-1], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.7, 0.7, 0.7))
+		var log_y: float = vp.y - 30
+		draw_rect(Rect2(margin, log_y - 5, vp.x - margin * 2, 22), Color(0, 0, 0, 0.6))
+		draw_string(ThemeDB.fallback_font, Vector2(margin + 5, log_y + 10),
+			combat_log[-1], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.7, 0.7, 0.7))
 
 func _draw_pc_view(vp: Vector2) -> void:
 	var panel_w: float = 220
