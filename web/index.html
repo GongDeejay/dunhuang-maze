@@ -89,6 +89,27 @@ body {
 	text-align: center;
 	z-index: 1;
 }
+
+#fullscreen-btn {
+	position: fixed;
+	top: 10px;
+	right: 10px;
+	z-index: 1000;
+	background: rgba(0, 0, 0, 0.6);
+	color: white;
+	border: 2px solid rgba(255, 255, 255, 0.5);
+	border-radius: 8px;
+	padding: 8px 16px;
+	font-size: 14px;
+	cursor: pointer;
+	transition: all 0.3s;
+	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#fullscreen-btn:hover {
+	background: rgba(255, 255, 255, 0.2);
+	border-color: white;
+}
 		</style>
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
@@ -98,6 +119,8 @@ body {
 		<canvas id="canvas">
 			Your browser does not support the canvas tag.
 		</canvas>
+
+		<button id="fullscreen-btn" onclick="toggleFullscreen()">⛶ 全屏</button>
 
 		<noscript>
 			Your browser does not support JavaScript.
@@ -111,6 +134,35 @@ body {
 
 		<script src="index.js"></script>
 		<script>
+function toggleFullscreen() {
+	var canvas = document.getElementById('canvas');
+	if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+		if (canvas.requestFullscreen) {
+			canvas.requestFullscreen();
+		} else if (canvas.webkitRequestFullscreen) {
+			canvas.webkitRequestFullscreen();
+		}
+	} else {
+		if (document.exitFullscreen) {
+			document.exitFullscreen();
+		} else if (document.webkitExitFullscreen) {
+			document.webkitExitFullscreen();
+		}
+	}
+}
+
+document.addEventListener('fullscreenchange', updateFullscreenBtn);
+document.addEventListener('webkitfullscreenchange', updateFullscreenBtn);
+
+function updateFullscreenBtn() {
+	var btn = document.getElementById('fullscreen-btn');
+	if (document.fullscreenElement || document.webkitFullscreenElement) {
+		btn.textContent = '⛶ 退出全屏';
+	} else {
+		btn.textContent = '⛶ 全屏';
+	}
+}
+
 const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":7915624,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
