@@ -626,14 +626,14 @@ func _draw_mobile_view(vp: Vector2) -> void:
 
 			var cell = maze.grid[gy][gx]
 			var wall_color = Color(0.12, 0.08, 0.05)
-			if (cell & MazeGenerator.N) == 0 and gy > 0:
-				draw_rect(Rect2(screen_x, screen_y, cell_sz, wall_w), wall_color)
-			if (cell & MazeGenerator.S) == 0 and gy < maze_height - 1:
+			if (cell & MazeGenerator.S) == 0:
 				draw_rect(Rect2(screen_x, screen_y + cell_sz - wall_w, cell_sz, wall_w), wall_color)
-			if (cell & MazeGenerator.W) == 0 and gx > 0:
-				draw_rect(Rect2(screen_x, screen_y, wall_w, cell_sz), wall_color)
-			if (cell & MazeGenerator.E) == 0 and gx < maze_width - 1:
+			if (cell & MazeGenerator.E) == 0:
 				draw_rect(Rect2(screen_x + cell_sz - wall_w, screen_y, wall_w, cell_sz), wall_color)
+			if gx == 0 and (cell & MazeGenerator.W) == 0:
+				draw_rect(Rect2(screen_x, screen_y, wall_w, cell_sz), wall_color)
+			if gy == 0 and (cell & MazeGenerator.N) == 0:
+				draw_rect(Rect2(screen_x, screen_y, cell_sz, wall_w), wall_color)
 
 			if gx == exit_pos.x and gy == exit_pos.y and (game_won or _is_revealed(exit_pos)):
 				draw_rect(Rect2(screen_x + cell_sz * 0.2, screen_y + cell_sz * 0.2,
