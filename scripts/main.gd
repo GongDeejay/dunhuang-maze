@@ -626,12 +626,17 @@ func _draw_mobile_view(vp: Vector2) -> void:
 
 			var cell = maze.grid[gy][gx]
 			var wall_color = Color(0.12, 0.08, 0.05)
-			if (cell & MazeGenerator.S) == 0:
+
+			# South wall: draw if no passage OR at bottom boundary
+			if (cell & MazeGenerator.S) == 0 or gy == maze_height - 1:
 				draw_rect(Rect2(screen_x, screen_y + cell_sz - wall_w, cell_sz, wall_w), wall_color)
-			if (cell & MazeGenerator.E) == 0:
+			# East wall: draw if no passage OR at right boundary
+			if (cell & MazeGenerator.E) == 0 or gx == maze_width - 1:
 				draw_rect(Rect2(screen_x + cell_sz - wall_w, screen_y, wall_w, cell_sz), wall_color)
+			# West wall: only at left boundary
 			if gx == 0 and (cell & MazeGenerator.W) == 0:
 				draw_rect(Rect2(screen_x, screen_y, wall_w, cell_sz), wall_color)
+			# North wall: only at top boundary
 			if gy == 0 and (cell & MazeGenerator.N) == 0:
 				draw_rect(Rect2(screen_x, screen_y, cell_sz, wall_w), wall_color)
 
@@ -834,13 +839,13 @@ func _draw_cells(offset: Vector2, scale: float) -> void:
 
 			var cell = maze.grid[y][x]
 			var wall_color = Color(0.12, 0.08, 0.05)
-			if (cell & MazeGenerator.N) == 0 and y > 0:
+			if (cell & MazeGenerator.N) == 0 or y == 0:
 				draw_rect(Rect2(cell_pos, Vector2(cs, wt)), wall_color)
-			if (cell & MazeGenerator.S) == 0 and y < maze_height - 1:
+			if (cell & MazeGenerator.S) == 0 or y == maze_height - 1:
 				draw_rect(Rect2(cell_pos + Vector2(0, cs - wt), Vector2(cs, wt)), wall_color)
-			if (cell & MazeGenerator.W) == 0 and x > 0:
+			if (cell & MazeGenerator.W) == 0 or x == 0:
 				draw_rect(Rect2(cell_pos, Vector2(wt, cs)), wall_color)
-			if (cell & MazeGenerator.E) == 0 and x < maze_width - 1:
+			if (cell & MazeGenerator.E) == 0 or x == maze_width - 1:
 				draw_rect(Rect2(cell_pos + Vector2(cs - wt, 0), Vector2(wt, cs)), wall_color)
 
 func _get_terrain_symbol_color(t_key: String, floor_color: Color) -> Color:
