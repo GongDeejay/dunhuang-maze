@@ -6,6 +6,7 @@ signal action_pressed(action: String)
 
 var is_mobile: bool = false
 var is_portrait: bool = false
+var force_mode: int = -1  # -1=auto, 0=portrait, 1=landscape
 var btn_radius: float = 40.0
 var btn_spacing: float = 90.0
 var func_btn_size: float = 55.0
@@ -19,8 +20,13 @@ func _ready():
 		is_mobile = vp.x < 800 or vp.y < 600
 
 func _process(_delta: float):
-	var vp = get_viewport_rect().size
-	is_portrait = vp.y > vp.x
+	if force_mode == 0:
+		is_portrait = true
+	elif force_mode == 1:
+		is_portrait = false
+	else:
+		var vp = get_viewport_rect().size
+		is_portrait = vp.y > vp.x
 
 func _draw():
 	if not is_mobile:
@@ -30,6 +36,18 @@ func _draw():
 		_draw_portrait(vp)
 	else:
 		_draw_landscape(vp)
+	_draw_toggle_button(vp)
+
+func _draw_toggle_button(vp: Vector2) -> void:
+	var btn_size = 36.0
+	var btn_x = vp.x - btn_size - 10
+	var btn_y = 10.0
+	var rect = Rect2(btn_x, btn_y, btn_size, btn_size)
+	draw_rect(rect, Color(0, 0, 0, 0.5))
+	draw_rect(rect, Color(1, 1, 1, 0.3), false, 1.5)
+	var label = "横" if is_portrait else "竖"
+	draw_string(ThemeDB.fallback_font, Vector2(btn_x + 10, btn_y + 25), label,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1, 0.8))
 
 func _draw_portrait(vp: Vector2) -> void:
 	var alpha = 0.5
@@ -117,6 +135,23 @@ func _input(event: InputEvent) -> void:
 
 func _handle_touch(pos: Vector2) -> void:
 	var vp = get_viewport_rect().size
+
+	# Check toggle button
+	var btn_size = 36.0
+	var btn_x = vp.x - btn_size - 10
+	var btn_y = 10.0
+	var toggle_rect = Rect2(btn_x, btn_y, btn_size, btn_size)
+	if toggle_rect.has_point(pos):
+		force_mode = 1 - force_mode if force_mode >= 0 else (0 if is_portrait else 1)
+		if force_mode == 0:
+			is_portrait = true
+		elif force_mode == 1:
+			is_portrait = false
+		else:
+			var vp2 = get_viewport_rect().size
+			is_portrait = vp2.y > vp2.x
+		queue_redraw()
+		return
 
 	if is_portrait:
 		_handle_touch_portrait(pos, vp)
