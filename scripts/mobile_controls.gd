@@ -13,19 +13,14 @@ var touch_start: Vector2 = Vector2.ZERO
 var swipe_threshold: float = 30.0
 
 func _ready():
-	is_mobile = false
+	is_mobile = OS.has_feature("mobile") or OS.has_feature("web")
+	if not is_mobile:
+		var vp = get_viewport_rect().size
+		is_mobile = vp.x < 800 or vp.y < 600
 
 func _process(_delta: float):
 	var vp = get_viewport_rect().size
 	is_portrait = vp.y > vp.x
-
-func _input(event: InputEvent) -> void:
-	# Detect touch device on first touch
-	if not is_mobile and event is InputEventScreenTouch and event.pressed:
-		is_mobile = true
-
-	if not is_mobile:
-		return
 
 func _draw():
 	if not is_mobile:
