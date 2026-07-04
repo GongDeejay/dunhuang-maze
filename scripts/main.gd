@@ -621,14 +621,13 @@ func _draw_mobile_view(vp: Vector2) -> void:
 			if not _is_revealed(Vector2i(gx, gy)) and not visited.get(Vector2i(gx, gy), false):
 				floor_color = Color(0.15, 0.12, 0.10)
 
-			draw_rect(Rect2(screen_x + wall_w, screen_y + wall_w,
-				cell_sz - wall_w * 2, cell_sz - wall_w * 2), floor_color)
+			# Draw floor to fill entire cell first
+			draw_rect(Rect2(screen_x, screen_y, cell_sz, cell_sz), floor_color)
 
 			var cell = maze.grid[gy][gx]
 			var wall_color = Color(0.12, 0.08, 0.05)
 
-			# Only draw walls where there is NO passage
-			# Bit SET = passage (no wall), Bit NOT SET = wall
+			# Only draw walls where there is NO passage (bit NOT set)
 			if (cell & MazeGenerator.N) == 0:
 				draw_rect(Rect2(screen_x, screen_y, cell_sz, wall_w), wall_color)
 			if (cell & MazeGenerator.S) == 0:
@@ -848,7 +847,7 @@ func _draw_cells(offset: Vector2, scale: float) -> void:
 			var cell = maze.grid[y][x]
 			var wall_color = Color(0.12, 0.08, 0.05)
 
-			# Only draw walls where there is NO passage
+			# Only draw walls where there is NO passage (bit NOT set)
 			if (cell & MazeGenerator.N) == 0:
 				draw_rect(Rect2(cell_pos, Vector2(cs, wt)), wall_color)
 			if (cell & MazeGenerator.S) == 0:
