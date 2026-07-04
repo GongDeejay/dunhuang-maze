@@ -142,14 +142,11 @@ func _handle_touch(pos: Vector2) -> void:
 	var btn_y = 10.0
 	var toggle_rect = Rect2(btn_x, btn_y, btn_size, btn_size)
 	if toggle_rect.has_point(pos):
-		force_mode = 1 - force_mode if force_mode >= 0 else (0 if is_portrait else 1)
-		if force_mode == 0:
-			is_portrait = true
-		elif force_mode == 1:
-			is_portrait = false
+		# Toggle to opposite mode
+		if is_portrait:
+			force_mode = 1  # Force landscape
 		else:
-			var vp2 = get_viewport_rect().size
-			is_portrait = vp2.y > vp2.x
+			force_mode = 0  # Force portrait
 		queue_redraw()
 		return
 
