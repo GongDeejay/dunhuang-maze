@@ -656,13 +656,28 @@ func _draw_mobile_view(vp: Vector2) -> void:
 					if it.item_type == "key":
 						_draw_mini_character(Vector2(screen_x, screen_y), cell_sz, 0)
 					else:
-						draw_rect(Rect2(screen_x + cell_sz * 0.3, screen_y + cell_sz * 0.3,
-							cell_sz * 0.4, cell_sz * 0.4), it.color.darkened(0.2))
+						var item_cx = screen_x + cell_sz * 0.5
+						var item_cy = screen_y + cell_sz * 0.5
+						var item_r = cell_sz * 0.25
+						draw_circle(Vector2(item_cx, item_cy), item_r, it.color.darkened(0.2))
+						draw_circle(Vector2(item_cx, item_cy), item_r * 0.6, it.color)
+						if it.item_type == "heal":
+							draw_rect(Rect2(item_cx - item_r * 0.15, item_cy - item_r * 0.4,
+								item_r * 0.3, item_r * 0.8), Color.WHITE)
+							draw_rect(Rect2(item_cx - item_r * 0.4, item_cy - item_r * 0.15,
+								item_r * 0.8, item_r * 0.3), Color.WHITE)
 
 			for m in monsters:
 				if is_instance_valid(m) and m.pos == Vector2i(gx, gy) and _is_revealed(m.pos):
-					draw_rect(Rect2(screen_x + cell_sz * 0.2, screen_y + cell_sz * 0.2,
-						cell_sz * 0.6, cell_sz * 0.6), m.color.darkened(0.3))
+					var mcx = screen_x + cell_sz * 0.5
+					var mcy = screen_y + cell_sz * 0.5
+					var mr = cell_sz * 0.3
+					draw_circle(Vector2(mcx, mcy), mr, m.color.darkened(0.4))
+					draw_circle(Vector2(mcx, mcy), mr * 0.7, m.color.darkened(0.2))
+					draw_circle(Vector2(mcx - mr * 0.3, mcy - mr * 0.2), mr * 0.15, Color.WHITE)
+					draw_circle(Vector2(mcx + mr * 0.3, mcy - mr * 0.2), mr * 0.15, Color.WHITE)
+					draw_circle(Vector2(mcx - mr * 0.3, mcy - mr * 0.2), mr * 0.08, Color.BLACK)
+					draw_circle(Vector2(mcx + mr * 0.3, mcy - mr * 0.2), mr * 0.08, Color.BLACK)
 
 	var player_screen_x: float = half * cell_sz
 	var player_screen_y: float = half * cell_sz
@@ -674,6 +689,7 @@ func _draw_mini_character(o: Vector2, s: float, char_type: int) -> void:
 	var robe: Color
 	var hair: Color
 	var skin: Color = Color(1.0, 0.85, 0.72)
+	var belt: Color = Color(0.6, 0.4, 0.2)
 
 	match char_type:
 		0:
@@ -687,14 +703,41 @@ func _draw_mini_character(o: Vector2, s: float, char_type: int) -> void:
 			hair = Color(0.39, 0.27, 0.16)
 
 	var p: float = s / 16.0
-	draw_rect(Rect2(o.x + 4*p, o.y + 1*p, 8*p, 5*p), hair)
+
+	# Hair
+	draw_rect(Rect2(o.x + 4*p, o.y + 1*p, 8*p, 4*p), hair)
+	draw_rect(Rect2(o.x + 3*p, o.y + 3*p, 2*p, 3*p), hair)
+	draw_rect(Rect2(o.x + 11*p, o.y + 3*p, 2*p, 3*p), hair)
+
+	# Face
 	draw_rect(Rect2(o.x + 5*p, o.y + 4*p, 6*p, 4*p), skin)
+
+	# Eyes
 	draw_rect(Rect2(o.x + 6*p, o.y + 5*p, 1*p, 1*p), Color.WHITE)
 	draw_rect(Rect2(o.x + 9*p, o.y + 5*p, 1*p, 1*p), Color.WHITE)
-	draw_rect(Rect2(o.x + 6*p, o.y + 6*p, 1*p, 1*p), Color.BLACK)
-	draw_rect(Rect2(o.x + 9*p, o.y + 6*p, 1*p, 1*p), Color.BLACK)
-	draw_rect(Rect2(o.x + 4*p, o.y + 8*p, 8*p, 6*p), robe)
-	draw_rect(Rect2(o.x + 4*p, o.y + 10*p, 8*p, 1*p), hair)
+	draw_rect(Rect2(o.x + 6*p, o.y + 6*p, 1*p, 1*p), Color(0.2, 0.15, 0.1))
+	draw_rect(Rect2(o.x + 9*p, o.y + 6*p, 1*p, 1*p), Color(0.2, 0.15, 0.1))
+
+	# Mouth
+	draw_rect(Rect2(o.x + 7*p, o.y + 7*p, 2*p, 1*p), Color(0.8, 0.4, 0.4))
+
+	# Body robe
+	draw_rect(Rect2(o.x + 4*p, o.y + 8*p, 8*p, 5*p), robe)
+
+	# Belt
+	draw_rect(Rect2(o.x + 4*p, o.y + 10*p, 8*p, 1*p), belt)
+
+	# Arms
+	draw_rect(Rect2(o.x + 2*p, o.y + 9*p, 2*p, 3*p), skin)
+	draw_rect(Rect2(o.x + 12*p, o.y + 9*p, 2*p, 3*p), skin)
+
+	# Legs
+	draw_rect(Rect2(o.x + 5*p, o.y + 13*p, 2*p, 2*p), hair.darkened(0.3))
+	draw_rect(Rect2(o.x + 9*p, o.y + 13*p, 2*p, 2*p), hair.darkened(0.3))
+
+	# Shoes
+	draw_rect(Rect2(o.x + 5*p, o.y + 15*p, 2*p, 1*p), Color(0.3, 0.2, 0.1))
+	draw_rect(Rect2(o.x + 9*p, o.y + 15*p, 2*p, 1*p), Color(0.3, 0.2, 0.1))
 	draw_rect(Rect2(o.x + 2*p, o.y + 9*p, 2*p, 3*p), skin)
 	draw_rect(Rect2(o.x + 12*p, o.y + 9*p, 2*p, 3*p), skin)
 	draw_rect(Rect2(o.x + 5*p, o.y + 14*p, 2*p, 2*p), hair.darkened(0.2))
