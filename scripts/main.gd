@@ -674,6 +674,35 @@ func _draw_mobile_view(vp: Vector2) -> void:
 					var mr = cell_sz * 0.3
 					draw_circle(Vector2(mcx, mcy), mr, m.color.darkened(0.4))
 					draw_circle(Vector2(mcx, mcy), mr * 0.7, m.color.darkened(0.2))
+
+					match m.monster_type:
+						"sand":
+							# 沙蝎 - claws and stinger
+							draw_rect(Rect2(mcx - mr * 0.8, mcy - mr * 0.3, mr * 0.3, mr * 0.15), m.color)
+							draw_rect(Rect2(mcx + mr * 0.5, mcy - mr * 0.3, mr * 0.3, mr * 0.15), m.color)
+							draw_rect(Rect2(mcx - mr * 0.1, mcy + mr * 0.5, mr * 0.2, mr * 0.4), m.color.darkened(0.3))
+						"desert":
+							# 沙虫 - segmented body
+							for i in range(3):
+								var seg_y = mcy - mr * 0.4 + i * mr * 0.3
+								draw_rect(Rect2(mcx - mr * 0.5, seg_y, mr, mr * 0.2), m.color.lightened(0.1))
+						"grotto":
+							# 石魔 - rocky spikes
+							for i in range(4):
+								var angle = i * PI / 2
+								var spike_x = mcx + cos(angle) * mr * 0.8
+								var spike_y = mcy + sin(angle) * mr * 0.8
+								draw_circle(Vector2(spike_x, spike_y), mr * 0.15, m.color.lightened(0.2))
+						"oasis":
+							# 水妖 - water waves
+							for i in range(3):
+								var wave_y = mcy + mr * 0.3 + i * mr * 0.15
+								draw_rect(Rect2(mcx - mr * 0.6, wave_y, mr * 1.2, mr * 0.08), Color(0.4, 0.7, 0.8, 0.6))
+						"ancient_road":
+							# 盗匪 - scarf and weapon
+							draw_rect(Rect2(mcx - mr * 0.4, mcy - mr * 0.7, mr * 0.8, mr * 0.2), Color(0.8, 0.2, 0.1))
+							draw_rect(Rect2(mcx + mr * 0.4, mcy - mr * 0.3, mr * 0.15, mr * 0.8), Color(0.5, 0.5, 0.5))
+
 					draw_circle(Vector2(mcx - mr * 0.3, mcy - mr * 0.2), mr * 0.15, Color.WHITE)
 					draw_circle(Vector2(mcx + mr * 0.3, mcy - mr * 0.2), mr * 0.15, Color.WHITE)
 					draw_circle(Vector2(mcx - mr * 0.3, mcy - mr * 0.2), mr * 0.08, Color.BLACK)
