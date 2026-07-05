@@ -366,13 +366,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			DataLoader.set_difficulty(selected_difficulty)
 			game_state = "playing"
 			_new_game(0)
-		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		elif (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) or (event is InputEventScreenTouch and event.pressed):
 			var click_pos = event.position
 			var vp = get_viewport_rect().size
+			var min_dim = minf(vp.x, vp.y)
+			var font_mult = clampf(min_dim / 400.0, 1.0, 2.5)
 			var start_y = vp.y * 0.4
 			for i in difficulty_options.size():
-				var y = start_y + i * 80
-				var btn_rect = Rect2(vp.x / 2 - 180, y - 10, 360, 65)
+				var y = start_y + i * 80 * font_mult
+				var btn_rect = Rect2(vp.x / 2 - 180 * font_mult, y - 10, 360 * font_mult, 65 * font_mult)
 				if btn_rect.has_point(click_pos):
 					selected_difficulty = difficulty_options[i]
 					DataLoader.set_difficulty(selected_difficulty)
