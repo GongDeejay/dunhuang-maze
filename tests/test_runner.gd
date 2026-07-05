@@ -117,7 +117,7 @@ func test_item_data():
 	dl._ready()
 
 	assert_true(not dl.item_data.is_empty(), "item_data loaded")
-	assert_eq(dl.item_data.size(), 9, "9 items loaded")
+	assert_eq(dl.item_data.size(), 12, "12 items loaded")
 
 	var heal_def = dl.get_item_def("heal_scroll")
 	assert_true(not heal_def.is_empty(), "heal_scroll def exists")

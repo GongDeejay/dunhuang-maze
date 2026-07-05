@@ -232,6 +232,7 @@ func _spawn_items():
 		items.append(it)
 
 	var reachable = maze.get_reachable_cells()
+	var family_keys = ["family_1", "family_2", "family_3"]
 	for i in level_key_count:
 		var pos = Vector2i(randi_range(0, maze_width - 1), randi_range(0, maze_height - 1))
 		var attempts = 0
@@ -241,7 +242,7 @@ func _spawn_items():
 		if not occupied.has(pos) and reachable.has(pos):
 			occupied[pos] = true
 			var it = ItemEntity.new()
-			it.setup("ancient_key", pos)
+			it.setup(family_keys[i % family_keys.size()], pos)
 			add_child(it)
 			items.append(it)
 

@@ -82,5 +82,32 @@
     "rarity": 0.0,
     "duration": 0,
     "description": "失散的家人，找到他们一起离开"
+  },
+  "family_1": {
+    "name": "家人1",
+    "symbol": "人",
+    "type": "key",
+    "value": 1,
+    "rarity": 0.0,
+    "duration": 0,
+    "description": "失散的家人，找到他们一起离开"
+  },
+  "family_2": {
+    "name": "家人2",
+    "symbol": "人",
+    "type": "key",
+    "value": 1,
+    "rarity": 0.0,
+    "duration": 0,
+    "description": "失散的家人，找到他们一起离开"
+  },
+  "family_3": {
+    "name": "家人3",
+    "symbol": "人",
+    "type": "key",
+    "value": 1,
+    "rarity": 0.0,
+    "duration": 0,
+    "description": "失散的家人，找到他们一起离开"
   }
 }
