@@ -22,10 +22,10 @@ func _ready():
 func _process(_delta: float):
 	var vp = get_viewport_rect().size
 	var min_dim = minf(vp.x, vp.y)
-	font_scale = clampf(min_dim / 400.0, 0.8, 2.0)
-	btn_radius = clampf(min_dim * 0.09, 30.0, 55.0)
-	btn_spacing = btn_radius * 2.2
-	func_btn_size = clampf(min_dim * 0.11, 40.0, 65.0)
+	font_scale = clampf(min_dim / 200.0, 1.0, 3.0)
+	btn_radius = clampf(min_dim * 0.07, 28.0, 50.0)
+	btn_spacing = btn_radius * 2.3
+	func_btn_size = clampf(min_dim * 0.09, 36.0, 55.0)
 
 func _draw():
 	if not is_mobile:
@@ -38,28 +38,30 @@ func _draw():
 	_draw_toggle_button(vp)
 
 func _draw_toggle_button(vp: Vector2) -> void:
-	var btn_size = func_btn_size
-	var btn_x = vp.x - btn_size - 10
-	var btn_y = 10.0
+	var btn_size = func_btn_size * 0.8
+	var btn_x = vp.x - btn_size - 8
+	var btn_y = 8.0
 	var rect = Rect2(btn_x, btn_y, btn_size, btn_size)
 	draw_rect(rect, Color(0, 0, 0, 0.6))
 	draw_rect(rect, Color(1, 1, 1, 0.4), false, 2.0)
 	var label = "横" if is_portrait else "竖"
-	var fs = int(18 * font_scale)
+	var fs = int(20 * font_scale)
 	draw_string(ThemeDB.fallback_font, Vector2(btn_x + btn_size / 2 - fs / 2, btn_y + btn_size / 2 + fs / 3), label,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.9))
 
 func _draw_portrait(vp: Vector2) -> void:
 	var alpha = 0.5
-	var dpad_center = Vector2(vp.x / 2, vp.y * 0.55)
-	var fs = int(20 * font_scale)
+	var fs = int(24 * font_scale)
+	var small_fs = int(18 * font_scale)
 
 	# D-pad in center
+	var dpad_cx = vp.x / 2
+	var dpad_cy = vp.y * 0.5
 	var dirs = [
-		["↑", Vector2(0, -1), dpad_center + Vector2(0, -btn_spacing)],
-		["←", Vector2(-1, 0), dpad_center + Vector2(-btn_spacing, 0)],
-		["→", Vector2(1, 0), dpad_center + Vector2(btn_spacing, 0)],
-		["↓", Vector2(0, 1), dpad_center + Vector2(0, btn_spacing)]
+		["↑", Vector2(0, -1), Vector2(dpad_cx, dpad_cy - btn_spacing)],
+		["←", Vector2(-1, 0), Vector2(dpad_cx - btn_spacing, dpad_cy)],
+		["→", Vector2(1, 0), Vector2(dpad_cx + btn_spacing, dpad_cy)],
+		["↓", Vector2(0, 1), Vector2(dpad_cx, dpad_cy + btn_spacing)]
 	]
 	for d in dirs:
 		var pos = d[2] as Vector2
@@ -68,42 +70,45 @@ func _draw_portrait(vp: Vector2) -> void:
 		draw_string(ThemeDB.fallback_font, pos + Vector2(-fs / 2, fs / 3), d[0] as String,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, alpha))
 
-	# System info - left bottom
-	var info_x = 15.0
-	var info_y = vp.y - 120.0
-	var info_fs = int(14 * font_scale)
-	draw_rect(Rect2(info_x - 5, info_y - 20, 160 * font_scale, 115), Color(0, 0, 0, 0.5))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, info_y), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(1, 0.8, 0.3))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x + 35 * font_scale, info_y), "家人", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(0.3, 0.8, 0.4))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, info_y + 22 * font_scale), "步数", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(0.7, 0.7, 0.7))
+	# Bottom bar: info | dpad | buttons (all in one row)
+	var bar_y = vp.y - 70.0
+	var bar_center_x = vp.x / 2
 
-	# Function buttons - right bottom
-	var func_x = vp.x - 25.0
-	var func_y = vp.y - 120.0
+	# Info - left side of bottom bar
+	var info_x = 15.0
+	draw_rect(Rect2(info_x - 5, bar_y - 10, 140 * font_scale, 65), Color(0, 0, 0, 0.5))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 10), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, Color(1, 0.8, 0.3))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x + 45 * font_scale, bar_y + 10), "家人", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, Color(0.3, 0.8, 0.4))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 30 * font_scale), "步数", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, Color(0.7, 0.7, 0.7))
+
+	# Function buttons - right side of bottom bar
+	var func_x = vp.x - 20.0
 	var func_buttons = [
 		["E", "use_item"],
 		["R", "regenerate"],
 		["Q", "menu"]
 	]
 	for i in func_buttons.size():
-		var pos = Vector2(func_x, func_y + i * (func_btn_size + 10))
-		var rect = Rect2(pos.x - func_btn_size / 2, pos.y - func_btn_size / 2, func_btn_size, func_btn_size)
+		var bx = func_x - i * (func_btn_size + 8)
+		var by = bar_y + 15
+		var rect = Rect2(bx - func_btn_size / 2, by - func_btn_size / 2, func_btn_size, func_btn_size)
 		draw_rect(rect, Color(1, 1, 1, alpha * 0.3))
 		draw_rect(rect, Color(1, 1, 1, alpha * 0.15), false, 2.0)
-		draw_string(ThemeDB.fallback_font, pos + Vector2(-6, 7), func_buttons[i][0] as String,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, int(18 * font_scale), Color(1, 1, 1, alpha))
+		draw_string(ThemeDB.fallback_font, Vector2(bx - 6, by + 7), func_buttons[i][0] as String,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, int(22 * font_scale), Color(1, 1, 1, alpha))
 
 func _draw_landscape(vp: Vector2) -> void:
 	var alpha = 0.4
-	var dpad_center = Vector2(80, vp.y / 2)
-	var fs = int(16 * font_scale)
+	var fs = int(18 * font_scale)
 
 	# D-pad on left
+	var dpad_cx = 80.0
+	var dpad_cy = vp.y / 2
 	var dirs = [
-		["↑", Vector2(0, -1), dpad_center + Vector2(0, -btn_spacing)],
-		["←", Vector2(-1, 0), dpad_center + Vector2(-btn_spacing, 0)],
-		["→", Vector2(1, 0), dpad_center + Vector2(btn_spacing, 0)],
-		["↓", Vector2(0, 1), dpad_center + Vector2(0, btn_spacing)]
+		["↑", Vector2(0, -1), Vector2(dpad_cx, dpad_cy - btn_spacing)],
+		["←", Vector2(-1, 0), Vector2(dpad_cx - btn_spacing, dpad_cy)],
+		["→", Vector2(1, 0), Vector2(dpad_cx + btn_spacing, dpad_cy)],
+		["↓", Vector2(0, 1), Vector2(dpad_cx, dpad_cy + btn_spacing)]
 	]
 	for d in dirs:
 		var pos = d[2] as Vector2
@@ -125,15 +130,16 @@ func _draw_landscape(vp: Vector2) -> void:
 		draw_rect(rect, Color(1, 1, 1, alpha * 0.3))
 		draw_rect(rect, Color(1, 1, 1, alpha * 0.1), false, 1.5)
 		draw_string(ThemeDB.fallback_font, pos + Vector2(-5, 6), b[0] as String,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * font_scale), Color(1, 1, 1, alpha))
+			HORIZONTAL_ALIGNMENT_LEFT, -1, int(18 * font_scale), Color(1, 1, 1, alpha))
 
 	# System info - top left
 	var info_x = 15.0
 	var info_y = 25.0
-	var info_fs = int(12 * font_scale)
-	draw_rect(Rect2(info_x - 5, info_y - 15, 120 * font_scale, 50), Color(0, 0, 0, 0.5))
+	var info_fs = int(14 * font_scale)
+	draw_rect(Rect2(info_x - 5, info_y - 15, 130 * font_scale, 55), Color(0, 0, 0, 0.5))
 	draw_string(ThemeDB.fallback_font, Vector2(info_x, info_y), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(1, 0.8, 0.3))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x + 30 * font_scale, info_y), "家人", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(0.3, 0.8, 0.4))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x + 40 * font_scale, info_y), "家人", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(0.3, 0.8, 0.4))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x, info_y + 25 * font_scale), "步数", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(0.7, 0.7, 0.7))
 
 func _input(event: InputEvent) -> void:
 	if not is_mobile:
@@ -154,9 +160,9 @@ func _handle_touch(pos: Vector2) -> void:
 	var vp = get_viewport_rect().size
 
 	# Check toggle button
-	var btn_size = func_btn_size
-	var btn_x = vp.x - btn_size - 10
-	var btn_y = 10.0
+	var btn_size = func_btn_size * 0.8
+	var btn_x = vp.x - btn_size - 8
+	var btn_y = 8.0
 	var toggle_rect = Rect2(btn_x - 15, btn_y - 15, btn_size + 30, btn_size + 30)
 	if toggle_rect.has_point(pos):
 		is_portrait = not is_portrait
@@ -169,34 +175,37 @@ func _handle_touch(pos: Vector2) -> void:
 		_handle_touch_landscape(pos, vp)
 
 func _handle_touch_portrait(pos: Vector2, vp: Vector2) -> void:
-	var dpad_center = Vector2(vp.x / 2, vp.y * 0.55)
+	var dpad_cx = vp.x / 2
+	var dpad_cy = vp.y * 0.5
 	var dpad_dirs = [
-		[MazeGenerator.N, dpad_center + Vector2(0, -btn_spacing)],
-		[MazeGenerator.W, dpad_center + Vector2(-btn_spacing, 0)],
-		[MazeGenerator.E, dpad_center + Vector2(btn_spacing, 0)],
-		[MazeGenerator.S, dpad_center + Vector2(0, btn_spacing)]
+		[MazeGenerator.N, Vector2(dpad_cx, dpad_cy - btn_spacing)],
+		[MazeGenerator.W, Vector2(dpad_cx - btn_spacing, dpad_cy)],
+		[MazeGenerator.E, Vector2(dpad_cx + btn_spacing, dpad_cy)],
+		[MazeGenerator.S, Vector2(dpad_cx, dpad_cy + btn_spacing)]
 	]
 	for d in dpad_dirs:
 		if pos.distance_to(d[1] as Vector2) < btn_radius * 1.5:
 			move_pressed.emit(d[0] as int)
 			return
 
-	var func_x = vp.x - 25.0
-	var func_y = vp.y - 120.0
+	var func_x = vp.x - 20.0
+	var bar_y = vp.y - 70.0
 	var func_names = ["use_item", "regenerate", "menu"]
 	for i in func_names.size():
-		var btn_pos = Vector2(func_x, func_y + i * (func_btn_size + 10))
-		if pos.distance_to(btn_pos) < func_btn_size:
+		var bx = func_x - i * (func_btn_size + 8)
+		var by = bar_y + 15
+		if pos.distance_to(Vector2(bx, by)) < func_btn_size:
 			action_pressed.emit(func_names[i])
 			return
 
 func _handle_touch_landscape(pos: Vector2, vp: Vector2) -> void:
-	var dpad_center = Vector2(80, vp.y / 2)
+	var dpad_cx = 80.0
+	var dpad_cy = vp.y / 2
 	var dirs = [
-		[MazeGenerator.N, dpad_center + Vector2(0, -btn_spacing)],
-		[MazeGenerator.W, dpad_center + Vector2(-btn_spacing, 0)],
-		[MazeGenerator.E, dpad_center + Vector2(btn_spacing, 0)],
-		[MazeGenerator.S, dpad_center + Vector2(0, btn_spacing)]
+		[MazeGenerator.N, Vector2(dpad_cx, dpad_cy - btn_spacing)],
+		[MazeGenerator.W, Vector2(dpad_cx - btn_spacing, dpad_cy)],
+		[MazeGenerator.E, Vector2(dpad_cx + btn_spacing, dpad_cy)],
+		[MazeGenerator.S, Vector2(dpad_cx, dpad_cy + btn_spacing)]
 	]
 	for d in dirs:
 		if pos.distance_to(d[1] as Vector2) < btn_radius * 0.7 * 1.5:
