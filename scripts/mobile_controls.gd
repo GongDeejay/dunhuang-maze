@@ -5,8 +5,7 @@ signal move_pressed(dir: int)
 signal action_pressed(action: String)
 
 var is_mobile: bool = false
-var is_portrait: bool = false
-var force_mode: int = -1  # -1=auto, 0=portrait, 1=landscape
+var is_portrait: bool = true  # Default to portrait
 var btn_radius: float = 40.0
 var btn_spacing: float = 90.0
 var func_btn_size: float = 55.0
@@ -18,15 +17,6 @@ func _ready():
 	if not is_mobile:
 		var vp = get_viewport_rect().size
 		is_mobile = vp.x < 800 or vp.y < 600
-
-func _process(_delta: float):
-	if force_mode == 0:
-		is_portrait = true
-	elif force_mode == 1:
-		is_portrait = false
-	else:
-		var vp = get_viewport_rect().size
-		is_portrait = vp.y > vp.x
 
 func _draw():
 	if not is_mobile:
@@ -136,17 +126,13 @@ func _input(event: InputEvent) -> void:
 func _handle_touch(pos: Vector2) -> void:
 	var vp = get_viewport_rect().size
 
-	# Check toggle button (larger detection area for mobile)
+	# Check toggle button (large area for easy tapping)
 	var btn_size = 50.0
 	var btn_x = vp.x - btn_size - 10
 	var btn_y = 10.0
-	var toggle_rect = Rect2(btn_x - 10, btn_y - 10, btn_size + 20, btn_size + 20)
+	var toggle_rect = Rect2(btn_x - 15, btn_y - 15, btn_size + 30, btn_size + 30)
 	if toggle_rect.has_point(pos):
-		# Toggle to opposite mode
-		if is_portrait:
-			force_mode = 1  # Force landscape
-		else:
-			force_mode = 0  # Force portrait
+		is_portrait = not is_portrait
 		queue_redraw()
 		return
 
