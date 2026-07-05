@@ -100,6 +100,11 @@ func _on_mobile_move(dir: int) -> void:
 				else:
 					_add_log("家人还没到齐！还需要找到 %d 个人" % key_tracker.get_remaining())
 			queue_redraw()
+			_update_mobile_ui()
+
+func _update_mobile_ui():
+	if mobile_controls and player:
+		mobile_controls.update_values(player.hp, player.max_hp, key_tracker.collected_keys, move_count)
 
 func _on_mobile_action(action: String) -> void:
 	match action:
@@ -270,6 +275,7 @@ func _pick_up_item(item: ItemEntity) -> void:
 		items.erase(item)
 		if is_instance_valid(item):
 			item.queue_free()
+		_update_mobile_ui()
 		return
 
 	if item.item_type == "container":
@@ -287,6 +293,7 @@ func _pick_up_item(item: ItemEntity) -> void:
 				player.take_damage(trap_damage)
 				_flash_player_hurt()
 				_try_auto_heal()
+				_update_mobile_ui()
 			else:
 				if inventory.is_full():
 					_add_log("背包已满，丢弃 %s" % inner_name)
@@ -332,6 +339,7 @@ func _combat(target: MonsterEntity) -> void:
 		player.take_damage(damage_to_player)
 		_flash_player_hurt()
 		_try_auto_heal()
+		_update_mobile_ui()
 
 func _on_monster_defeated(monster: MonsterEntity) -> void:
 	_add_log("%s 被击败!" % monster.display_name)
@@ -453,6 +461,7 @@ func _apply_terrain_effect() -> void:
 		_add_log("%s: 受到 %d 环境伤害" % [effect.get("description", ""), dmg])
 		_flash_player_hurt()
 		_try_auto_heal()
+		_update_mobile_ui()
 	if effect.has("move_heal") and effect.move_heal > 0:
 		var heal = int(effect.move_heal * diff.get("heal_multiplier", 1.0))
 		player.heal(heal)

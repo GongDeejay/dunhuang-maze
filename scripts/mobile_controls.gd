@@ -12,6 +12,10 @@ var func_btn_size: float = 50.0
 var touch_start: Vector2 = Vector2.ZERO
 var swipe_threshold: float = 30.0
 var font_scale: float = 1.0
+var player_hp: int = 3
+var player_max_hp: int = 5
+var family_count: int = 0
+var steps: int = 0
 var heart_full: Texture2D
 var heart_empty: Texture2D
 
@@ -22,6 +26,13 @@ func _ready():
 		is_mobile = vp.x < 800 or vp.y < 600
 	heart_full = load("res://assets/sprites/heart/full.png")
 	heart_empty = load("res://assets/sprites/heart/empty.png")
+
+func update_values(hp: int, max_hp: int, family: int,步数: int):
+	player_hp = hp
+	player_max_hp = max_hp
+	family_count = family
+	steps = 步数
+	queue_redraw()
 
 func _process(_delta: float):
 	var vp = get_viewport_rect().size
@@ -62,14 +73,7 @@ func _draw_portrait(vp: Vector2) -> void:
 	var hp_x = 15.0
 	var hp_y = 15.0
 	var heart_size = 24.0 * font_scale
-	var hp = 3
-	var max_hp = 5
-	if Engine.has_singleton("Main") or has_node("/root/Main"):
-		var main = get_node_or_null("/root/Main")
-		if main and main.player:
-			hp = main.player.hp
-			max_hp = main.player.max_hp
-	var hearts_to_show = int(ceil(float(hp) / float(max_hp) * 5.0))
+	var hearts_to_show = int(ceil(float(player_hp) / float(player_max_hp) * 5.0))
 	for i in range(5):
 		var heart_x = hp_x + i * (heart_size + 6)
 		var heart_sprite = heart_full if i < hearts_to_show else heart_empty
@@ -97,13 +101,6 @@ func _draw_portrait(vp: Vector2) -> void:
 
 	# Info - left side (2x size)
 	var info_x = 15.0
-	var family_count = 0
-	var steps = 0
-	if has_node("/root/Main"):
-		var main = get_node_or_null("/root/Main")
-		if main and main.key_tracker:
-			family_count = main.key_tracker.collected_keys
-			steps = main.move_count
 	draw_rect(Rect2(info_x - 5, bar_y - 10, 180 * font_scale, 80), Color(0, 0, 0, 0.5))
 	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 15), "家人 %d/%d" % [family_count, 3], HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.3, 0.8, 0.4))
 	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 50), "步数 %d" % steps, HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.7, 0.7, 0.7))
