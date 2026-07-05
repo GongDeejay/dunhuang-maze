@@ -43,6 +43,7 @@ var flash_tweens: Array[Tween] = []
 
 func _ready():
 	_ensure_data_loaded()
+	_load_sprites()
 	player = PlayerController.new()
 	add_child(player)
 	player.died.connect(_on_player_died)
@@ -718,6 +719,13 @@ func _draw_mobile_view(vp: Vector2) -> void:
 					draw_circle(Vector2(mcx + mr * 0.3, mcy - mr * 0.2), mr * 0.15, Color.WHITE)
 					draw_circle(Vector2(mcx - mr * 0.3, mcy - mr * 0.2), mr * 0.08, Color.BLACK)
 					draw_circle(Vector2(mcx + mr * 0.3, mcy - mr * 0.2), mr * 0.08, Color.BLACK)
+					
+					# Monster name label
+					var monster_names = {"sand":"蝎", "desert":"虫", "grotto":"魔", "oasis":"妖", "ancient_road":"匪"}
+					var label = monster_names.get(m.monster_type, "?")
+					var label_fs = int(cell_sz * 0.18)
+					draw_string(ThemeDB.fallback_font, Vector2(mcx - label_fs / 2, screen_y + cell_sz - 4), label,
+						HORIZONTAL_ALIGNMENT_LEFT, -1, label_fs, Color(1, 1, 1, 0.8))
 
 	var player_screen_x: float = half_cols * cell_sz
 	var player_screen_y: float = half_rows * cell_sz
@@ -725,63 +733,29 @@ func _draw_mobile_view(vp: Vector2) -> void:
 
 	_draw_mobile_hud_overlay(vp)
 
+var player_sprite: Texture2D
+var family_sprites: Array[Texture2D] = []
+
+func _load_sprites():
+	player_sprite = load("res://assets/sprites/player/dj.png")
+	family_sprites = [
+		load("res://assets/sprites/player/le.png"),
+		load("res://assets/sprites/player/mac.png"),
+		load("res://assets/sprites/player/mcking.png")
+	]
+
 func _draw_mini_character(o: Vector2, s: float, char_type: int) -> void:
-	var robe: Color
-	var hair: Color
-	var skin: Color = Color(1.0, 0.85, 0.72)
-	var belt: Color = Color(0.6, 0.4, 0.2)
-
-	match char_type:
-		0:
-			robe = Color(0.86, 0.24, 0.24)
-			hair = Color(0.2, 0.2, 0.2)
-		1:
-			robe = Color(0.27, 0.51, 0.71)
-			hair = Color(0.85, 0.65, 0.13)
-		_:
-			robe = Color(0.31, 0.71, 0.31)
-			hair = Color(0.39, 0.27, 0.16)
-
-	var p: float = s / 16.0
-
-	# Hair
-	draw_rect(Rect2(o.x + 4*p, o.y + 1*p, 8*p, 4*p), hair)
-	draw_rect(Rect2(o.x + 3*p, o.y + 3*p, 2*p, 3*p), hair)
-	draw_rect(Rect2(o.x + 11*p, o.y + 3*p, 2*p, 3*p), hair)
-
-	# Face
-	draw_rect(Rect2(o.x + 5*p, o.y + 4*p, 6*p, 4*p), skin)
-
-	# Eyes
-	draw_rect(Rect2(o.x + 6*p, o.y + 5*p, 1*p, 1*p), Color.WHITE)
-	draw_rect(Rect2(o.x + 9*p, o.y + 5*p, 1*p, 1*p), Color.WHITE)
-	draw_rect(Rect2(o.x + 6*p, o.y + 6*p, 1*p, 1*p), Color(0.2, 0.15, 0.1))
-	draw_rect(Rect2(o.x + 9*p, o.y + 6*p, 1*p, 1*p), Color(0.2, 0.15, 0.1))
-
-	# Mouth
-	draw_rect(Rect2(o.x + 7*p, o.y + 7*p, 2*p, 1*p), Color(0.8, 0.4, 0.4))
-
-	# Body robe
-	draw_rect(Rect2(o.x + 4*p, o.y + 8*p, 8*p, 5*p), robe)
-
-	# Belt
-	draw_rect(Rect2(o.x + 4*p, o.y + 10*p, 8*p, 1*p), belt)
-
-	# Arms
-	draw_rect(Rect2(o.x + 2*p, o.y + 9*p, 2*p, 3*p), skin)
-	draw_rect(Rect2(o.x + 12*p, o.y + 9*p, 2*p, 3*p), skin)
-
-	# Legs
-	draw_rect(Rect2(o.x + 5*p, o.y + 13*p, 2*p, 2*p), hair.darkened(0.3))
-	draw_rect(Rect2(o.x + 9*p, o.y + 13*p, 2*p, 2*p), hair.darkened(0.3))
-
-	# Shoes
-	draw_rect(Rect2(o.x + 5*p, o.y + 15*p, 2*p, 1*p), Color(0.3, 0.2, 0.1))
-	draw_rect(Rect2(o.x + 9*p, o.y + 15*p, 2*p, 1*p), Color(0.3, 0.2, 0.1))
-	draw_rect(Rect2(o.x + 2*p, o.y + 9*p, 2*p, 3*p), skin)
-	draw_rect(Rect2(o.x + 12*p, o.y + 9*p, 2*p, 3*p), skin)
-	draw_rect(Rect2(o.x + 5*p, o.y + 14*p, 2*p, 2*p), hair.darkened(0.2))
-	draw_rect(Rect2(o.x + 9*p, o.y + 14*p, 2*p, 2*p), hair.darkened(0.2))
+	var sprite: Texture2D
+	if char_type == 1:
+		sprite = player_sprite
+	else:
+		sprite = family_sprites[char_type % family_sprites.size()]
+	
+	if sprite:
+		var tex_size = sprite.get_size()
+		var scale_x = s / tex_size.x
+		var scale_y = s / tex_size.y
+		draw_texture_rect(sprite, Rect2(o, Vector2(s, s)), false)
 
 func _draw_mobile_hud_overlay(vp: Vector2) -> void:
 	pass
