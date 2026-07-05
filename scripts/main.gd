@@ -784,34 +784,7 @@ func _draw_mini_character(o: Vector2, s: float, char_type: int) -> void:
 	draw_rect(Rect2(o.x + 9*p, o.y + 14*p, 2*p, 2*p), hair.darkened(0.2))
 
 func _draw_mobile_hud_overlay(vp: Vector2) -> void:
-	var margin: float = 8
-	var bar_w: float = 120
-	var bar_h: float = 14
-
-	draw_rect(Rect2(margin, margin, bar_w + 10, bar_h + 6), Color(0, 0, 0, 0.6))
-
-	var hp_ratio: float = float(player.hp) / float(player.max_hp)
-	draw_rect(Rect2(margin + 5, margin + 3, bar_w, bar_h), Color(0.3, 0.1, 0.1))
-	draw_rect(Rect2(margin + 5, margin + 3, bar_w * hp_ratio, bar_h),
-		Color(0.2, 0.7, 0.3) if hp_ratio > 0.3 else Color(0.9, 0.15, 0.1))
-	draw_string(ThemeDB.fallback_font, Vector2(margin + 8, margin + 14),
-		"%d/%d" % [player.hp, player.max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.WHITE)
-
-	draw_rect(Rect2(vp.x - 100, margin, 92, 22), Color(0, 0, 0, 0.6))
-	draw_string(ThemeDB.fallback_font, Vector2(vp.x - 95, margin + 15),
-		"步:%d" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.8, 0.8, 0.8))
-
-	if key_tracker.get_remaining() > 0:
-		draw_rect(Rect2(margin, margin + 24, 80, 18), Color(0, 0, 0, 0.6))
-		draw_string(ThemeDB.fallback_font, Vector2(margin + 5, margin + 37),
-			"家人:%s" % key_tracker.get_progress(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10,
-			Color(1.0, 0.8, 0.3))
-
-	if combat_log.size() > 0:
-		var log_y: float = vp.y - 30
-		draw_rect(Rect2(margin, log_y - 5, vp.x - margin * 2, 22), Color(0, 0, 0, 0.6))
-		draw_string(ThemeDB.fallback_font, Vector2(margin + 5, log_y + 10),
-			combat_log[-1], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.7, 0.7, 0.7))
+	pass
 
 func _draw_pc_view(vp: Vector2) -> void:
 	var panel_w: float = 220
