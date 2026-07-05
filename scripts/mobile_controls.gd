@@ -39,15 +39,15 @@ func _draw():
 	_draw_toggle_button(vp)
 
 func _draw_toggle_button(vp: Vector2) -> void:
-	var btn_size = 36.0
+	var btn_size = 50.0
 	var btn_x = vp.x - btn_size - 10
 	var btn_y = 10.0
 	var rect = Rect2(btn_x, btn_y, btn_size, btn_size)
-	draw_rect(rect, Color(0, 0, 0, 0.5))
-	draw_rect(rect, Color(1, 1, 1, 0.3), false, 1.5)
+	draw_rect(rect, Color(0, 0, 0, 0.6))
+	draw_rect(rect, Color(1, 1, 1, 0.4), false, 2.0)
 	var label = "横" if is_portrait else "竖"
-	draw_string(ThemeDB.fallback_font, Vector2(btn_x + 10, btn_y + 25), label,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1, 0.8))
+	draw_string(ThemeDB.fallback_font, Vector2(btn_x + 14, btn_y + 33), label,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 1, 1, 0.9))
 
 func _draw_portrait(vp: Vector2) -> void:
 	var alpha = 0.5
@@ -136,11 +136,11 @@ func _input(event: InputEvent) -> void:
 func _handle_touch(pos: Vector2) -> void:
 	var vp = get_viewport_rect().size
 
-	# Check toggle button
-	var btn_size = 36.0
+	# Check toggle button (larger detection area for mobile)
+	var btn_size = 50.0
 	var btn_x = vp.x - btn_size - 10
 	var btn_y = 10.0
-	var toggle_rect = Rect2(btn_x, btn_y, btn_size, btn_size)
+	var toggle_rect = Rect2(btn_x - 10, btn_y - 10, btn_size + 20, btn_size + 20)
 	if toggle_rect.has_point(pos):
 		# Toggle to opposite mode
 		if is_portrait:
