@@ -12,12 +12,16 @@ var func_btn_size: float = 50.0
 var touch_start: Vector2 = Vector2.ZERO
 var swipe_threshold: float = 30.0
 var font_scale: float = 1.0
+var heart_full: Texture2D
+var heart_empty: Texture2D
 
 func _ready():
 	is_mobile = OS.has_feature("mobile") or OS.has_feature("web")
 	if not is_mobile:
 		var vp = get_viewport_rect().size
 		is_mobile = vp.x < 800 or vp.y < 600
+	heart_full = load("res://assets/sprites/heart/full.png")
+	heart_empty = load("res://assets/sprites/heart/empty.png")
 
 func _process(_delta: float):
 	var vp = get_viewport_rect().size
@@ -77,7 +81,15 @@ func _draw_portrait(vp: Vector2) -> void:
 	# Info - left side of bottom bar
 	var info_x = 15.0
 	draw_rect(Rect2(info_x - 5, bar_y - 10, 140 * font_scale, 65), Color(0, 0, 0, 0.5))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 10), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, Color(1, 0.8, 0.3))
+	
+	# Hearts for HP
+	var heart_size = 12.0 * font_scale
+	for i in range(5):
+		var heart_x = info_x + i * (heart_size + 4)
+		var heart_sprite = heart_full if i < 3 else heart_empty
+		if heart_sprite:
+			draw_texture_rect(heart_sprite, Rect2(heart_x, bar_y, heart_size, heart_size), false)
+	
 	draw_string(ThemeDB.fallback_font, Vector2(info_x + 45 * font_scale, bar_y + 10), "家人", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, Color(0.3, 0.8, 0.4))
 	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 30 * font_scale), "步数", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, Color(0.7, 0.7, 0.7))
 

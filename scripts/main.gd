@@ -663,21 +663,14 @@ func _draw_mobile_view(vp: Vector2) -> void:
 				draw_rect(Rect2(screen_x + cell_sz * 0.2, screen_y + cell_sz * 0.2,
 					cell_sz * 0.6, cell_sz * 0.6), Color(0.1, 0.8, 0.3))
 
+			var key_idx = 0
 			for it in items:
 				if is_instance_valid(it) and it.pos == Vector2i(gx, gy) and _is_revealed(it.pos):
 					if it.item_type == "key":
-						_draw_mini_character(Vector2(screen_x, screen_y), cell_sz, 0)
+						_draw_mini_character(Vector2(screen_x, screen_y), cell_sz, key_idx)
+						key_idx += 1
 					else:
-						var item_cx = screen_x + cell_sz * 0.5
-						var item_cy = screen_y + cell_sz * 0.5
-						var item_r = cell_sz * 0.25
-						draw_circle(Vector2(item_cx, item_cy), item_r, it.color.darkened(0.2))
-						draw_circle(Vector2(item_cx, item_cy), item_r * 0.6, it.color)
-						if it.item_type == "heal":
-							draw_rect(Rect2(item_cx - item_r * 0.15, item_cy - item_r * 0.4,
-								item_r * 0.3, item_r * 0.8), Color.WHITE)
-							draw_rect(Rect2(item_cx - item_r * 0.4, item_cy - item_r * 0.15,
-								item_r * 0.8, item_r * 0.3), Color.WHITE)
+						_draw_item_sprite(Vector2(screen_x, screen_y), cell_sz, it)
 
 			for m in monsters:
 				if is_instance_valid(m) and m.pos == Vector2i(gx, gy) and _is_revealed(m.pos):
@@ -743,6 +736,17 @@ func _load_sprites():
 		load("res://assets/sprites/player/mac.png"),
 		load("res://assets/sprites/player/mcking.png")
 	]
+	_load_item_sprites()
+
+func _load_item_sprites():
+	item_sprites = {
+		"container": load("res://assets/sprites/item/pot.png"),
+		"heal": load("res://assets/sprites/item/scroll.png"),
+		"defense": load("res://assets/sprites/item/shield.png"),
+		"attack": load("res://assets/sprites/item/sword.png"),
+		"trap": load("res://assets/sprites/item/pot.png"),
+		"key": null
+	}
 
 func _draw_mini_character(o: Vector2, s: float, char_type: int) -> void:
 	var sprite: Texture2D
@@ -756,6 +760,19 @@ func _draw_mini_character(o: Vector2, s: float, char_type: int) -> void:
 		var scale_x = s / tex_size.x
 		var scale_y = s / tex_size.y
 		draw_texture_rect(sprite, Rect2(o, Vector2(s, s)), false)
+
+var item_sprites: Dictionary = {}
+
+func _draw_item_sprite(o: Vector2, s: float, item) -> void:
+	var sprite = item_sprites.get(item.item_type)
+	if sprite:
+		draw_texture_rect(sprite, Rect2(o, Vector2(s, s)), false)
+	else:
+		var item_cx = o.x + s * 0.5
+		var item_cy = o.y + s * 0.5
+		var item_r = s * 0.25
+		draw_circle(Vector2(item_cx, item_cy), item_r, item.color.darkened(0.2))
+		draw_circle(Vector2(item_cx, item_cy), item_r * 0.6, item.color)
 
 func _draw_mobile_hud_overlay(vp: Vector2) -> void:
 	pass
