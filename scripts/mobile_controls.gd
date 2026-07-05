@@ -56,7 +56,17 @@ func _draw_toggle_button(vp: Vector2) -> void:
 func _draw_portrait(vp: Vector2) -> void:
 	var alpha = 0.5
 	var fs = int(24 * font_scale)
-	var small_fs = int(18 * font_scale)
+	var big_fs = int(36 * font_scale)
+
+	# HP hearts - top left (2x size)
+	var hp_x = 15.0
+	var hp_y = 15.0
+	var heart_size = 24.0 * font_scale
+	for i in range(5):
+		var heart_x = hp_x + i * (heart_size + 6)
+		var heart_sprite = heart_full if i < 3 else heart_empty
+		if heart_sprite:
+			draw_texture_rect(heart_sprite, Rect2(heart_x, hp_y, heart_size, heart_size), false)
 
 	# D-pad in center
 	var dpad_cx = vp.x / 2
@@ -74,40 +84,30 @@ func _draw_portrait(vp: Vector2) -> void:
 		draw_string(ThemeDB.fallback_font, pos + Vector2(-fs / 2, fs / 3), d[0] as String,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, alpha))
 
-	# Bottom bar: info | dpad | buttons (all in one row)
-	var bar_y = vp.y - 70.0
-	var bar_center_x = vp.x / 2
+	# Bottom bar: info | buttons
+	var bar_y = vp.y - 80.0
 
-	# Info - left side of bottom bar
+	# Info - left side (2x size)
 	var info_x = 15.0
-	draw_rect(Rect2(info_x - 5, bar_y - 10, 140 * font_scale, 65), Color(0, 0, 0, 0.5))
-	
-	# Hearts for HP
-	var heart_size = 12.0 * font_scale
-	for i in range(5):
-		var heart_x = info_x + i * (heart_size + 4)
-		var heart_sprite = heart_full if i < 3 else heart_empty
-		if heart_sprite:
-			draw_texture_rect(heart_sprite, Rect2(heart_x, bar_y, heart_size, heart_size), false)
-	
-	draw_string(ThemeDB.fallback_font, Vector2(info_x + 45 * font_scale, bar_y + 10), "家人", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, Color(0.3, 0.8, 0.4))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 30 * font_scale), "步数", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, Color(0.7, 0.7, 0.7))
+	draw_rect(Rect2(info_x - 5, bar_y - 10, 180 * font_scale, 80), Color(0, 0, 0, 0.5))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 15), "家人", HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.3, 0.8, 0.4))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 50), "步数", HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.7, 0.7, 0.7))
 
-	# Function buttons - right side of bottom bar
-	var func_x = vp.x - 20.0
+	# Function buttons - right side (2x size)
 	var func_buttons = [
 		["E", "use_item"],
 		["R", "regenerate"],
 		["Q", "menu"]
 	]
 	for i in func_buttons.size():
-		var bx = func_x - i * (func_btn_size + 8)
-		var by = bar_y + 15
-		var rect = Rect2(bx - func_btn_size / 2, by - func_btn_size / 2, func_btn_size, func_btn_size)
+		var bx = vp.x - 30.0 - i * (func_btn_size * 1.5 + 12)
+		var by = bar_y + 20
+		var btn_sz = func_btn_size * 1.5
+		var rect = Rect2(bx - btn_sz / 2, by - btn_sz / 2, btn_sz, btn_sz)
 		draw_rect(rect, Color(1, 1, 1, alpha * 0.3))
 		draw_rect(rect, Color(1, 1, 1, alpha * 0.15), false, 2.0)
-		draw_string(ThemeDB.fallback_font, Vector2(bx - 6, by + 7), func_buttons[i][0] as String,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, int(22 * font_scale), Color(1, 1, 1, alpha))
+		draw_string(ThemeDB.fallback_font, Vector2(bx - 8, by + 10), func_buttons[i][0] as String,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, int(28 * font_scale), Color(1, 1, 1, alpha))
 
 func _draw_landscape(vp: Vector2) -> void:
 	var alpha = 0.4

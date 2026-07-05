@@ -636,6 +636,11 @@ func _draw_mobile_view(vp: Vector2) -> void:
 			# Draw floor to fill entire cell first
 			draw_rect(Rect2(screen_x, screen_y, cell_sz, cell_sz), floor_color)
 
+			# Draw terrain sprite if available
+			var terrain_sprite = terrain_sprites.get(t_key)
+			if terrain_sprite and _is_revealed(Vector2i(gx, gy)):
+				draw_texture_rect(terrain_sprite, Rect2(screen_x, screen_y, cell_sz, cell_sz), false)
+
 			var cell = maze.grid[gy][gx]
 			var wall_color = Color(0.12, 0.08, 0.05)
 
@@ -728,6 +733,7 @@ func _draw_mobile_view(vp: Vector2) -> void:
 
 var player_sprite: Texture2D
 var family_sprites: Array[Texture2D] = []
+var terrain_sprites: Dictionary = {}
 
 func _load_sprites():
 	player_sprite = load("res://assets/sprites/player/dj.png")
@@ -737,6 +743,16 @@ func _load_sprites():
 		load("res://assets/sprites/player/mcking.png")
 	]
 	_load_item_sprites()
+	_load_terrain_sprites()
+
+func _load_terrain_sprites():
+	terrain_sprites = {
+		"sand": load("res://assets/sprites/terrain/sand.png"),
+		"desert": load("res://assets/sprites/terrain/desert.png"),
+		"grotto": load("res://assets/sprites/terrain/hole/line.png"),
+		"oasis": load("res://assets/sprites/terrain/oasis/defult.png"),
+		"ancient_road": load("res://assets/sprites/terrain/road/line.png")
+	}
 
 func _load_item_sprites():
 	item_sprites = {
