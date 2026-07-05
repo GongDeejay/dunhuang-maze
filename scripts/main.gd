@@ -582,27 +582,38 @@ func _draw() -> void:
 		_draw_pc_view(vp)
 
 func _draw_mobile_view(vp: Vector2) -> void:
-	var view_size: int = 8
+	var is_portrait = mobile_controls.is_portrait
+	var view_cols: int
+	var view_rows: int
+
+	if is_portrait:
+		view_cols = 6
+		view_rows = 10
+	else:
+		view_cols = 10
+		view_rows = 6
+
 	var game_w: float = vp.x
 	var game_h: float = vp.y
 
-	var cell_w: float = game_w / view_size
-	var cell_h: float = game_h / view_size
+	var cell_w: float = game_w / view_cols
+	var cell_h: float = game_h / view_rows
 	var cell_sz: float = minf(cell_w, cell_h)
 
 	var center_x: int = player.pos.x
 	var center_y: int = player.pos.y
-	var half: int = view_size / 2
+	var half_cols: int = view_cols / 2
+	var half_rows: int = view_rows / 2
 
-	var start_x: int = center_x - half
-	var start_y: int = center_y - half
+	var start_x: int = center_x - half_cols
+	var start_y: int = center_y - half_rows
 
 	var wall_w: float = maxf(cell_sz * 0.08, 3.0)
 
 	draw_rect(Rect2(0, 0, game_w, game_h), Color(0.12, 0.10, 0.08))
 
-	for vy in view_size:
-		for vx in view_size:
+	for vy in view_rows:
+		for vx in view_cols:
 			var gx: int = start_x + vx
 			var gy: int = start_y + vy
 
@@ -708,8 +719,8 @@ func _draw_mobile_view(vp: Vector2) -> void:
 					draw_circle(Vector2(mcx - mr * 0.3, mcy - mr * 0.2), mr * 0.08, Color.BLACK)
 					draw_circle(Vector2(mcx + mr * 0.3, mcy - mr * 0.2), mr * 0.08, Color.BLACK)
 
-	var player_screen_x: float = half * cell_sz
-	var player_screen_y: float = half * cell_sz
+	var player_screen_x: float = half_cols * cell_sz
+	var player_screen_y: float = half_rows * cell_sz
 	_draw_mini_character(Vector2(player_screen_x, player_screen_y), cell_sz, 1)
 
 	_draw_mobile_hud_overlay(vp)
