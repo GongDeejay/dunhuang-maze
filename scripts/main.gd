@@ -718,12 +718,12 @@ func _draw_mobile_view(vp: Vector2) -> void:
 					draw_circle(Vector2(mcx - mr * 0.3, mcy - mr * 0.2), mr * 0.08, Color.BLACK)
 					draw_circle(Vector2(mcx + mr * 0.3, mcy - mr * 0.2), mr * 0.08, Color.BLACK)
 					
-					# Monster name label
+					# Monster name label on top
 					var monster_names = {"sand":"蝎", "desert":"虫", "grotto":"魔", "oasis":"妖", "ancient_road":"匪"}
 					var label = monster_names.get(m.monster_type, "?")
-					var label_fs = int(cell_sz * 0.18)
-					draw_string(ThemeDB.fallback_font, Vector2(mcx - label_fs / 2, screen_y + cell_sz - 4), label,
-						HORIZONTAL_ALIGNMENT_LEFT, -1, label_fs, Color(1, 1, 1, 0.8))
+					var label_fs = int(cell_sz * 0.2)
+					draw_string(ThemeDB.fallback_font, Vector2(mcx - label_fs / 2, screen_y + label_fs + 2), label,
+						HORIZONTAL_ALIGNMENT_LEFT, -1, label_fs, Color(1, 1, 1, 0.9))
 
 	var player_screen_x: float = half_cols * cell_sz
 	var player_screen_y: float = half_rows * cell_sz
@@ -843,11 +843,14 @@ func _draw_difficulty_select():
 	var vp = get_viewport_rect().size
 	draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0.12, 0.1, 0.08))
 
+	var min_dim = minf(vp.x, vp.y)
+	var font_mult = clampf(min_dim / 400.0, 1.0, 2.5)
+
 	var title_y = vp.y * 0.2
-	draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, title_y),
-		"敦煌迷途", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color(0.9, 0.8, 0.6))
-	draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 60, title_y + 40),
-		"选择旅途难度", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.7, 0.65, 0.55))
+	draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 80 * font_mult, title_y),
+		"敦煌迷途", HORIZONTAL_ALIGNMENT_LEFT, -1, int(36 * font_mult), Color(0.9, 0.8, 0.6))
+	draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 60 * font_mult, title_y + 40 * font_mult),
+		"选择旅途难度", HORIZONTAL_ALIGNMENT_LEFT, -1, int(20 * font_mult), Color(0.7, 0.65, 0.55))
 
 	var start_y = vp.y * 0.4
 	for i in difficulty_options.size():
@@ -857,21 +860,21 @@ func _draw_difficulty_select():
 		var desc = diff.get("description", "")
 		var is_selected = (key == selected_difficulty)
 
-		var y = start_y + i * 80
+		var y = start_y + i * 80 * font_mult
 		var bg_color = Color(0.25, 0.2, 0.15) if is_selected else Color(0.18, 0.15, 0.12)
 		var text_color = Color(1.0, 0.9, 0.6) if is_selected else Color(0.6, 0.55, 0.45)
 
-		draw_rect(Rect2(vp.x / 2 - 180, y - 10, 360, 65), bg_color)
+		draw_rect(Rect2(vp.x / 2 - 180 * font_mult, y - 10, 360 * font_mult, 65 * font_mult), bg_color)
 		if is_selected:
-			draw_rect(Rect2(vp.x / 2 - 180, y - 10, 4, 65), Color(0.9, 0.7, 0.2))
+			draw_rect(Rect2(vp.x / 2 - 180 * font_mult, y - 10, 4, 65 * font_mult), Color(0.9, 0.7, 0.2))
 
-		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 160, y + 15),
-			name, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, text_color)
-		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 160, y + 40),
-			desc, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.5, 0.48, 0.42))
+		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 15),
+			name, HORIZONTAL_ALIGNMENT_LEFT, -1, int(22 * font_mult), text_color)
+		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 40),
+			desc, HORIZONTAL_ALIGNMENT_LEFT, -1, int(13 * font_mult), Color(0.5, 0.48, 0.42))
 
-	draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 100, vp.y * 0.85),
-		"↑↓ 选择  回车/→ 确认", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.5, 0.48, 0.42))
+	draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 100 * font_mult, vp.y * 0.85),
+		"↑↓ 选择  回车/→ 确认", HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * font_mult), Color(0.5, 0.48, 0.42))
 
 func _draw_error_screen():
 	var vp = get_viewport_rect().size

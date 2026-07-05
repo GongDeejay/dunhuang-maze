@@ -62,15 +62,23 @@ func _draw_portrait(vp: Vector2) -> void:
 	var hp_x = 15.0
 	var hp_y = 15.0
 	var heart_size = 24.0 * font_scale
+	var hp = 3
+	var max_hp = 5
+	if Engine.has_singleton("Main") or has_node("/root/Main"):
+		var main = get_node_or_null("/root/Main")
+		if main and main.player:
+			hp = main.player.hp
+			max_hp = main.player.max_hp
+	var hearts_to_show = int(ceil(float(hp) / float(max_hp) * 5.0))
 	for i in range(5):
 		var heart_x = hp_x + i * (heart_size + 6)
-		var heart_sprite = heart_full if i < 3 else heart_empty
+		var heart_sprite = heart_full if i < hearts_to_show else heart_empty
 		if heart_sprite:
 			draw_texture_rect(heart_sprite, Rect2(heart_x, hp_y, heart_size, heart_size), false)
 
-	# D-pad in center
+	# D-pad at bottom center
 	var dpad_cx = vp.x / 2
-	var dpad_cy = vp.y * 0.5
+	var dpad_cy = vp.y - 160.0
 	var dirs = [
 		["↑", Vector2(0, -1), Vector2(dpad_cx, dpad_cy - btn_spacing)],
 		["←", Vector2(-1, 0), Vector2(dpad_cx - btn_spacing, dpad_cy)],
@@ -79,8 +87,8 @@ func _draw_portrait(vp: Vector2) -> void:
 	]
 	for d in dirs:
 		var pos = d[2] as Vector2
-		draw_circle(pos, btn_radius, Color(1, 1, 1, alpha * 0.3))
-		draw_circle(pos, btn_radius, Color(1, 1, 1, alpha * 0.15), false, 2.0)
+		draw_circle(pos, btn_radius * 1.2, Color(1, 1, 1, alpha * 0.3))
+		draw_circle(pos, btn_radius * 1.2, Color(1, 1, 1, alpha * 0.15), false, 2.0)
 		draw_string(ThemeDB.fallback_font, pos + Vector2(-fs / 2, fs / 3), d[0] as String,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, alpha))
 
@@ -89,9 +97,16 @@ func _draw_portrait(vp: Vector2) -> void:
 
 	# Info - left side (2x size)
 	var info_x = 15.0
+	var family_count = 0
+	var steps = 0
+	if has_node("/root/Main"):
+		var main = get_node_or_null("/root/Main")
+		if main and main.key_tracker:
+			family_count = main.key_tracker.collected_keys
+			steps = main.move_count
 	draw_rect(Rect2(info_x - 5, bar_y - 10, 180 * font_scale, 80), Color(0, 0, 0, 0.5))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 15), "家人", HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.3, 0.8, 0.4))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 50), "步数", HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.7, 0.7, 0.7))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 15), "家人 %d/%d" % [family_count, 3], HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.3, 0.8, 0.4))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 50), "步数 %d" % steps, HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.7, 0.7, 0.7))
 
 	# Function buttons - right side (2x size)
 	var func_buttons = [
@@ -188,7 +203,7 @@ func _handle_touch(pos: Vector2) -> void:
 
 func _handle_touch_portrait(pos: Vector2, vp: Vector2) -> void:
 	var dpad_cx = vp.x / 2
-	var dpad_cy = vp.y * 0.5
+	var dpad_cy = vp.y - 160.0
 	var dpad_dirs = [
 		[MazeGenerator.N, Vector2(dpad_cx, dpad_cy - btn_spacing)],
 		[MazeGenerator.W, Vector2(dpad_cx - btn_spacing, dpad_cy)],
