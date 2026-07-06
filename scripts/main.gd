@@ -622,6 +622,7 @@ func _draw_mobile_view(vp: Vector2) -> void:
 	var start_y: int = center_y - half_rows
 
 	var wall_w: float = maxf(cell_sz * 0.08, 3.0)
+	var key_idx = 0
 
 	draw_rect(Rect2(0, 0, game_w, game_h), Color(0.12, 0.10, 0.08))
 
@@ -680,7 +681,6 @@ func _draw_mobile_view(vp: Vector2) -> void:
 				draw_rect(Rect2(screen_x + cell_sz * 0.2, screen_y + cell_sz * 0.2,
 					cell_sz * 0.6, cell_sz * 0.6), Color(0.1, 0.8, 0.3))
 
-			var key_idx = 0
 			for it in items:
 				if is_instance_valid(it) and it.pos == Vector2i(gx, gy) and _is_revealed(it.pos):
 					if it.item_type == "key":
@@ -742,6 +742,31 @@ func _draw_mobile_view(vp: Vector2) -> void:
 	_draw_mini_character(Vector2(player_screen_x, player_screen_y), cell_sz, 1)
 
 	_draw_mobile_hud_overlay(vp)
+
+	# Completion overlay
+	if game_over:
+		draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0, 0, 0, 0.7))
+		var fs = int(36 * minf(vp.x, vp.y) / 400.0)
+		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 - 30),
+			"你倒下了...", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.9, 0.3, 0.2))
+		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 60, vp.y / 2 + 20),
+			"走了 %d 步" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.6), Color.WHITE)
+		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 + 60),
+			"按 R 重新尝试", HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.5), Color(0.7, 0.7, 0.7))
+	elif game_won:
+		var is_final = current_level_index + 1 >= levels_data.size()
+		var title = "通关!" if is_final else "穿越成功!"
+		var sub = "你穿越了所有关卡" if is_final else "%s 已通关" % levels_data[current_level_index].get("name", "")
+		var hint = "按 R 重新开始" if is_final else "按 R 进入下一关"
+		var fs = int(36 * minf(vp.x, vp.y) / 400.0)
+		draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0, 0, 0, 0.7))
+		var title_color = Color(1.0, 0.85, 0.3) if is_final else Color.WHITE
+		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 - 40),
+			title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, title_color)
+		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 100, vp.y / 2 + 10),
+			sub + "\n用了 %d 步" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.5), Color.WHITE)
+		draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 + 60),
+			hint, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.5), Color(0.7, 0.7, 0.7))
 
 var player_sprite: Texture2D
 var family_sprites: Array[Texture2D] = []

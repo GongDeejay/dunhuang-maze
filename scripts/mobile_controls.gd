@@ -103,7 +103,7 @@ func _draw_portrait(vp: Vector2) -> void:
 	var info_x = 15.0
 	draw_rect(Rect2(info_x - 5, bar_y - 10, 180 * font_scale, 80), Color(0, 0, 0, 0.5))
 	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 15), "家人 %d/%d" % [family_count, 3], HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.3, 0.8, 0.4))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 50), "步数 %d" % steps, HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.7, 0.7, 0.7))
+	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 15 + big_fs + 10), "步数 %d" % steps, HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.7, 0.7, 0.7))
 
 	# Function buttons - right side (2x size)
 	var func_buttons = [

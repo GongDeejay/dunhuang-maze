@@ -41,7 +41,7 @@
       "difficulty": 3,
       "monster_scale": 1.4,
       "waypoints": 5,
-      "key_count": 4,
+      "key_count": 3,
       "terrain_effect": {
         "desert": {"move_damage": 2, "description": "沙暴肆虐"},
         "grotto": {"reveal_penalty": -3, "description": "洞窟黑暗"},
