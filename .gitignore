@@ -10,6 +10,15 @@
 web/cert.pem
 web/key.pem
 
+# Old root-level web exports (use web/ directory)
+敦煌迷途.html
+敦煌迷途.js
+敦煌迷途.icon.png
+敦煌迷途.audio.worklet.js
+敦煌迷途.audio.position.worklet.js
+敦煌迷途.wasm
+敦煌迷途.pck
+
 # IDE
 .vscode/
 .cursor/

@@ -2,8 +2,10 @@ extends Node
 
 var players: Array[AudioStreamGeneratorPlayback] = []
 var generators: Array[AudioStreamPlayer] = []
+var sample_players: Array[AudioStreamPlayer] = []
 const MAX_PLAYERS := 8
 const SAMPLE_RATE := 22050
+const AUDIO_DIR := "res://assets/audio/"
 
 func _ready():
 	for i in MAX_PLAYERS:
@@ -16,6 +18,30 @@ func _ready():
 		add_child(gen)
 		generators.append(gen)
 		players.append(null)
+
+	for i in 4:
+		var sample_player = AudioStreamPlayer.new()
+		sample_player.bus = "Master"
+		add_child(sample_player)
+		sample_players.append(sample_player)
+
+func _play_sample(name: String) -> bool:
+	var extensions: Array[String] = [".wav", ".ogg", ".mp3"]
+	for ext in extensions:
+		var path: String = AUDIO_DIR + name + ext
+		if ResourceLoader.exists(path):
+			var idx: int = _get_free_sample_index()
+			var player_node: AudioStreamPlayer = sample_players[idx]
+			player_node.stream = load(path)
+			player_node.play()
+			return true
+	return false
+
+func _get_free_sample_index() -> int:
+	for i in sample_players.size():
+		if not sample_players[i].playing:
+			return i
+	return 0
 
 func _get_free_index() -> int:
 	for i in generators.size():
@@ -53,11 +79,15 @@ func _generate_tone(playback: AudioStreamGeneratorPlayback, freq: float, duratio
 		phase += increment
 
 func play_hit() -> void:
+	if _play_sample("hit"):
+		return
 	_play_tone(200, 0.1, 0.4, 1)
 	await get_tree().create_timer(0.05).timeout
 	_play_tone(150, 0.08, 0.3, 1)
 
 func play_pickup() -> void:
+	if _play_sample("pickup"):
+		return
 	_play_tone(523, 0.08, 0.3, 0)
 	await get_tree().create_timer(0.06).timeout
 	_play_tone(659, 0.08, 0.3, 0)
@@ -65,6 +95,8 @@ func play_pickup() -> void:
 	_play_tone(784, 0.12, 0.35, 0)
 
 func play_level_start() -> void:
+	if _play_sample("level_start"):
+		return
 	_play_tone(392, 0.15, 0.3, 0)
 	await get_tree().create_timer(0.12).timeout
 	_play_tone(523, 0.15, 0.3, 0)
@@ -72,6 +104,8 @@ func play_level_start() -> void:
 	_play_tone(659, 0.2, 0.35, 0)
 
 func play_victory() -> void:
+	if _play_sample("victory"):
+		return
 	_play_tone(523, 0.12, 0.35, 0)
 	await get_tree().create_timer(0.1).timeout
 	_play_tone(659, 0.12, 0.35, 0)
@@ -81,6 +115,8 @@ func play_victory() -> void:
 	_play_tone(1047, 0.3, 0.4, 0)
 
 func play_death() -> void:
+	if _play_sample("death"):
+		return
 	_play_tone(440, 0.15, 0.35, 1)
 	await get_tree().create_timer(0.12).timeout
 	_play_tone(349, 0.15, 0.3, 1)
@@ -90,7 +126,11 @@ func play_death() -> void:
 	_play_tone(220, 0.4, 0.35, 1)
 
 func play_step() -> void:
+	if _play_sample("step"):
+		return
 	_play_tone(80, 0.05, 0.15, 2)
 
 func play_wall_hit() -> void:
+	if _play_sample("wall_hit"):
+		return
 	_play_tone(100, 0.06, 0.2, 1)

@@ -40,7 +40,7 @@ func try_move(maze: MazeGenerator, occupied: Dictionary) -> void:
 	for d in dirs:
 		if maze.can_move(pos.x, pos.y, d):
 			var next = pos + Vector2i(MazeGenerator.DX[d], MazeGenerator.DY[d])
-			if maze._in_bounds(next.x, next.y) and not occupied.has(next):
+			if maze.in_bounds(next.x, next.y) and not occupied.has(next):
 				pos = next
 				break
 

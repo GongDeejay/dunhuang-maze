@@ -303,6 +303,9 @@ func has_wall(cx: int, cy: int, dir: int) -> bool:
 func can_move(cx: int, cy: int, dir: int) -> bool:
 	return not has_wall(cx, cy, dir)
 
+func in_bounds(x: int, y: int) -> bool:
+	return _in_bounds(x, y)
+
 func _in_bounds(x: int, y: int) -> bool:
 	return x >= 0 and x < width and y >= 0 and y < height
 

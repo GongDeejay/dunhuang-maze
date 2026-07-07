@@ -1,0 +1,23 @@
+name: Test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  godot-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot 4 headless
+        run: |
+          GODOT_VERSION="4.3.2"
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          chmod +x Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+
+      - name: Run headless tests
+        run: godot --headless --path . res://tests/test_runner.tscn
