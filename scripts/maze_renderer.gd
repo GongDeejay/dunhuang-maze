@@ -1,52 +1,69 @@
 class_name MazeRenderer
 extends RefCounted
 
+const FAMILY_KEY_TO_SPRITE := AssetRegistry.FAMILY_KEY_TO_SPRITE
+
 var cell_size: int = 40
 var wall_thickness: int = 4
 var item_sprites: Dictionary = {}
 var terrain_sprites: Dictionary = {}
 var player_sprite: Texture2D
 var family_sprites: Array[Texture2D] = []
+var family_sprite_map: Dictionary = {}
 
 func load_sprites() -> void:
-	player_sprite = load("res://assets/sprites/player/dj.png")
+	player_sprite = _load_character_sprite("dj")
 	family_sprites = [
-		load("res://assets/sprites/player/le.png"),
-		load("res://assets/sprites/player/mac.png"),
-		load("res://assets/sprites/player/mcking.png"),
+		_load_character_sprite("le"),
+		_load_character_sprite("mac"),
+		_load_character_sprite("mcking"),
 	]
-	item_sprites = {
-		"container": load("res://assets/sprites/item/pot.png"),
-		"heal": load("res://assets/sprites/item/scroll.png"),
-		"defense": load("res://assets/sprites/item/shield.png"),
-		"attack": load("res://assets/sprites/item/sword.png"),
-		"trap": load("res://assets/sprites/item/pot.png"),
-		"key": load("res://assets/sprites/player/le.png"),
+	family_sprite_map = {
+		"family_1": family_sprites[0],
+		"family_2": family_sprites[1],
+		"family_3": family_sprites[2],
 	}
-	terrain_sprites = {
-		"sand": load("res://assets/sprites/terrain/sand.png"),
-		"desert": load("res://assets/sprites/terrain/desert.png"),
-		"grotto": load("res://assets/sprites/terrain/hole/line.png"),
-		"oasis": load("res://assets/sprites/terrain/oasis/defult.png"),
-		"ancient_road": load("res://assets/sprites/terrain/road/line.png"),
-	}
+	item_sprites = {}
+	for item_type in AssetRegistry.ITEM_TYPE_FILES:
+		var path := AssetRegistry.item_sprite_path(item_type)
+		if ResourceLoader.exists(path):
+			item_sprites[item_type] = load(path)
+	item_sprites["key"] = family_sprites[0]
+	terrain_sprites = {}
+	for t_key in AssetRegistry.TERRAIN_FILES:
+		var path := AssetRegistry.terrain_sprite_path(t_key)
+		if ResourceLoader.exists(path):
+			terrain_sprites[t_key] = load(path)
 	_load_terrain_variants()
 
+func _load_character_sprite(name: String) -> Texture2D:
+	var path := AssetRegistry.character_sprite_path(name)
+	if ResourceLoader.exists(path):
+		return load(path)
+	return null
+
+func get_family_sprite(item_key: String) -> Texture2D:
+	if family_sprite_map.has(item_key):
+		return family_sprite_map[item_key]
+	return family_sprites[0] if not family_sprites.is_empty() else null
+
+func draw_sprite_in_cell(
+	canvas: CanvasItem,
+	texture: Texture2D,
+	cell_origin: Vector2,
+	cell_sz: float,
+	padding: float,
+) -> void:
+	if texture == null:
+		return
+	var inner := cell_sz - padding * 2.0
+	canvas.draw_texture_rect(texture, Rect2(cell_origin + Vector2(padding, padding), Vector2(inner, inner)), false)
+
 func _load_terrain_variants() -> void:
-	var variant_paths := {
-		"ancient_road_cross": "res://assets/sprites/terrain/road/cross.png",
-		"ancient_road_cross_t": "res://assets/sprites/terrain/road/cross_t.png",
-		"ancient_road_cross_l": "res://assets/sprites/terrain/road/cross_l.png",
-		"grotto_cross": "res://assets/sprites/terrain/hole/cross.png",
-		"grotto_cross_t": "res://assets/sprites/terrain/hole/cross_t.png",
-		"grotto_cross_l": "res://assets/sprites/terrain/hole/cross_l.png",
-		"oasis_pond": "res://assets/sprites/terrain/oasis/pond.png",
-		"oasis_tree": "res://assets/sprites/terrain/oasis/tree.png",
-	}
-	for key in variant_paths:
-		var tex: Texture2D = load(variant_paths[key])
-		if tex:
-			terrain_sprites[key] = tex
+	for key in AssetRegistry.TERRAIN_VARIANTS:
+		var path := AssetRegistry.terrain_sprite_path(key)
+		if ResourceLoader.exists(path):
+			terrain_sprites[key] = load(path)
 
 func get_terrain_sprite(maze: MazeGenerator, x: int, y: int) -> Texture2D:
 	var t_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(x, y)]
@@ -98,6 +115,10 @@ func draw_pc_view(
 	buff_display: String,
 	combat_log: Array,
 	inventory: Inventory,
+	key_tracker: KeyTracker = null,
+	selected_slot: int = 0,
+	guide_dir: int = -1,
+	low_hp_pulse: float = 0.0,
 ) -> void:
 	var panel_w: float = 220.0
 	var game_w: float = vp.x - panel_w
@@ -119,8 +140,10 @@ func draw_pc_view(
 	draw_pillars(canvas, maze, maze_width, maze_height, offset, draw_scale)
 	draw_exit(canvas, exit_pos, offset, draw_scale, is_revealed, exit_visible, game_won)
 	draw_items(canvas, items, offset, draw_scale, is_revealed)
-	draw_monsters(canvas, monsters, offset, draw_scale, is_revealed)
+	draw_monsters(canvas, monsters, offset, draw_scale, is_revealed, player.pos)
 	draw_player(canvas, player, offset, draw_scale)
+	if guide_dir >= 0:
+		draw_path_arrow(canvas, player.pos, guide_dir, offset, draw_scale)
 
 	canvas.draw_rect(Rect2(game_w, 0, panel_w, vp.y), Color(0.12, 0.10, 0.08))
 	ui_panel.draw_panel(
@@ -129,7 +152,8 @@ func draw_pc_view(
 		levels_data, current_level_index, difficulty_name,
 		move_count, current_terrain_name, buff_display,
 		visited, is_revealed,
-		combat_log, inventory,
+		combat_log, inventory, key_tracker,
+		selected_slot, items, guide_dir, low_hp_pulse,
 	)
 
 func draw_cells(
@@ -238,13 +262,17 @@ func draw_items(
 			continue
 		var ip := offset + Vector2(it.pos.x * cs, it.pos.y * cs)
 		if it.item_type == "key":
-			var pal: Array = key_palettes[key_index % 3]
-			draw_character(canvas, ip, cs / 16.0, pal[0], pal[1], pal[2])
+			var family_sprite := get_family_sprite(it.item_key)
+			if family_sprite:
+				draw_sprite_in_cell(canvas, family_sprite, ip, cs, wt)
+			else:
+				var pal: Array = key_palettes[key_index % 3]
+				draw_character(canvas, ip, cs / 16.0, pal[0], pal[1], pal[2])
 			key_index += 1
 		else:
 			var sprite: Texture2D = item_sprites.get(it.item_type)
 			if sprite:
-				canvas.draw_texture_rect(sprite, Rect2(ip + Vector2(wt, wt), Vector2(cs - wt * 2, cs - wt * 2)), false)
+				draw_sprite_in_cell(canvas, sprite, ip, cs, wt)
 			else:
 				canvas.draw_rect(Rect2(ip + Vector2(wt, wt), Vector2(cs - wt * 2, cs - wt * 2)), it.color.darkened(0.2))
 				canvas.draw_string(
@@ -258,29 +286,77 @@ func draw_monsters(
 	offset: Vector2,
 	scale: float,
 	is_revealed: Callable,
+	player_pos: Vector2i = Vector2i(-1, -1),
 ) -> void:
 	var cs: float = cell_size * scale
 	var wt: float = wall_thickness * scale
 	for m in monsters:
 		if not is_instance_valid(m) or not is_revealed.call(m.pos):
 			continue
+		if m.pos == player_pos:
+			continue
 		var mp := offset + Vector2(m.pos.x * cs, m.pos.y * cs)
-		canvas.draw_rect(Rect2(mp + Vector2(wt, wt), Vector2(cs - wt * 2, cs - wt * 2)), m.color.darkened(0.3))
-		canvas.draw_string(
-			ThemeDB.fallback_font, mp + Vector2(cs * 0.3, cs * 0.65),
-			m.symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * scale), m.color,
-		)
-		var hp_ratio := float(m.hp) / float(m.max_hp)
-		var bar_w := cs - wt * 2 - 4
-		var bar_x := mp.x + wt + 2
-		var bar_y := mp.y + cs - wt - 6
-		canvas.draw_rect(Rect2(bar_x, bar_y, bar_w, 4), Color(0.2, 0.1, 0.1))
-		canvas.draw_rect(Rect2(bar_x, bar_y, bar_w * hp_ratio, 4), Color(0.8, 0.2, 0.2))
+		draw_monster_in_cell(canvas, m, mp, cs, wt, scale)
+
+
+func draw_monster_in_cell(
+	canvas: CanvasItem,
+	m: MonsterEntity,
+	cell_origin: Vector2,
+	cs: float,
+	wt: float,
+	scale: float = 1.0,
+) -> void:
+	if not is_instance_valid(m):
+		return
+	canvas.draw_rect(Rect2(cell_origin + Vector2(wt, wt), Vector2(cs - wt * 2, cs - wt * 2)), m.color.darkened(0.3))
+	canvas.draw_string(
+		ThemeDB.fallback_font, cell_origin + Vector2(cs * 0.3, cs * 0.65),
+		m.symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * scale), m.color,
+	)
+	var hp_ratio := float(m.hp) / float(maxi(m.max_hp, 1))
+	var bar_w := cs - wt * 2 - 4.0
+	var bar_x := cell_origin.x + wt + 2.0
+	var bar_y := cell_origin.y + cs - wt - 6.0
+	canvas.draw_rect(Rect2(bar_x, bar_y, bar_w, 4.0), Color(0.2, 0.1, 0.1))
+	canvas.draw_rect(Rect2(bar_x, bar_y, bar_w * hp_ratio, 4.0), Color(0.8, 0.2, 0.2))
 
 func draw_player(canvas: CanvasItem, player: PlayerController, offset: Vector2, scale: float) -> void:
 	var cs: float = cell_size * scale
+	var wt: float = wall_thickness * scale
 	var pp := offset + Vector2(player.pos.x * cs, player.pos.y * cs)
-	draw_character(canvas, pp, cs / 16.0, Color(0.27, 0.51, 0.71), Color(0.85, 0.65, 0.13), Color(1.0, 0.85, 0.72))
+	if player_sprite:
+		draw_sprite_in_cell(canvas, player_sprite, pp, cs, wt)
+	else:
+		draw_character(canvas, pp, cs / 16.0, Color(0.27, 0.51, 0.71), Color(0.85, 0.65, 0.13), Color(1.0, 0.85, 0.72))
+
+func draw_path_arrow(canvas: CanvasItem, pos: Vector2i, dir: int, offset: Vector2, scale: float) -> void:
+	var cs: float = cell_size * scale
+	var center := offset + Vector2(pos.x * cs + cs * 0.5, pos.y * cs + cs * 0.5)
+	var tip := center
+	var left := center
+	var right := center
+	var arrow_len := cs * 0.22
+	match dir:
+		MazeGenerator.N:
+			tip += Vector2(0, -arrow_len)
+			left += Vector2(-arrow_len * 0.5, arrow_len * 0.2)
+			right += Vector2(arrow_len * 0.5, arrow_len * 0.2)
+		MazeGenerator.S:
+			tip += Vector2(0, arrow_len)
+			left += Vector2(-arrow_len * 0.5, -arrow_len * 0.2)
+			right += Vector2(arrow_len * 0.5, -arrow_len * 0.2)
+		MazeGenerator.E:
+			tip += Vector2(arrow_len, 0)
+			left += Vector2(-arrow_len * 0.2, -arrow_len * 0.5)
+			right += Vector2(-arrow_len * 0.2, arrow_len * 0.5)
+		MazeGenerator.W:
+			tip += Vector2(-arrow_len, 0)
+			left += Vector2(arrow_len * 0.2, -arrow_len * 0.5)
+			right += Vector2(arrow_len * 0.2, arrow_len * 0.5)
+		_:
+			return
+	canvas.draw_colored_polygon(PackedVector2Array([tip, left, right]), Color(0.35, 0.9, 1.0, 0.85))
 
 func draw_character(canvas: CanvasItem, o: Vector2, s: float, robe: Color, hair: Color, skin: Color) -> void:
 	canvas.draw_rect(Rect2(o.x + 4 * s, o.y + 1 * s, 8 * s, 5 * s), hair)
@@ -297,7 +373,7 @@ func draw_character(canvas: CanvasItem, o: Vector2, s: float, robe: Color, hair:
 	canvas.draw_rect(Rect2(o.x + 5 * s, o.y + 14 * s, 2 * s, 2 * s), hair.darkened(0.2))
 	canvas.draw_rect(Rect2(o.x + 9 * s, o.y + 14 * s, 2 * s, 2 * s), hair.darkened(0.2))
 
-func draw_difficulty_select(canvas: CanvasItem, vp: Vector2, selected_difficulty: String) -> void:
+func draw_difficulty_select(canvas: CanvasItem, vp: Vector2, selected_difficulty: String, continue_hint: String = "") -> void:
 	canvas.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0.12, 0.1, 0.08))
 	var min_dim := minf(vp.x, vp.y)
 	var font_mult := clampf(min_dim / 400.0, 1.0, 2.5)
@@ -310,31 +386,42 @@ func draw_difficulty_select(canvas: CanvasItem, vp: Vector2, selected_difficulty
 		ThemeDB.fallback_font, Vector2(vp.x / 2 - 60 * font_mult, title_y + 40 * font_mult),
 		"选择旅途难度", HORIZONTAL_ALIGNMENT_LEFT, -1, int(20 * font_mult), Color(0.7, 0.65, 0.55),
 	)
-	var start_y := vp.y * 0.4
+	var start_y := vp.y * 0.38
+	var row_h := 88 * font_mult
 	for i in GameState.DIFFICULTY_OPTIONS.size():
 		var key: String = GameState.DIFFICULTY_OPTIONS[i]
 		var name: String = GameState.DIFFICULTY_NAMES[key]
 		var diff: Dictionary = DataLoader.difficulty_data.get(key, {})
 		var desc: String = diff.get("description", "")
+		var stats: String = _format_difficulty_stats(diff)
 		var is_selected := key == selected_difficulty
-		var y := start_y + i * 80 * font_mult
+		var y := start_y + i * row_h
 		var bg_color := Color(0.25, 0.2, 0.15) if is_selected else Color(0.18, 0.15, 0.12)
 		var text_color := Color(1.0, 0.9, 0.6) if is_selected else Color(0.6, 0.55, 0.45)
-		canvas.draw_rect(Rect2(vp.x / 2 - 180 * font_mult, y - 10, 360 * font_mult, 65 * font_mult), bg_color)
+		canvas.draw_rect(Rect2(vp.x / 2 - 180 * font_mult, y - 10, 360 * font_mult, row_h - 12 * font_mult), bg_color)
 		if is_selected:
-			canvas.draw_rect(Rect2(vp.x / 2 - 180 * font_mult, y - 10, 4, 65 * font_mult), Color(0.9, 0.7, 0.2))
+			canvas.draw_rect(Rect2(vp.x / 2 - 180 * font_mult, y - 10, 4, row_h - 12 * font_mult), Color(0.9, 0.7, 0.2))
 		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 15),
+			ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 12),
 			name, HORIZONTAL_ALIGNMENT_LEFT, -1, int(22 * font_mult), text_color,
 		)
 		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 40),
-			desc, HORIZONTAL_ALIGNMENT_LEFT, -1, int(13 * font_mult), Color(0.5, 0.48, 0.42),
+			ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 34),
+			desc, HORIZONTAL_ALIGNMENT_LEFT, -1, int(12 * font_mult), Color(0.5, 0.48, 0.42),
+		)
+		canvas.draw_string(
+			ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 52),
+			stats, HORIZONTAL_ALIGNMENT_LEFT, -1, int(11 * font_mult), Color(0.55, 0.75, 0.55),
 		)
 	canvas.draw_string(
 		ThemeDB.fallback_font, Vector2(vp.x / 2 - 100 * font_mult, vp.y * 0.85),
 		"↑↓ 选择  回车/→ 确认", HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * font_mult), Color(0.5, 0.48, 0.42),
 	)
+	if continue_hint != "":
+		canvas.draw_string(
+			ThemeDB.fallback_font, Vector2(vp.x / 2 - 140 * font_mult, vp.y * 0.92),
+			continue_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, int(14 * font_mult), Color(0.4, 0.75, 0.45),
+		)
 
 func draw_error_screen(canvas: CanvasItem, vp: Vector2) -> void:
 	canvas.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0.15, 0.1, 0.08))
@@ -376,3 +463,12 @@ func _terrain_symbol_color(t_key: String, floor_color: Color) -> Color:
 	if floor_color.get_luminance() > 0.5:
 		return Color(0.2, 0.15, 0.1)
 	return Color(0.9, 0.85, 0.7)
+
+
+func _format_difficulty_stats(diff: Dictionary) -> String:
+	var base_hp := int(DataLoader.player_stats.get("max_hp", 18) * diff.get("hp_multiplier", 1.0))
+	var base_atk := int(DataLoader.player_stats.get("base_atk", 5) * diff.get("atk_multiplier", 1.0))
+	var drop := int(diff.get("item_drop_multiplier", 1.0) * 100)
+	var reveal := int(diff.get("reveal_radius_bonus", 0))
+	var reveal_str := "+%d 视野" % reveal if reveal >= 0 else "%d 视野" % reveal
+	return "HP≈%d  攻≈%d  掉落%d%%  %s" % [base_hp, base_atk, drop, reveal_str]

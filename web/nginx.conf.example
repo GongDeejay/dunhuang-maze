@@ -1,0 +1,56 @@
+# 敦煌迷途 — Nginx 站点示例
+# 域名: maze.mplusm.site
+# 将 root 指向 web/ 导出目录
+
+server {
+    listen 443 ssl http2;
+    server_name maze.mplusm.site;
+
+    # ssl_certificate     /path/to/fullchain.pem;
+    # ssl_certificate_key /path/to/privkey.pem;
+
+    root /www/wwwroot/maze.mplusm.site;
+    index index.html;
+
+    # Godot Web 跨域隔离（必须）
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Embedder-Policy "require-corp" always;
+
+    # 压缩（推荐）
+    gzip on;
+    gzip_types application/wasm application/javascript text/html text/css application/octet-stream;
+    gzip_min_length 1024;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.wasm$ {
+        types { application/wasm wasm; }
+        default_type application/wasm;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+    }
+
+    location ~* \.(pck|js)$ {
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+    }
+
+    location = /index.html {
+        expires -1;
+        add_header Cache-Control "no-cache";
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+    }
+}
+
+server {
+    listen 80;
+    server_name maze.mplusm.site;
+    return 301 https://$host$request_uri;
+}

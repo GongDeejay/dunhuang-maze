@@ -1,0 +1,101 @@
+{
+  "project": "敦煌迷途",
+  "project_en": "Dunhuang Maze",
+  "entry": "index.html",
+  "godot_version": "4.7",
+  "build_time_utc": "2026-07-07T07:01:49Z",
+  "git_revision": "4019ac3",
+  "deploy": {
+    "domain": "maze.mplusm.site",
+    "web_root": "/www/wwwroot/maze.mplusm.site",
+    "requires_https": true,
+    "requires_cross_origin_isolation": true
+  },
+  "headers_required": [
+    "Cross-Origin-Opener-Policy: same-origin",
+    "Cross-Origin-Embedder-Policy: require-corp"
+  ],
+  "total_bytes": 57913731,
+  "files": [
+    {
+      "name": "DEPLOY.md",
+      "bytes": 5289,
+      "sha256": "b4851bcdf70ea080b833beba38b580dfd42235733c6b0ee1f3d14b8f0ed2e650"
+    },
+    {
+      "name": "MANIFEST.json",
+      "bytes": 2942,
+      "sha256": "636e186d0bf2459905d82d416ef4e0e6ae709770795923242825b02f7be7017e"
+    },
+    {
+      "name": "VERSION.txt",
+      "bytes": 730,
+      "sha256": "df694f3b3537857d97bc937063c1c65ce64bd90329200523be5bef6d03552c98"
+    },
+    {
+      "name": "apache.htaccess.example",
+      "bytes": 653,
+      "sha256": "8cfeafab7a1626067a72c63770ea16b9d2898dbcc6ae1679d81bbd7aaaac68e3"
+    },
+    {
+      "name": "index.apple-touch-icon.png",
+      "bytes": 11944,
+      "sha256": "01d4f63e525941e06ce74f5187dad030d20a8d52a07ce365ae4e94af97a3b1f5"
+    },
+    {
+      "name": "index.audio.position.worklet.js",
+      "bytes": 2973,
+      "sha256": "be33985bc7160d6bf9646f259cd86b259cd67b02ccb297ee5c44f8ac84327bc8"
+    },
+    {
+      "name": "index.audio.worklet.js",
+      "bytes": 7298,
+      "sha256": "5b476a9c9ce642c0ee4256436d1bc31d9c38f868aca0f9a8e2a57c18d2dec2a3"
+    },
+    {
+      "name": "index.html",
+      "bytes": 5443,
+      "sha256": "68bbfb673080ce3875b544b90937a6ba635a806e488332fa571ba28a941b05cb"
+    },
+    {
+      "name": "index.icon.png",
+      "bytes": 5700,
+      "sha256": "ad3c35ad0facf487c618204bd98db543034fc95224eadc7f08c7a9ff38d5b3b5"
+    },
+    {
+      "name": "index.js",
+      "bytes": 279815,
+      "sha256": "68586d6daafc93c6e697b3fb258976874aa7459b8931165ebb1dc3c9614cc42c"
+    },
+    {
+      "name": "index.pck",
+      "bytes": 8005836,
+      "sha256": "e6a7d583f535932c52851f08a121ed6fd43ac1b36dc46df1bc4c5a196bc1c711"
+    },
+    {
+      "name": "index.png",
+      "bytes": 21443,
+      "sha256": "3cb4495c0b98dfbe4b663cbf2b6836473572339beb66d902367893162a70be0e"
+    },
+    {
+      "name": "index.wasm",
+      "bytes": 39509339,
+      "sha256": "7eda98958eb09135a1acb54a4323a00b1a55af1997f15fa1cdc2b93e3df46656"
+    },
+    {
+      "name": "index.wasm.gz",
+      "bytes": 10052184,
+      "sha256": "5980b5a35be384ba12bd7f4d9c5b0c9d082ba98871bfbedab3ae3e84c8586b60"
+    },
+    {
+      "name": "nginx.conf.example",
+      "bytes": 1658,
+      "sha256": "fab49ef8901359524dabba2bcc47ad6344cfe5dfd251298e499e2c0ef34343b6"
+    },
+    {
+      "name": "project.conf",
+      "bytes": 484,
+      "sha256": "408e321d2ae6842fdaec978e4f4ec2367a57ce2eaa0de7c6dd992d92d3633f27"
+    }
+  ]
+}

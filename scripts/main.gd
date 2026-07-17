@@ -31,8 +31,16 @@ var ui_panel: UIPanel
 var mobile_controls: MobileControls
 var maze_renderer: MazeRenderer
 var mobile_renderer: MobileRenderer
+var game_view_composer: GameViewComposer
+var current_layout: LayoutProfile = LayoutProfile.new()
 var flash_tweens: Array[Tween] = []
 var needs_redraw := true
+var selected_inventory_slot: int = 0
+var show_new_journey_confirm: bool = false
+var tutorial_done: bool = false
+var first_combat_warned: bool = false
+var low_hp_pulse: float = 0.0
+var input_handler := InputHandler.new()
 
 # Aliases for TurnResolver compatibility
 var move_count: int:
@@ -53,6 +61,7 @@ var current_level_index: int:
 
 func _ready() -> void:
 	_ensure_data_loaded()
+	cell_size = PlatformService.get_target_cell_size(cell_size)
 	maze_renderer = MazeRenderer.new()
 	maze_renderer.cell_size = cell_size
 	maze_renderer.wall_thickness = wall_thickness
@@ -65,19 +74,25 @@ func _ready() -> void:
 	player.hp_changed.connect(_on_hp_changed)
 
 	inventory = Inventory.new()
-	inventory.inventory_changed.connect(_request_redraw)
+	inventory.inventory_changed.connect(_on_inventory_changed)
 	key_tracker = KeyTracker.new()
 	key_tracker.key_collected.connect(func(_c, _r): _update_mobile_ui())
 	ui_panel = UIPanel.new()
+	game_view_composer = GameViewComposer.new(maze_renderer, mobile_renderer, ui_panel)
 	mobile_controls = MobileControls.new()
 	mobile_controls.move_pressed.connect(_on_mobile_move)
 	mobile_controls.action_pressed.connect(_on_mobile_action)
-	add_child(mobile_controls)
+	var touch_layer := CanvasLayer.new()
+	touch_layer.layer = 100
+	touch_layer.name = "TouchLayer"
+	add_child(touch_layer)
+	touch_layer.add_child(mobile_controls)
 
 	levels_data = DataLoader.get_level_data()
 	if levels_data.is_empty():
 		levels_data = [{"name": "未知", "maze_width": 20, "maze_height": 15, "monster_density": 0.12}]
 	_try_load_save()
+	_refresh_layout()
 	_request_redraw()
 
 func _try_load_save() -> void:
@@ -88,12 +103,23 @@ func _try_load_save() -> void:
 	game.selected_difficulty = str(save.get("difficulty", "normal"))
 	DataLoader.set_difficulty(game.selected_difficulty)
 
+func _on_inventory_changed() -> void:
+	if inventory.get_count() == 0:
+		selected_inventory_slot = 0
+	elif selected_inventory_slot >= inventory.get_count():
+		selected_inventory_slot = inventory.get_count() - 1
+	_request_redraw()
+
 func _on_hp_changed(_new_hp: int, _max_hp: int) -> void:
 	_update_mobile_ui()
+	if _max_hp > 0 and float(_new_hp) / float(_max_hp) <= 0.3:
+		low_hp_pulse = 1.0
 	_request_redraw()
 
 func _request_redraw() -> void:
 	needs_redraw = true
+	if mobile_controls:
+		mobile_controls.queue_redraw()
 
 func _on_mobile_move(dir: int) -> void:
 	if game.is_difficulty_select():
@@ -112,16 +138,33 @@ func _on_mobile_move(dir: int) -> void:
 		TurnResolver.resolve_after_move(self)
 
 func _update_mobile_ui() -> void:
-	if mobile_controls and player:
-		mobile_controls.update_values(
-			player.hp, player.max_hp,
-			key_tracker.collected_keys, game.move_count, level_key_count,
-		)
+	_refresh_layout()
+	_request_redraw()
+
+
+func _refresh_layout() -> void:
+	var vp := get_viewport_rect().size
+	PlatformService.refresh(vp)
+	var touch := PlatformService.use_mobile_ui or DisplayServer.is_touchscreen_available() or PlatformService.is_portrait_viewport(vp)
+	current_layout = UILayoutDirector.compute(vp, touch)
+	if mobile_controls:
+		mobile_controls.apply_layout(current_layout)
+
+
+func _input(event: InputEvent) -> void:
+	if game.is_difficulty_select():
+		return
+	if not current_layout.show_touch_controls:
+		return
+	if mobile_controls.try_handle_input(event):
+		get_viewport().set_input_as_handled()
 
 func _on_mobile_action(action: String) -> void:
 	match action:
 		"use_item":
-			_use_item_from_inventory()
+			_use_item_from_inventory(selected_inventory_slot)
+		"cycle_item":
+			_cycle_inventory_slot(1)
 		"regenerate":
 			_handle_regenerate()
 		"menu":
@@ -167,10 +210,11 @@ func _new_game(level_idx: int = -1) -> void:
 	var hp_mult = diff.get("hp_multiplier", 1.0)
 	var atk_mult = diff.get("atk_multiplier", 1.0)
 	player.initialize(Vector2i(0, 0))
-	player.max_hp = int(DataLoader.player_stats.get("max_hp", 18) * hp_mult)
-	player.hp = player.max_hp
-	player.atk = int(DataLoader.player_stats.get("base_atk", 5) * atk_mult)
+	var base_max_hp := int(DataLoader.player_stats.get("max_hp", 18) * hp_mult)
+	var base_atk := int(DataLoader.player_stats.get("base_atk", 5) * atk_mult)
+	player.apply_base_stats(base_max_hp, base_atk)
 	player.reveal_bonus = diff.get("reveal_radius_bonus", 0)
+	inventory.clear()
 	exit_pos = Vector2i(maze_width - 1, maze_height - 1)
 	game.reset_round()
 	visited = {}
@@ -186,10 +230,45 @@ func _new_game(level_idx: int = -1) -> void:
 	)
 	_mark_visited(player.pos)
 	current_terrain_name = maze.get_terrain_name(player.pos.x, player.pos.y)
+	selected_inventory_slot = 0
+	first_combat_warned = false
 	_add_log("进入 %s - 找到 %d 个家人，一起离开" % [level.get("name", ""), level_key_count])
+	_show_tutorial_if_needed()
 	AudioManager.play_level_start()
 	SaveManager.save_progress(current_level_index, selected_difficulty, player.level, player.xp)
 	_request_redraw()
+
+func _show_tutorial_if_needed() -> void:
+	if current_level_index != 0 or tutorial_done:
+		return
+	tutorial_done = true
+	_add_log("【引导】WASD 移动，在迷宫中寻找散落的家人")
+	_add_log("【引导】集齐家人后，前往出口「门」离开")
+	_add_log("【引导】1-5 选择背包道具，E 使用；侧栏箭头为路径指引")
+
+func _cycle_inventory_slot(delta: int) -> void:
+	if inventory.get_count() == 0:
+		selected_inventory_slot = 0
+		return
+	selected_inventory_slot = (selected_inventory_slot + delta) % inventory.get_count()
+	if selected_inventory_slot < 0:
+		selected_inventory_slot += inventory.get_count()
+	_request_redraw()
+
+func _select_inventory_slot(index: int) -> void:
+	if index < 0 or index >= inventory.get_count():
+		return
+	selected_inventory_slot = index
+	_request_redraw()
+
+func _get_guide_direction() -> int:
+	if maze == null or game_won or game_over:
+		return -1
+	var target := PathGuide.nearest_target(
+		maze, player.pos, items, exit_pos,
+		key_tracker.collected_keys, level_key_count,
+	)
+	return PathGuide.next_direction(maze, player.pos, target)
 
 func _get_item_at(pos: Vector2i) -> ItemEntity:
 	for it in items:
@@ -296,63 +375,76 @@ func _add_log(msg: String) -> void:
 	_request_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if game.is_difficulty_select():
-		if event.is_action_pressed("move_up"):
-			game.cycle_difficulty(-1)
+	var action := input_handler.handle(event, _input_context())
+	if action.type == GameAction.Type.NONE:
+		return
+	_apply_game_action(action)
+
+func _input_context() -> Dictionary:
+	return {
+		"show_confirm": show_new_journey_confirm,
+		"difficulty_select": game.is_difficulty_select(),
+		"game_won": game_won,
+		"game_over": game_over,
+		"selected_slot": selected_inventory_slot,
+		"use_mobile_ui": current_layout.show_touch_controls,
+		"allow_hud_click": not current_layout.is_side_hud(),
+		"hud_rect": current_layout.hud_rect,
+	}
+
+func _apply_game_action(action: GameAction) -> void:
+	match action.type:
+		GameAction.Type.CONFIRM:
+			if show_new_journey_confirm:
+				show_new_journey_confirm = false
+				_do_start_playing(true)
+				_request_redraw()
+			elif game.is_difficulty_select():
+				_start_playing()
+		GameAction.Type.CANCEL:
+			show_new_journey_confirm = false
 			_request_redraw()
-		elif event.is_action_pressed("move_down"):
-			game.cycle_difficulty(1)
+		GameAction.Type.CYCLE_DIFFICULTY:
+			game.cycle_difficulty(action.diff_delta)
 			_request_redraw()
-		elif event.is_action_pressed("regenerate") or event.is_action_pressed("move_right"):
-			_start_playing()
-		elif (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) or (event is InputEventScreenTouch and event.pressed):
-			_handle_difficulty_click(event.position)
-		return
-
-	if game_won or game_over:
-		if event.is_action_pressed("regenerate"):
-			_handle_regenerate()
-		return
-
-	if event.is_action_pressed("regenerate"):
-		_new_game(current_level_index)
-		return
-
-	if event is InputEventKey and event.pressed and event.keycode == KEY_E:
-		_use_item_from_inventory()
-		return
-
-	if event is InputEventKey and event.pressed and event.keycode == KEY_Q:
-		game.return_to_menu()
-		_request_redraw()
-		return
-
-	var moved := false
-	if event.is_action_pressed("move_up"):
-		moved = _try_move(MazeGenerator.N)
-	elif event.is_action_pressed("move_down"):
-		moved = _try_move(MazeGenerator.S)
-	elif event.is_action_pressed("move_left"):
-		moved = _try_move(MazeGenerator.W)
-	elif event.is_action_pressed("move_right"):
-		moved = _try_move(MazeGenerator.E)
-
-	if moved:
-		AudioManager.play_step()
-		TurnResolver.resolve_after_move(self)
+		GameAction.Type.CLICK_AT:
+			if game.is_difficulty_select():
+				_handle_difficulty_click(action.position)
+			else:
+				var slot := game_view_composer.get_inventory_slot_at(action.position, current_layout)
+				if slot >= 0:
+					_select_inventory_slot(slot)
+		GameAction.Type.REGENERATE:
+			if game_won or game_over:
+				_handle_regenerate()
+			elif not game.is_difficulty_select():
+				_new_game(current_level_index)
+		GameAction.Type.USE_ITEM:
+			_use_item_from_inventory(action.slot)
+		GameAction.Type.SELECT_SLOT:
+			_select_inventory_slot(action.slot)
+		GameAction.Type.MENU:
+			game.return_to_menu()
+			_request_redraw()
+		GameAction.Type.MOVE:
+			if not game.can_move():
+				return
+			if _try_move(action.direction):
+				AudioManager.play_step()
+				TurnResolver.resolve_after_move(self)
 
 func _start_playing() -> void:
-	DataLoader.set_difficulty(selected_difficulty)
-	game.start_game()
-	var save := SaveManager.load_progress()
-	if save.is_empty() or str(save.get("difficulty", "")) != selected_difficulty:
-		player.xp = 0
-		player.level = 1
-		_new_game(0)
-	else:
-		player.level = int(save.get("player_level", 1))
-		player.xp = int(save.get("player_xp", 0))
-		_new_game(int(save.get("level_index", 0)))
+	if GameDirector.needs_new_journey_confirm(selected_difficulty):
+		show_new_journey_confirm = true
+		_request_redraw()
+		return
+	_do_start_playing(false)
+
+func _do_start_playing(force_new: bool) -> void:
+	GameDirector.begin_session(
+		selected_difficulty, game, player, force_new,
+		func(level_idx: int): _new_game(level_idx),
+	)
 
 func _handle_difficulty_click(click_pos: Vector2) -> void:
 	var vp = get_viewport_rect().size
@@ -386,13 +478,22 @@ func _apply_terrain_effect() -> void:
 		player.heal(heal)
 		_add_log("%s: 恢复 %d HP" % [effect.get("description", ""), heal])
 
-func _use_item_from_inventory() -> void:
+func _use_item_from_inventory(slot: int = -1) -> void:
 	if inventory.get_count() == 0:
 		_add_log("背包是空的")
 		return
-	var key = inventory.use_item(0)
+	var index := slot if slot >= 0 else selected_inventory_slot
+	if index >= inventory.get_count():
+		index = 0
+	var key = inventory.use_item(index)
 	if key == "":
 		return
+	if index < inventory.get_count():
+		selected_inventory_slot = mini(index, inventory.get_count() - 1)
+	elif inventory.get_count() > 0:
+		selected_inventory_slot = mini(selected_inventory_slot, inventory.get_count() - 1)
+	else:
+		selected_inventory_slot = 0
 	var msg := player.apply_item(key)
 	_add_log(msg)
 	_request_redraw()
@@ -434,6 +535,9 @@ func _is_revealed(pos: Vector2i) -> bool:
 			radius += effect.reveal_penalty
 	return pos.distance_to(player.pos) <= radius
 
+func _get_continue_hint() -> String:
+	return GameDirector.get_continue_hint(levels_data)
+
 func _get_buff_display() -> String:
 	var parts: Array = []
 	if player.temp_atk_bonus > 0:
@@ -451,6 +555,9 @@ func _get_buff_display() -> String:
 	return "Buff: " + " ".join(parts)
 
 func _process(delta: float) -> void:
+	var vp := get_viewport_rect().size
+	PlatformService.refresh(vp)
+	_refresh_layout()
 	var dirty := false
 	if log_timer > 0:
 		log_timer -= delta
@@ -458,6 +565,12 @@ func _process(delta: float) -> void:
 			if combat_log.size() > 0:
 				combat_log.remove_at(0)
 				dirty = true
+	if low_hp_pulse > 0.0:
+		low_hp_pulse = maxf(0.0, low_hp_pulse - delta * 0.8)
+		dirty = true
+	elif player.max_hp > 0 and float(player.hp) / float(player.max_hp) <= 0.3:
+		low_hp_pulse = 0.35 + 0.25 * sin(Time.get_ticks_msec() * 0.008)
+		dirty = true
 	exit_blink_timer += delta
 	if exit_blink_timer >= 2.0:
 		exit_blink_timer = 0.0
@@ -483,46 +596,60 @@ func _move_monsters() -> bool:
 			var old_pos := m.pos
 			m.try_move(maze, occupied)
 			if m.pos == player.pos and m.pos != old_pos:
+				if not first_combat_warned:
+					first_combat_warned = true
+					_add_log("【遇敌】怪物会主动靠近攻击，注意 HP 与背包回血")
 				_combat(m)
 				did_combat = true
 	return did_combat
 
 func _draw() -> void:
 	if game.is_difficulty_select():
-		maze_renderer.draw_difficulty_select(self, get_viewport_rect().size, selected_difficulty)
+		var save_hint := _get_continue_hint()
+		maze_renderer.draw_difficulty_select(self, get_viewport_rect().size, selected_difficulty, save_hint)
+		if show_new_journey_confirm:
+			ui_panel.draw_confirm_overlay(
+				self, get_viewport_rect().size,
+				"切换难度将开始新旅途",
+				"当前存档将被覆盖",
+				"→ 确认    ← 取消",
+			)
 		return
 
 	if maze == null or maze.grid.is_empty():
 		maze_renderer.draw_error_screen(self, get_viewport_rect().size)
 		return
 
-	var vp = get_viewport_rect().size
-	if mobile_controls.is_mobile:
-		mobile_renderer.draw_mobile_view(
-			self, vp, maze, maze_width, maze_height,
-			player, monsters, items, exit_pos,
-			game_won, game_over, visited, _is_revealed,
-			mobile_controls.is_portrait,
-			levels_data, current_level_index, move_count,
-		)
-	else:
-		maze_renderer.draw_pc_view(
-			self, vp, maze, maze_width, maze_height,
-			player, monsters, items, exit_pos,
-			exit_visible, game_won, visited, _is_revealed,
-			ui_panel, levels_data, current_level_index,
-			game.get_difficulty_name(), move_count, current_terrain_name,
-			_get_buff_display(), combat_log, inventory,
-		)
-		if game_over:
-			ui_panel.draw_overlay(self, vp, "你倒下了...", "走了 %d 步" % move_count, "按 R 重新尝试", Color(0.9, 0.3, 0.2))
-		elif game_won:
-			var is_final = current_level_index + 1 >= levels_data.size()
-			var title = "通关!" if is_final else "穿越成功!"
-			var sub = "你穿越了所有关卡" if is_final else "%s 已通关" % levels_data[current_level_index].get("name", "")
-			var hint = "按 R 重新开始" if is_final else "按 R 进入下一关"
-			var c = Color(1.0, 0.85, 0.3) if is_final else Color.WHITE
-			ui_panel.draw_overlay(self, vp, title, sub + "\n用了 %d 步" % move_count, hint, c)
+	game_view_composer.draw(self, current_layout, _draw_context())
+
+func _draw_context() -> Dictionary:
+	return {
+		"maze": maze,
+		"maze_width": maze_width,
+		"maze_height": maze_height,
+		"player": player,
+		"monsters": monsters,
+		"items": items,
+		"exit_pos": exit_pos,
+		"exit_visible": exit_visible,
+		"game_won": game_won,
+		"game_over": game_over,
+		"visited": visited,
+		"is_revealed": _is_revealed,
+		"levels_data": levels_data,
+		"current_level_index": current_level_index,
+		"difficulty_name": game.get_difficulty_name(),
+		"move_count": move_count,
+		"terrain_name": current_terrain_name,
+		"buff_display": _get_buff_display(),
+		"combat_log": combat_log,
+		"inventory": inventory,
+		"key_tracker": key_tracker,
+		"selected_slot": selected_inventory_slot,
+		"guide_dir": _get_guide_direction(),
+		"low_hp_pulse": low_hp_pulse,
+	}
+
 
 func _flash_player_hurt() -> void:
 	player.is_hurt = true

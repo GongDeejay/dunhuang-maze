@@ -6,9 +6,10 @@ var maze_renderer: MazeRenderer
 func _init(renderer: MazeRenderer) -> void:
 	maze_renderer = renderer
 
-func draw_mobile_view(
+
+func draw_follow_in_rect(
 	canvas: CanvasItem,
-	vp: Vector2,
+	maze_rect: Rect2,
 	maze: MazeGenerator,
 	maze_width: int,
 	maze_height: int,
@@ -17,38 +18,43 @@ func draw_mobile_view(
 	items: Array,
 	exit_pos: Vector2i,
 	game_won: bool,
-	game_over: bool,
 	visited: Dictionary,
 	is_revealed: Callable,
-	is_portrait: bool,
-	levels_data: Array,
-	current_level_index: int,
-	move_count: int,
+	guide_dir: int = -1,
+	ui_scale: float = 1.0,
 ) -> void:
-	var view_cols: int = 6 if is_portrait else 10
-	var view_rows: int = 10 if is_portrait else 6
-	var game_w: float = vp.x
-	var game_h: float = vp.y
-	var cell_w: float = game_w / view_cols
-	var cell_h: float = game_h / view_rows
-	var cell_sz: float = minf(cell_w, cell_h)
-	var center_x: int = player.pos.x
-	var center_y: int = player.pos.y
-	var half_cols: int = view_cols / 2
-	var half_rows: int = view_rows / 2
-	var start_x: int = center_x - half_cols
-	var start_y: int = center_y - half_rows
-	var wall_w: float = maxf(cell_sz * 0.08, 3.0)
-	var key_idx := 0
+	if maze_rect.size.x <= 1.0 or maze_rect.size.y <= 1.0:
+		return
 
-	canvas.draw_rect(Rect2(0, 0, game_w, game_h), Color(0.12, 0.10, 0.08))
+	var origin := maze_rect.position
+	var area_w := maze_rect.size.x
+	var area_h := maze_rect.size.y
+
+	# ui_scale 2.0 → 更少格子、更大像素（iPhone 可读）
+	var col_div := maxf(2.5, 5.0 / ui_scale)
+	var row_div := maxf(3.0, 6.5 / ui_scale)
+	var target_cell := clampf(minf(area_w / col_div, area_h / row_div), 48.0 * ui_scale, 120.0)
+	var view_cols := maxi(5, int(area_w / target_cell))
+	var view_rows := maxi(5, int(area_h / target_cell))
+	var cell_sz := minf(area_w / float(view_cols), area_h / float(view_rows))
+
+	var center_x := player.pos.x
+	var center_y := player.pos.y
+	var half_cols := view_cols / 2
+	var half_rows := view_rows / 2
+	var start_x := center_x - half_cols
+	var start_y := center_y - half_rows
+	var wall_w := maxf(cell_sz * 0.08, 3.0)
+	var draw_scale := cell_sz / float(maze_renderer.cell_size)
+
+	canvas.draw_rect(maze_rect, Color(0.10, 0.08, 0.07))
 
 	for vy in view_rows:
 		for vx in view_cols:
-			var gx: int = start_x + vx
-			var gy: int = start_y + vy
-			var screen_x: float = vx * cell_sz
-			var screen_y: float = vy * cell_sz
+			var gx := start_x + vx
+			var gy := start_y + vy
+			var screen_x := origin.x + vx * cell_sz
+			var screen_y := origin.y + vy * cell_sz
 
 			if gx < 0 or gx >= maze_width or gy < 0 or gy >= maze_height:
 				canvas.draw_rect(Rect2(screen_x, screen_y, cell_sz, cell_sz), Color(0.15, 0.12, 0.10))
@@ -69,103 +75,54 @@ func draw_mobile_view(
 			maze_renderer._draw_walls(canvas, cell, Vector2(screen_x, screen_y), cell_sz, wall_w, gx, gy, maze_width, maze_height)
 
 			if gx == exit_pos.x and gy == exit_pos.y and (game_won or is_revealed.call(exit_pos)):
-				canvas.draw_rect(
-					Rect2(screen_x + cell_sz * 0.2, screen_y + cell_sz * 0.2, cell_sz * 0.6, cell_sz * 0.6),
-					Color(0.1, 0.8, 0.3),
+				var ep := Vector2(screen_x, screen_y)
+				canvas.draw_rect(Rect2(ep + Vector2(cell_sz * 0.15, cell_sz * 0.15), Vector2(cell_sz * 0.7, cell_sz * 0.7)), Color(0.1, 0.8, 0.3))
+				canvas.draw_string(
+					ThemeDB.fallback_font, ep + Vector2(cell_sz * 0.3, cell_sz * 0.65),
+					"门", HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * draw_scale), Color.WHITE,
 				)
 
 			for it in items:
 				if is_instance_valid(it) and it.pos == Vector2i(gx, gy) and is_revealed.call(it.pos):
-					if it.item_type == "key":
-						draw_mini_character(canvas, Vector2(screen_x, screen_y), cell_sz, key_idx)
-						key_idx += 1
-					else:
-						draw_item_sprite(canvas, Vector2(screen_x, screen_y), cell_sz, it)
+					_draw_item_in_cell(canvas, it, Vector2(screen_x, screen_y), cell_sz, wall_w)
 
 			for m in monsters:
 				if is_instance_valid(m) and m.pos == Vector2i(gx, gy) and is_revealed.call(m.pos):
-					_draw_monster_icon(canvas, m, screen_x, screen_y, cell_sz)
+					if m.pos == player.pos:
+						continue
+					maze_renderer.draw_monster_in_cell(canvas, m, Vector2(screen_x, screen_y), cell_sz, wall_w, draw_scale)
 
-	var player_screen_x: float = half_cols * cell_sz
-	var player_screen_y: float = half_rows * cell_sz
-	draw_mini_character(canvas, Vector2(player_screen_x, player_screen_y), cell_sz, 1)
-	_draw_completion_overlay(canvas, vp, game_over, game_won, levels_data, current_level_index, move_count)
+	var player_screen_x := origin.x + half_cols * cell_sz
+	var player_screen_y := origin.y + half_rows * cell_sz
+	_draw_player_in_cell(canvas, Vector2(player_screen_x, player_screen_y), cell_sz, wall_w)
+	if guide_dir >= 0:
+		maze_renderer.draw_path_arrow(
+			canvas, Vector2i(half_cols, half_rows), guide_dir,
+			origin, draw_scale,
+		)
 
-func draw_mini_character(canvas: CanvasItem, o: Vector2, s: float, char_type: int) -> void:
-	var sprite: Texture2D
-	if char_type == 1:
-		sprite = maze_renderer.player_sprite
+
+func _draw_player_in_cell(canvas: CanvasItem, o: Vector2, cs: float, wt: float) -> void:
+	if maze_renderer.player_sprite:
+		maze_renderer.draw_sprite_in_cell(canvas, maze_renderer.player_sprite, o, cs, wt)
 	else:
-		sprite = maze_renderer.family_sprites[char_type % maze_renderer.family_sprites.size()]
-	if sprite:
-		canvas.draw_texture_rect(sprite, Rect2(o, Vector2(s, s)), false)
+		maze_renderer.draw_character(canvas, o, cs / 16.0, Color(0.27, 0.51, 0.71), Color(0.85, 0.65, 0.13), Color(1.0, 0.85, 0.72))
 
-func draw_item_sprite(canvas: CanvasItem, o: Vector2, s: float, item) -> void:
+
+func _draw_item_in_cell(canvas: CanvasItem, item, o: Vector2, cs: float, wt: float) -> void:
+	if item.item_type == "key":
+		var family_sprite := maze_renderer.get_family_sprite(item.item_key)
+		if family_sprite:
+			maze_renderer.draw_sprite_in_cell(canvas, family_sprite, o, cs, wt)
+		else:
+			maze_renderer.draw_character(canvas, o, cs / 16.0, Color(0.86, 0.24, 0.24), Color(0.2, 0.2, 0.2), Color(1.0, 0.85, 0.72))
+		return
 	var sprite: Texture2D = maze_renderer.item_sprites.get(item.item_type)
 	if sprite:
-		canvas.draw_texture_rect(sprite, Rect2(o, Vector2(s, s)), false)
+		maze_renderer.draw_sprite_in_cell(canvas, sprite, o, cs, wt)
 	else:
-		var item_cx := o.x + s * 0.5
-		var item_cy := o.y + s * 0.5
-		var item_r := s * 0.25
-		canvas.draw_circle(Vector2(item_cx, item_cy), item_r, item.color.darkened(0.2))
-		canvas.draw_circle(Vector2(item_cx, item_cy), item_r * 0.6, item.color)
-
-func _draw_monster_icon(canvas: CanvasItem, m: MonsterEntity, screen_x: float, screen_y: float, cell_sz: float) -> void:
-	var mcx := screen_x + cell_sz * 0.5
-	var mcy := screen_y + cell_sz * 0.5
-	var mr := cell_sz * 0.3
-	canvas.draw_circle(Vector2(mcx, mcy), mr, m.color.darkened(0.4))
-	canvas.draw_circle(Vector2(mcx, mcy), mr * 0.7, m.color.darkened(0.2))
-	var monster_names := {"sand": "蝎", "desert": "虫", "grotto": "魔", "oasis": "妖", "ancient_road": "匪"}
-	var label: String = monster_names.get(m.monster_type, "?")
-	var label_fs := int(cell_sz * 0.2)
-	canvas.draw_string(
-		ThemeDB.fallback_font, Vector2(mcx - label_fs / 2, screen_y + label_fs + 2),
-		label, HORIZONTAL_ALIGNMENT_LEFT, -1, label_fs, Color(1, 1, 1, 0.9),
-	)
-
-func _draw_completion_overlay(
-	canvas: CanvasItem,
-	vp: Vector2,
-	game_over: bool,
-	game_won: bool,
-	levels_data: Array,
-	current_level_index: int,
-	move_count: int,
-) -> void:
-	if game_over:
-		canvas.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0, 0, 0, 0.7))
-		var fs := int(36 * minf(vp.x, vp.y) / 400.0)
+		canvas.draw_rect(Rect2(o + Vector2(wt, wt), Vector2(cs - wt * 2, cs - wt * 2)), item.color.darkened(0.2))
 		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 - 30),
-			"你倒下了...", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.9, 0.3, 0.2),
-		)
-		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 60, vp.y / 2 + 20),
-			"走了 %d 步" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.6), Color.WHITE,
-		)
-		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 + 60),
-			"按 R 重新尝试", HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.5), Color(0.7, 0.7, 0.7),
-		)
-	elif game_won:
-		var is_final := current_level_index + 1 >= levels_data.size()
-		var title := "通关!" if is_final else "穿越成功!"
-		var sub := "你穿越了所有关卡" if is_final else "%s 已通关" % levels_data[current_level_index].get("name", "")
-		var hint := "按 R 重新开始" if is_final else "按 R 进入下一关"
-		var fs := int(36 * minf(vp.x, vp.y) / 400.0)
-		canvas.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0, 0, 0, 0.7))
-		var title_color := Color(1.0, 0.85, 0.3) if is_final else Color.WHITE
-		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 - 40),
-			title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, title_color,
-		)
-		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 100, vp.y / 2 + 10),
-			sub + "\n用了 %d 步" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.5), Color.WHITE,
-		)
-		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 + 60),
-			hint, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.5), Color(0.7, 0.7, 0.7),
+			ThemeDB.fallback_font, o + Vector2(cs * 0.3, cs * 0.65),
+			item.symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, int(14 * cs / 40.0), item.color,
 		)

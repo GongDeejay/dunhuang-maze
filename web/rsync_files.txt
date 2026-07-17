@@ -1,0 +1,5 @@
+DEPLOY.md
+MANIFEST.json
+VERSION.txt
+index.html
+index.pck

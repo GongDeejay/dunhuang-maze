@@ -22,6 +22,8 @@ config/features=PackedStringArray("4.7")
 [autoload]
 
 DataLoader="*res://scripts/data_loader.gd"
+PlatformService="*res://scripts/core/platform_service.gd"
+GameDirector="*res://scripts/core/game_director.gd"
 BeckettRuntime="*uid://dspgi2nxto4e8"
 AudioManager="*res://scripts/audio_manager.gd"
 
@@ -40,6 +42,10 @@ window/size/override_controls_size=true
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/beckett/plugin.cfg")
+
+[beckett]
+
+autostart=false
 
 [gui]
 
@@ -84,3 +90,4 @@ regenerate={
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true

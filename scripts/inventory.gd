@@ -43,6 +43,12 @@ func get_heal_count() -> int:
 func get_count() -> int:
 	return items.size()
 
+func clear() -> void:
+	if items.is_empty():
+		return
+	items.clear()
+	inventory_changed.emit()
+
 func is_full() -> bool:
 	return items.size() >= max_size
 

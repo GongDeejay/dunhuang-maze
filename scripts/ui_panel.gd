@@ -8,13 +8,21 @@ var text_dim := Color(0.45, 0.42, 0.38)
 var accent := Color(0.9, 0.75, 0.3)
 var hp_green := Color(0.2, 0.7, 0.3)
 var hp_red := Color(0.9, 0.15, 0.1)
+var inventory_hit_rects: Array[Rect2] = []
+var panel_origin_x: float = 0.0
+var heart_bar := HeartBar.new()
 
 func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		player, maze, maze_w: int, maze_h: int, exit_pos: Vector2i,
 		levels_data: Array, level_idx: int, diff_name: String,
 		move_count: int, terrain_name: String, buff_info: String,
 		visited: Dictionary, revealed_func: Callable,
-		combat_log: Array, inventory: Inventory) -> void:
+		combat_log: Array, inventory: Inventory, key_tracker: KeyTracker = null,
+		selected_slot: int = 0, items: Array = [], guide_dir: int = -1,
+		low_hp_pulse: float = 0.0) -> void:
+
+	panel_origin_x = panel_x
+	inventory_hit_rects.clear()
 
 	owner.draw_rect(Rect2(panel_x, 0, panel_w, vp_h), panel_bg)
 
@@ -33,23 +41,33 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		"%s [%s]" % [level_name, diff_name], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, text_secondary)
 	y += 22
 
-	# HP bar
+	# HP hearts
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-		"HP", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, text_primary)
-	owner.draw_string(ThemeDB.fallback_font, Vector2(lx + 25, y),
-		"%d / %d" % [player.hp, player.max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, text_primary)
-	y += 6
+		"生命", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, text_primary)
+	y += 4
 	var bar_w: float = panel_w - 24
-	owner.draw_rect(Rect2(lx, y, bar_w, 12), Color(0.3, 0.1, 0.1))
-	var hp_ratio: float = float(player.hp) / float(player.max_hp)
-	owner.draw_rect(Rect2(lx, y, bar_w * hp_ratio, 12),
-		hp_green if hp_ratio > 0.3 else hp_red)
-	y += 20
+	heart_bar.draw(owner, Vector2(lx, y), bar_w, player.hp, player.max_hp, low_hp_pulse, 6)
+	y += 22
+	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
+		"%d / %d" % [player.hp, player.max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, text_secondary)
+	if float(player.hp) / float(maxi(player.max_hp, 1)) <= 0.3:
+		owner.draw_string(ThemeDB.fallback_font, Vector2(lx + bar_w - 48, y - 24),
+			"低血!", HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
+			Color(1.0, 0.35, 0.25, 0.7 + 0.3 * clampf(low_hp_pulse, 0.0, 1.0)))
+	y += 18
 
 	# Stats
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 		"攻击: %d" % player.get_effective_atk(), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, text_primary)
 	y += 17
+	if player.level > 1:
+		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
+			"等级: Lv.%d" % player.level, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, accent)
+		y += 17
+	if key_tracker != null:
+		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
+			"家人: %s" % key_tracker.get_progress(), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.3, 0.85, 0.45))
+		y += 17
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 		"步数: %d" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, text_primary)
 	y += 17
@@ -87,10 +105,23 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 	owner.draw_rect(Rect2(mep, Vector2(cell_px, cell_px)), Color(0.2, 0.8, 0.3))
 	var mpp = Vector2(mx + player.pos.x * cell_px, y + player.pos.y * cell_px)
 	owner.draw_rect(Rect2(mpp, Vector2(cell_px, cell_px)), Color(0.9, 0.15, 0.1))
+	for it in items:
+		if not is_instance_valid(it):
+			continue
+		if not visited.get(it.pos, false):
+			continue
+		var dot_color := Color(0.3, 0.85, 0.45) if it.item_type == "key" else Color(0.95, 0.85, 0.25)
+		var dp := Vector2(mx + it.pos.x * cell_px, y + it.pos.y * cell_px)
+		owner.draw_rect(Rect2(dp + Vector2(0.5, 0.5), Vector2(cell_px - 1, cell_px - 1)), dot_color)
 	y += mh + 10
 
+	if guide_dir >= 0:
+		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
+			"指引: %s" % _dir_label(guide_dir), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.85, 0.95))
+		y += 16
+
 	# Inventory
-	y = _draw_inventory(owner, lx, y, panel_w - 24, inventory)
+	y = _draw_inventory(owner, lx, y, panel_w - 24, inventory, selected_slot)
 
 	y += 8
 
@@ -126,10 +157,10 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		"WASD 移动", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_dim)
 	y += 15
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-		"R 重新生成", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_dim)
+		"R 重开本关", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_dim)
 	y += 15
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-		"E 使用道具", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_dim)
+		"1-5 选道具 · E 使用", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_dim)
 	y += 15
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 		"Q 返回主界面", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_dim)
@@ -147,7 +178,7 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 			owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 				combat_log[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.75, 0.7, 0.62))
 
-func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: Inventory) -> float:
+func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: Inventory, selected_slot: int) -> float:
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 		"背包 (%d/%d)" % [inventory.get_count(), inventory.max_size],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, text_primary)
@@ -161,6 +192,11 @@ func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: In
 	else:
 		for i in inv_items.size():
 			y += 18
+			var row_rect := Rect2(lx, y - 14, w, 18)
+			inventory_hit_rects.append(row_rect)
+			if i == selected_slot:
+				owner.draw_rect(row_rect.grow(1), Color(0.35, 0.3, 0.15))
+				owner.draw_rect(row_rect, accent, false, 1.0)
 			var item = inv_items[i]
 			var type_color = text_primary
 			match item.type:
@@ -168,12 +204,29 @@ func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: In
 				"attack": type_color = Color(0.9, 0.4, 0.2)
 				"defense": type_color = Color(0.4, 0.6, 0.9)
 				"reveal": type_color = Color(0.9, 0.8, 0.3)
+			var prefix := "▶ " if i == selected_slot else "  "
 			owner.draw_string(ThemeDB.fallback_font, Vector2(lx + 5, y),
-				"%d. %s %s" % [i + 1, item.symbol, item.name],
+				"%s%d. %s %s" % [prefix, i + 1, item.symbol, item.name],
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 11, type_color)
 
 	y += 8
 	return y
+
+func get_inventory_slot_at(global_pos: Vector2) -> int:
+	for i in inventory_hit_rects.size():
+		var rect := inventory_hit_rects[i]
+		rect.position.x += panel_origin_x
+		if rect.has_point(global_pos):
+			return i
+	return -1
+
+func _dir_label(dir: int) -> String:
+	match dir:
+		MazeGenerator.N: return "↑ 北"
+		MazeGenerator.S: return "↓ 南"
+		MazeGenerator.E: return "→ 东"
+		MazeGenerator.W: return "← 西"
+	return "?"
 
 func draw_overlay(owner: Node2D, vp: Vector2, title: String, sub: String, hint: String, title_color: Color) -> void:
 	owner.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0, 0, 0, 0.6))
@@ -184,3 +237,13 @@ func draw_overlay(owner: Node2D, vp: Vector2, title: String, sub: String, hint: 
 		sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
 	owner.draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 + 35),
 		hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.7, 0.7, 0.7))
+
+func draw_confirm_overlay(owner: Node2D, vp: Vector2, title: String, sub: String, hint: String) -> void:
+	owner.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0, 0, 0, 0.55))
+	owner.draw_rect(Rect2(vp.x / 2 - 200, vp.y / 2 - 55, 400, 110), Color(0.12, 0.1, 0.08, 0.95))
+	owner.draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 120, vp.y / 2 - 25),
+		title, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, accent)
+	owner.draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 100, vp.y / 2 + 5),
+		sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, text_secondary)
+	owner.draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 + 30),
+		hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, text_dim)

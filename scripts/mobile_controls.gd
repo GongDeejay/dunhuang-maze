@@ -5,255 +5,219 @@ signal move_pressed(dir: int)
 signal action_pressed(action: String)
 
 var is_mobile: bool = false
-var is_portrait: bool = true
+var layout: LayoutProfile = LayoutProfile.new()
 var btn_radius: float = 40.0
 var btn_spacing: float = 90.0
 var func_btn_size: float = 50.0
 var touch_start: Vector2 = Vector2.ZERO
 var swipe_threshold: float = 30.0
-var font_scale: float = 1.0
-var player_hp: int = 3
-var player_max_hp: int = 5
-var family_count: int = 0
-var family_total: int = 3
-var steps: int = 0
-var heart_full: Texture2D
-var heart_empty: Texture2D
+var maze_touch_active: bool = false
 
-func _ready():
-	is_mobile = OS.has_feature("mobile") or OS.has_feature("web")
-	if not is_mobile:
-		var vp = get_viewport_rect().size
-		is_mobile = vp.x < 800 or vp.y < 600
-	heart_full = load("res://assets/sprites/heart/full.png")
-	heart_empty = load("res://assets/sprites/heart/empty.png")
+var _dpad_centers: Array = []
+var _func_centers: Dictionary = {}
+var _func_labels: Dictionary = {}
 
-func update_values(hp: int, max_hp: int, family: int, step_count: int, total_keys: int = 3) -> void:
-	player_hp = hp
-	player_max_hp = max_hp
-	family_count = family
-	family_total = total_keys
-	steps = step_count
+
+func _ready() -> void:
+	_refresh_mobile_flag()
+
+
+func apply_layout(profile: LayoutProfile) -> void:
+	layout = profile
+	is_mobile = profile.show_touch_controls
+	var scale := profile.ui_scale
+	btn_radius = clampf(28.0 * scale, 28.0, 56.0)
+	btn_spacing = btn_radius * 2.15
+	func_btn_size = clampf(36.0 * scale, 36.0, 64.0)
+	swipe_threshold = 24.0 * scale
+	_rebuild_hit_zones()
 	queue_redraw()
 
-func _process(_delta: float):
-	var vp = get_viewport_rect().size
-	var min_dim = minf(vp.x, vp.y)
-	font_scale = clampf(min_dim / 200.0, 1.0, 3.0)
-	btn_radius = clampf(min_dim * 0.07, 28.0, 50.0)
-	btn_spacing = btn_radius * 2.3
-	func_btn_size = clampf(min_dim * 0.09, 36.0, 55.0)
 
-func _draw():
-	if not is_mobile:
-		return
-	var vp = get_viewport_rect().size
-	if is_portrait:
-		_draw_portrait(vp)
-	else:
-		_draw_landscape(vp)
-	_draw_toggle_button(vp)
+func _refresh_mobile_flag() -> void:
+	PlatformService.refresh(get_viewport().get_visible_rect().size)
+	is_mobile = PlatformService.use_mobile_ui or DisplayServer.is_touchscreen_available()
 
-func _draw_toggle_button(vp: Vector2) -> void:
-	var btn_size = func_btn_size * 0.8
-	var btn_x = vp.x - btn_size - 8
-	var btn_y = 8.0
-	var rect = Rect2(btn_x, btn_y, btn_size, btn_size)
-	draw_rect(rect, Color(0, 0, 0, 0.6))
-	draw_rect(rect, Color(1, 1, 1, 0.4), false, 2.0)
-	var label = "横" if is_portrait else "竖"
-	var fs = int(20 * font_scale)
-	draw_string(ThemeDB.fallback_font, Vector2(btn_x + btn_size / 2 - fs / 2, btn_y + btn_size / 2 + fs / 3), label,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.9))
 
-func _draw_portrait(vp: Vector2) -> void:
-	var alpha = 0.5
-	var fs = int(24 * font_scale)
-	var big_fs = int(36 * font_scale)
+func _process(_delta: float) -> void:
+	if is_mobile and layout.show_touch_controls:
+		_rebuild_hit_zones()
 
-	# HP hearts - top left (2x size)
-	var hp_x = 15.0
-	var hp_y = 15.0
-	var heart_size = 24.0 * font_scale
-	var hearts_to_show = int(ceil(float(player_hp) / float(player_max_hp) * 5.0))
-	for i in range(5):
-		var heart_x = hp_x + i * (heart_size + 6)
-		var heart_sprite = heart_full if i < hearts_to_show else heart_empty
-		if heart_sprite:
-			draw_texture_rect(heart_sprite, Rect2(heart_x, hp_y, heart_size, heart_size), false)
 
-	# D-pad at bottom center
-	var dpad_cx = vp.x / 2
-	var dpad_cy = vp.y - 160.0
-	var dirs = [
-		["↑", Vector2(0, -1), Vector2(dpad_cx, dpad_cy - btn_spacing)],
-		["←", Vector2(-1, 0), Vector2(dpad_cx - btn_spacing, dpad_cy)],
-		["→", Vector2(1, 0), Vector2(dpad_cx + btn_spacing, dpad_cy)],
-		["↓", Vector2(0, 1), Vector2(dpad_cx, dpad_cy + btn_spacing)]
-	]
-	for d in dirs:
-		var pos = d[2] as Vector2
-		draw_circle(pos, btn_radius * 1.2, Color(1, 1, 1, alpha * 0.3))
-		draw_circle(pos, btn_radius * 1.2, Color(1, 1, 1, alpha * 0.15), false, 2.0)
-		draw_string(ThemeDB.fallback_font, pos + Vector2(-fs / 2, fs / 3), d[0] as String,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, alpha))
+func try_handle_input(event: InputEvent) -> bool:
+	if not is_mobile or not layout.show_touch_controls:
+		return false
 
-	# Bottom bar: info | buttons
-	var bar_y = vp.y - 80.0
-
-	# Info - left side (2x size)
-	var info_x = 15.0
-	draw_rect(Rect2(info_x - 5, bar_y - 10, 180 * font_scale, 80), Color(0, 0, 0, 0.5))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 15), "家人 %d/%d" % [family_count, family_total], HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.3, 0.8, 0.4))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, bar_y + 15 + big_fs + 10), "步数 %d" % steps, HORIZONTAL_ALIGNMENT_LEFT, -1, big_fs, Color(0.7, 0.7, 0.7))
-
-	# Function buttons - right side (2x size)
-	var func_buttons = [
-		["E", "use_item"],
-		["R", "regenerate"],
-		["Q", "menu"]
-	]
-	for i in func_buttons.size():
-		var bx = vp.x - 30.0 - i * (func_btn_size * 1.5 + 12)
-		var by = bar_y + 20
-		var btn_sz = func_btn_size * 1.5
-		var rect = Rect2(bx - btn_sz / 2, by - btn_sz / 2, btn_sz, btn_sz)
-		draw_rect(rect, Color(1, 1, 1, alpha * 0.3))
-		draw_rect(rect, Color(1, 1, 1, alpha * 0.15), false, 2.0)
-		draw_string(ThemeDB.fallback_font, Vector2(bx - 8, by + 10), func_buttons[i][0] as String,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, int(28 * font_scale), Color(1, 1, 1, alpha))
-
-func _draw_landscape(vp: Vector2) -> void:
-	var alpha = 0.4
-	var fs = int(18 * font_scale)
-
-	# D-pad on left
-	var dpad_cx = 80.0
-	var dpad_cy = vp.y / 2
-	var dirs = [
-		["↑", Vector2(0, -1), Vector2(dpad_cx, dpad_cy - btn_spacing)],
-		["←", Vector2(-1, 0), Vector2(dpad_cx - btn_spacing, dpad_cy)],
-		["→", Vector2(1, 0), Vector2(dpad_cx + btn_spacing, dpad_cy)],
-		["↓", Vector2(0, 1), Vector2(dpad_cx, dpad_cy + btn_spacing)]
-	]
-	for d in dirs:
-		var pos = d[2] as Vector2
-		draw_circle(pos, btn_radius * 0.7, Color(1, 1, 1, alpha * 0.3))
-		draw_circle(pos, btn_radius * 0.7, Color(1, 1, 1, alpha * 0.1), false, 1.5)
-		draw_string(ThemeDB.fallback_font, pos + Vector2(-5, 5), d[0] as String,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, alpha))
-
-	# Function buttons on right
-	var func_x = vp.x - 35
-	var func_buttons = [
-		["E", Vector2(func_x, vp.y - 150), "use_item"],
-		["R", Vector2(func_x, vp.y - 90), "regenerate"],
-		["Q", Vector2(func_x, vp.y - 30), "menu"]
-	]
-	for b in func_buttons:
-		var pos = b[1] as Vector2
-		var rect = Rect2(pos.x - 22, pos.y - 22, 44, 44)
-		draw_rect(rect, Color(1, 1, 1, alpha * 0.3))
-		draw_rect(rect, Color(1, 1, 1, alpha * 0.1), false, 1.5)
-		draw_string(ThemeDB.fallback_font, pos + Vector2(-5, 6), b[0] as String,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, int(18 * font_scale), Color(1, 1, 1, alpha))
-
-	# System info - top left
-	var info_x = 15.0
-	var info_y = 25.0
-	var info_fs = int(14 * font_scale)
-	draw_rect(Rect2(info_x - 5, info_y - 15, 130 * font_scale, 55), Color(0, 0, 0, 0.5))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, info_y), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(1, 0.8, 0.3))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x + 40 * font_scale, info_y), "家人", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(0.3, 0.8, 0.4))
-	draw_string(ThemeDB.fallback_font, Vector2(info_x, info_y + 25 * font_scale), "步数", HORIZONTAL_ALIGNMENT_LEFT, -1, info_fs, Color(0.7, 0.7, 0.7))
-
-func _input(event: InputEvent) -> void:
-	if not is_mobile:
-		return
 	if event is InputEventScreenTouch:
-		if event.pressed:
-			touch_start = event.position
-			_handle_touch(event.position)
-		else:
-			_handle_swipe(event.position)
-	elif event is InputEventScreenDrag:
-		var diff = event.position - touch_start
-		if diff.length() > swipe_threshold:
-			_handle_swipe(event.position)
-			touch_start = event.position
+		return _handle_pointer(event.position, event.pressed, not event.pressed)
+	if event is InputEventScreenDrag and maze_touch_active:
+		return true
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		return _handle_pointer(event.position, event.pressed, not event.pressed)
 
-func _handle_touch(pos: Vector2) -> void:
-	var vp = get_viewport_rect().size
+	return false
 
-	# Check toggle button
-	var btn_size = func_btn_size * 0.8
-	var btn_x = vp.x - btn_size - 8
-	var btn_y = 8.0
-	var toggle_rect = Rect2(btn_x - 15, btn_y - 15, btn_size + 30, btn_size + 30)
-	if toggle_rect.has_point(pos):
-		is_portrait = not is_portrait
-		queue_redraw()
-		return
 
-	if is_portrait:
-		_handle_touch_portrait(pos, vp)
-	else:
-		_handle_touch_landscape(pos, vp)
+func _handle_pointer(pos: Vector2, pressed: bool, released: bool) -> bool:
+	if layout.controls_rect.size.y > 1.0 and layout.controls_rect.has_point(pos):
+		if pressed:
+			touch_start = pos
+			if _handle_control_touch(pos):
+				return true
+		return true
 
-func _handle_touch_portrait(pos: Vector2, vp: Vector2) -> void:
-	var dpad_cx = vp.x / 2
-	var dpad_cy = vp.y - 160.0
-	var dpad_dirs = [
-		[MazeGenerator.N, Vector2(dpad_cx, dpad_cy - btn_spacing)],
-		[MazeGenerator.W, Vector2(dpad_cx - btn_spacing, dpad_cy)],
-		[MazeGenerator.E, Vector2(dpad_cx + btn_spacing, dpad_cy)],
-		[MazeGenerator.S, Vector2(dpad_cx, dpad_cy + btn_spacing)]
-	]
-	for d in dpad_dirs:
-		if pos.distance_to(d[1] as Vector2) < btn_radius * 1.5:
-			move_pressed.emit(d[0] as int)
-			return
+	if layout.hud_rect.has_point(pos):
+		return false
 
-	var func_x = vp.x - 20.0
-	var bar_y = vp.y - 70.0
-	var func_names = ["use_item", "regenerate", "menu"]
-	for i in func_names.size():
-		var bx = func_x - i * (func_btn_size + 8)
-		var by = bar_y + 15
-		if pos.distance_to(Vector2(bx, by)) < func_btn_size:
-			action_pressed.emit(func_names[i])
-			return
+	if layout.maze_rect.size.y > 1.0 and layout.maze_rect.has_point(pos):
+		if pressed:
+			touch_start = pos
+			maze_touch_active = true
+			return true
+		if released and maze_touch_active:
+			maze_touch_active = false
+			_handle_maze_swipe(pos)
+			return true
+		return true
 
-func _handle_touch_landscape(pos: Vector2, vp: Vector2) -> void:
-	var dpad_cx = 80.0
-	var dpad_cy = vp.y / 2
-	var dirs = [
-		[MazeGenerator.N, Vector2(dpad_cx, dpad_cy - btn_spacing)],
-		[MazeGenerator.W, Vector2(dpad_cx - btn_spacing, dpad_cy)],
-		[MazeGenerator.E, Vector2(dpad_cx + btn_spacing, dpad_cy)],
-		[MazeGenerator.S, Vector2(dpad_cx, dpad_cy + btn_spacing)]
-	]
-	for d in dirs:
-		if pos.distance_to(d[1] as Vector2) < btn_radius * 0.7 * 1.5:
-			move_pressed.emit(d[0] as int)
-			return
+	if released:
+		maze_touch_active = false
+	return false
 
-	var func_x = vp.x - 35
-	var func_buttons = [
-		["use_item", Vector2(func_x, vp.y - 150)],
-		["regenerate", Vector2(func_x, vp.y - 90)],
-		["menu", Vector2(func_x, vp.y - 30)]
-	]
-	for b in func_buttons:
-		if pos.distance_to(b[1] as Vector2) < 30:
-			action_pressed.emit(b[0] as String)
-			return
 
-func _handle_swipe(end_pos: Vector2) -> void:
-	var diff = end_pos - touch_start
+func _handle_control_touch(pos: Vector2) -> bool:
+	for entry in _dpad_centers:
+		if pos.distance_to(entry.pos as Vector2) < btn_radius * 1.4:
+			move_pressed.emit(entry.dir as int)
+			return true
+	for action in _func_centers:
+		if pos.distance_to(_func_centers[action] as Vector2) < func_btn_size * 0.7:
+			action_pressed.emit(action as String)
+			return true
+	return false
+
+
+func _handle_maze_swipe(end_pos: Vector2) -> void:
+	var diff := end_pos - touch_start
 	if diff.length() < swipe_threshold:
 		return
 	if absi(diff.x) > absi(diff.y):
 		move_pressed.emit(MazeGenerator.E if diff.x > 0 else MazeGenerator.W)
 	else:
 		move_pressed.emit(MazeGenerator.S if diff.y > 0 else MazeGenerator.N)
+
+
+func _draw() -> void:
+	if not is_mobile or layout.controls_rect.size.y <= 1.0:
+		return
+	_rebuild_hit_zones()
+	var rect := layout.controls_rect
+	var scale := layout.ui_scale
+	draw_rect(rect, Color(0.08, 0.07, 0.06, 0.88))
+	var alpha := 0.5
+	var fs := int(clampf(rect.size.y * 0.22 * scale, 18, 36))
+
+	if layout.is_portrait():
+		_draw_portrait_controls(rect, alpha, fs)
+	else:
+		_draw_landscape_controls(rect, alpha, fs)
+
+
+func _rebuild_hit_zones() -> void:
+	_dpad_centers.clear()
+	_func_centers.clear()
+	_func_labels.clear()
+	if not is_mobile or layout.controls_rect.size.y <= 1.0:
+		return
+	var rect := layout.controls_rect
+	var alpha := 0.5
+	var fs := int(clampf(rect.size.y * 0.22 * layout.ui_scale, 18, 36))
+	if layout.is_portrait():
+		_layout_portrait_zones(rect, alpha, fs)
+	else:
+		_layout_landscape_zones(rect, alpha, fs)
+
+
+func _draw_portrait_controls(rect: Rect2, alpha: float, fs: int) -> void:
+	_layout_portrait_zones(rect, alpha, fs)
+	for entry in _dpad_centers:
+		var pos: Vector2 = entry.pos
+		var label: String = entry.label
+		draw_circle(pos, btn_radius, Color(1, 1, 1, alpha * 0.28))
+		draw_circle(pos, btn_radius, Color(1, 1, 1, alpha * 0.14), false, 2.0)
+		draw_string(ThemeDB.fallback_font, pos + Vector2(-fs / 2, fs / 3), label,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, alpha))
+
+	for action in _func_centers:
+		var pos: Vector2 = _func_centers[action]
+		var label: String = _func_labels[action]
+		var btn_rect := Rect2(pos.x - func_btn_size / 2, pos.y - func_btn_size / 2, func_btn_size, func_btn_size)
+		draw_rect(btn_rect, Color(1, 1, 1, alpha * 0.22))
+		draw_rect(btn_rect, Color(1, 1, 1, alpha * 0.14), false, 1.5)
+		draw_string(ThemeDB.fallback_font, Vector2(pos.x - func_btn_size * 0.38, pos.y + fs * 0.28), label,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.72), Color(1, 1, 1, alpha))
+
+
+func _layout_portrait_zones(rect: Rect2, _alpha: float, _fs: int) -> void:
+	var dpad_cx := rect.position.x + rect.size.x * 0.5
+	var dpad_cy := rect.position.y + rect.size.y * 0.38
+	var dirs := [
+		["↑", MazeGenerator.N, Vector2(dpad_cx, dpad_cy - btn_spacing)],
+		["←", MazeGenerator.W, Vector2(dpad_cx - btn_spacing, dpad_cy)],
+		["→", MazeGenerator.E, Vector2(dpad_cx + btn_spacing, dpad_cy)],
+		["↓", MazeGenerator.S, Vector2(dpad_cx, dpad_cy + btn_spacing)],
+	]
+	for d in dirs:
+		_dpad_centers.append({"dir": d[1], "pos": d[2], "label": d[0]})
+
+	var funcs := [
+		["换", "cycle_item"], ["用", "use_item"], ["重开", "regenerate"], ["菜单", "menu"],
+	]
+	var btn_y := rect.position.y + rect.size.y * 0.82
+	var gap := func_btn_size + 12.0
+	var total_w := funcs.size() * gap - 12.0
+	var start_x := rect.position.x + (rect.size.x - total_w) * 0.5 + func_btn_size * 0.5
+	for i in funcs.size():
+		var bx := start_x + i * gap
+		_func_centers[funcs[i][1]] = Vector2(bx, btn_y)
+		_func_labels[funcs[i][1]] = funcs[i][0]
+
+
+func _draw_landscape_controls(rect: Rect2, alpha: float, fs: int) -> void:
+	_layout_landscape_zones(rect, alpha, fs)
+	for entry in _dpad_centers:
+		var pos: Vector2 = entry.pos
+		draw_circle(pos, btn_radius * 0.9, Color(1, 1, 1, alpha * 0.24))
+		draw_string(ThemeDB.fallback_font, pos + Vector2(-6, 6), entry.label as String,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, alpha))
+	for action in _func_centers:
+		var pos: Vector2 = _func_centers[action]
+		var btn_rect := Rect2(pos.x - func_btn_size / 2, pos.y - func_btn_size / 2, func_btn_size, func_btn_size)
+		draw_rect(btn_rect, Color(1, 1, 1, alpha * 0.22))
+		draw_string(ThemeDB.fallback_font, Vector2(pos.x - func_btn_size * 0.35, pos.y + fs * 0.25),
+			_func_labels[action], HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.7), Color(1, 1, 1, alpha))
+
+
+func _layout_landscape_zones(rect: Rect2, _alpha: float, _fs: int) -> void:
+	var dpad_cx := rect.position.x + rect.size.x * 0.14
+	var dpad_cy := rect.position.y + rect.size.y * 0.5
+	var dirs := [
+		["↑", MazeGenerator.N, Vector2(dpad_cx, dpad_cy - btn_spacing * 0.85)],
+		["←", MazeGenerator.W, Vector2(dpad_cx - btn_spacing * 0.85, dpad_cy)],
+		["→", MazeGenerator.E, Vector2(dpad_cx + btn_spacing * 0.85, dpad_cy)],
+		["↓", MazeGenerator.S, Vector2(dpad_cx, dpad_cy + btn_spacing * 0.85)],
+	]
+	for d in dirs:
+		_dpad_centers.append({"dir": d[1], "pos": d[2], "label": d[0]})
+
+	var func_x := rect.position.x + rect.size.x * 0.86
+	var funcs := [
+		["换", "cycle_item", 0.12],
+		["用", "use_item", 0.35],
+		["重开", "regenerate", 0.58],
+		["菜单", "menu", 0.81],
+	]
+	for f in funcs:
+		var pos := Vector2(func_x, rect.position.y + rect.size.y * f[2])
+		_func_centers[f[1]] = pos
+		_func_labels[f[1]] = f[0]

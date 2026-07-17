@@ -35,11 +35,16 @@ func _ready():
 
 func initialize(start_pos: Vector2i) -> void:
 	pos = start_pos
-	hp = max_hp
 	temp_atk_bonus = 0
 	temp_def_bonus = 0
 	temp_reveal_bonus = 0
 	buff_timer = 0
+
+func apply_base_stats(base_max_hp: int, base_atk: int) -> void:
+	max_hp = base_max_hp + (level - 1) * 2
+	atk = base_atk + (level - 1)
+	hp = max_hp
+	hp_changed.emit(hp, max_hp)
 
 func take_damage(amount: int) -> Dictionary:
 	if randf() < dodge_chance:

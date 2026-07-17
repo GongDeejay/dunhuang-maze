@@ -3,6 +3,10 @@
     "beckett": {
       "type": "http",
       "url": "http://127.0.0.1:8770/mcp"
+    },
+    "dunhuang-export": {
+      "command": "node",
+      "args": ["tools/godot_export_mcp/server.mjs"]
     }
   }
 }

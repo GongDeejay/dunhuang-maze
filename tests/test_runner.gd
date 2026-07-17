@@ -1,5 +1,7 @@
 extends Node
 
+const PathGuideScript = preload("res://scripts/path_guide.gd")
+
 var passed := 0
 var failed := 0
 
@@ -21,6 +23,13 @@ func _ready() -> void:
 	test_dodge_single_roll()
 	test_save_manager()
 	test_entity_spawner()
+	test_level_stats()
+	test_inventory_clear()
+	test_path_guide()
+	test_inventory_slot()
+	test_asset_registry()
+	test_game_director()
+	test_ui_layout_director()
 	print("\n=== 测试完成: %d 通过, %d 失败 ===" % [passed, failed])
 	get_tree().quit(failed)
 
@@ -160,7 +169,12 @@ func test_item_entity():
 	assert_eq(item.item_key, "heal_scroll", "item key set")
 	assert_eq(item.pos, Vector2i(3, 4), "item pos set")
 	assert_eq(item.item_type, "heal", "item type from def")
-	assert_eq(item.display_name, "疗伤卷", "item display name")
+	assert_eq(item.display_name, "疗伤卷", "heal scroll display name")
+
+	var family = ItemEntity.new()
+	family.setup("family_1", Vector2i(1, 2))
+	assert_eq(family.display_name, "乐僔", "family display name")
+	family.free()
 	item.free()
 	dl.free()
 
@@ -275,3 +289,81 @@ func test_entity_spawner():
 
 	root.free()
 	dl.free()
+
+func test_level_stats():
+	print("\n[TEST] Level Stats")
+	var player = PlayerController.new()
+	player.level = 3
+	player.apply_base_stats(20, 5)
+	assert_eq(player.max_hp, 24, "level 3 adds +4 max hp")
+	assert_eq(player.atk, 7, "level 3 adds +2 atk")
+	assert_eq(player.hp, 24, "hp refilled to max")
+
+func test_inventory_clear():
+	print("\n[TEST] Inventory Clear")
+	var inv = Inventory.new()
+	inv.add_item("heal_scroll")
+	inv.add_item("iron_talisman")
+	assert_eq(inv.get_count(), 2, "two items added")
+	inv.clear()
+	assert_eq(inv.get_count(), 0, "inventory cleared")
+
+func test_path_guide():
+	print("\n[TEST] Path Guide")
+	var maze = MazeGenerator.new(5, 5)
+	maze.generate(42, 1)
+	var from := Vector2i(0, 0)
+	var to := Vector2i(maze.width - 1, maze.height - 1)
+	var path: Array = PathGuideScript.bfs_path(maze, from, to)
+	assert_true(path.size() >= 2, "path exists from start to exit")
+	assert_eq(path[0], from, "path starts at origin")
+	var dir: int = PathGuideScript.next_direction(maze, from, to)
+	assert_true(dir >= 0, "next direction found")
+
+func test_inventory_slot():
+	print("\n[TEST] Inventory Slot Use")
+	var inv = Inventory.new()
+	inv.add_item("heal_scroll")
+	inv.add_item("iron_talisman")
+	var used := inv.use_item(1)
+	assert_eq(used, "iron_talisman", "uses selected slot 1")
+	assert_eq(inv.get_count(), 1, "one item remains")
+	assert_eq(inv.items[0], "heal_scroll", "slot 0 item kept")
+
+func test_asset_registry():
+	print("\n[TEST] Asset Registry")
+	var dj := AssetRegistry.character_sprite_path("dj")
+	assert_true(dj.begins_with("res://"), "character path valid")
+	assert_true(ResourceLoader.exists(AssetRegistry.item_sprite_path("heal")), "heal item exists")
+	assert_eq(AssetRegistry.CELL_SPRITE_PX, 16, "cell sprite standard")
+
+func test_game_director():
+	print("\n[TEST] Game Director")
+	SaveManager.clear_save()
+	assert_true(not GameDirector.needs_new_journey_confirm("normal"), "no save no confirm")
+	SaveManager.save_progress(0, "normal", 1, 0)
+	assert_true(not GameDirector.needs_new_journey_confirm("normal"), "same diff no confirm")
+	assert_true(GameDirector.needs_new_journey_confirm("hard"), "diff change needs confirm")
+	SaveManager.clear_save()
+
+func test_ui_layout_director():
+	print("\n[TEST] UI Layout Director")
+	var portrait := UILayoutDirector.compute(Vector2(390, 844), true)
+	assert_true(portrait.is_portrait(), "390x844 is portrait")
+	assert_eq(portrait.maze_mode, LayoutProfile.MazeMode.FOLLOW, "portrait uses follow")
+	assert_true(portrait.hud_rect.size.y >= 108.0, "portrait hud min height")
+	assert_true(portrait.controls_rect.size.y > 0.0, "portrait touch controls")
+	assert_true(portrait.maze_rect.size.y > 200.0, "portrait maze area")
+
+	var desktop := UILayoutDirector.compute(Vector2(1280, 720), false)
+	assert_eq(desktop.mode, LayoutProfile.Mode.DESKTOP_SIDE, "1280x720 desktop side")
+	assert_true(desktop.is_side_hud(), "desktop side hud")
+	assert_eq(desktop.maze_mode, LayoutProfile.MazeMode.FIT_FULL, "desktop fit full")
+
+	var tablet := UILayoutDirector.compute(Vector2(800, 600), true)
+	assert_eq(tablet.mode, LayoutProfile.Mode.TABLET_LANDSCAPE, "800x600 tablet landscape")
+	assert_eq(tablet.maze_mode, LayoutProfile.MazeMode.FOLLOW, "tablet follow")
+
+	var compact := UILayoutDirector.compute(Vector2(360, 780), true)
+	assert_eq(compact.mode, LayoutProfile.Mode.PORTRAIT_COMPACT, "narrow portrait compact")
+	assert_eq(compact.ui_scale, 2.0, "portrait ui scale 2x")
