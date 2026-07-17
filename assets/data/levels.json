@@ -13,7 +13,8 @@
       "terrain_effect": {
         "desert": {"move_damage": 1, "description": "沙暴侵蚀"},
         "grotto": {"reveal_penalty": -2, "description": "洞窟黑暗"},
-        "oasis": {"move_heal": 2, "description": "泉水恢复"}
+        "oasis": {"move_heal": 2, "description": "泉水恢复"},
+        "ancient_road": {"move_speed_bonus": 0.2, "description": "古道加速"}
       }
     },
     {
@@ -29,7 +30,8 @@
       "terrain_effect": {
         "desert": {"move_damage": 1, "description": "沙暴肆虐"},
         "grotto": {"reveal_penalty": -2, "description": "洞窟黑暗"},
-        "oasis": {"move_heal": 2, "description": "泉水恢复"}
+        "oasis": {"move_heal": 2, "description": "泉水恢复"},
+        "ancient_road": {"move_speed_bonus": 0.3, "description": "古道加速"}
       }
     },
     {
@@ -45,7 +47,8 @@
       "terrain_effect": {
         "desert": {"move_damage": 2, "description": "沙暴肆虐"},
         "grotto": {"reveal_penalty": -3, "description": "洞窟黑暗"},
-        "oasis": {"move_heal": 3, "description": "泉水恢复"}
+        "oasis": {"move_heal": 3, "description": "泉水恢复"},
+        "ancient_road": {"move_speed_bonus": 0.4, "description": "古道加速"}
       }
     }
   ]

@@ -320,6 +320,15 @@ func draw_monster_in_cell(
 	var bar_y := cell_origin.y + cs - wt - 6.0
 	canvas.draw_rect(Rect2(bar_x, bar_y, bar_w, 4.0), Color(0.2, 0.1, 0.1))
 	canvas.draw_rect(Rect2(bar_x, bar_y, bar_w * hp_ratio, 4.0), Color(0.8, 0.2, 0.2))
+	
+	# Draw intent arrow above monster
+	var intent := m.get_intent_arrow()
+	if intent != "":
+		var intent_fs := int(cs * 0.25)
+		canvas.draw_string(
+			ThemeDB.fallback_font, cell_origin + Vector2(cs * 0.35, cs * 0.25),
+			intent, HORIZONTAL_ALIGNMENT_LEFT, -1, intent_fs, Color(1.0, 0.8, 0.2, 0.9),
+		)
 
 func draw_player(canvas: CanvasItem, player: PlayerController, offset: Vector2, scale: float) -> void:
 	var cs: float = cell_size * scale

@@ -14,6 +14,7 @@ var color: Color
 var xp: int
 var move_timer: float = 0.0
 var move_interval: float = 2.0
+var next_move_dir: int = -1
 
 func setup(terrain_key: String, spawn_pos: Vector2i, scale: float = 1.0) -> void:
 	pos = spawn_pos
@@ -29,6 +30,19 @@ func setup(terrain_key: String, spawn_pos: Vector2i, scale: float = 1.0) -> void
 	color = DataLoader.color_from_array(def.get("color", [0.5, 0.5, 0.5]))
 	move_interval = randf_range(1.5, 3.0)
 
+func _calculate_next_move(maze: MazeGenerator, occupied: Dictionary) -> void:
+	if maze == null:
+		return
+	var dirs: Array = [MazeGenerator.N, MazeGenerator.S, MazeGenerator.E, MazeGenerator.W]
+	dirs.shuffle()
+	next_move_dir = -1
+	for d in dirs:
+		if maze.can_move(pos.x, pos.y, d):
+			var next = pos + Vector2i(MazeGenerator.DX[d], MazeGenerator.DY[d])
+			if maze.in_bounds(next.x, next.y) and not occupied.has(next):
+				next_move_dir = d
+				break
+
 func try_move(maze: MazeGenerator, occupied: Dictionary) -> void:
 	move_timer += get_process_delta_time()
 	if move_timer < move_interval:
@@ -42,6 +56,7 @@ func try_move(maze: MazeGenerator, occupied: Dictionary) -> void:
 			var next = pos + Vector2i(MazeGenerator.DX[d], MazeGenerator.DY[d])
 			if maze.in_bounds(next.x, next.y) and not occupied.has(next):
 				pos = next
+				_calculate_next_move(maze, occupied)
 				break
 
 func take_damage(amount: int) -> void:
@@ -51,3 +66,11 @@ func take_damage(amount: int) -> void:
 
 func is_alive() -> bool:
 	return hp > 0
+
+func get_intent_arrow() -> String:
+	match next_move_dir:
+		MazeGenerator.N: return "↑"
+		MazeGenerator.S: return "↓"
+		MazeGenerator.E: return "→"
+		MazeGenerator.W: return "←"
+		_: return ""
