@@ -384,53 +384,69 @@ func draw_character(canvas: CanvasItem, o: Vector2, s: float, robe: Color, hair:
 
 func draw_difficulty_select(canvas: CanvasItem, vp: Vector2, selected_difficulty: String, continue_hint: String = "") -> void:
 	canvas.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0.12, 0.1, 0.08))
-	var min_dim := minf(vp.x, vp.y)
-	var font_mult := clampf(min_dim / 400.0, 1.0, 2.5)
-	var title_y := vp.y * 0.2
+	var ui_scale := _difficulty_ui_scale(vp)
+	var title_y := maxf(82.0, vp.y * 0.16)
 	canvas.draw_string(
-		ThemeDB.fallback_font, Vector2(vp.x / 2 - 80 * font_mult, title_y),
-		"敦煌迷途", HORIZONTAL_ALIGNMENT_LEFT, -1, int(36 * font_mult), Color(0.9, 0.8, 0.6),
+		ThemeDB.fallback_font, Vector2(vp.x * 0.5 - 100.0 * ui_scale, title_y),
+		"敦煌迷途", HORIZONTAL_ALIGNMENT_CENTER, int(200.0 * ui_scale), int(38 * ui_scale), Color(0.9, 0.8, 0.6),
 	)
 	canvas.draw_string(
-		ThemeDB.fallback_font, Vector2(vp.x / 2 - 60 * font_mult, title_y + 40 * font_mult),
-		"选择旅途难度", HORIZONTAL_ALIGNMENT_LEFT, -1, int(20 * font_mult), Color(0.7, 0.65, 0.55),
+		ThemeDB.fallback_font, Vector2(vp.x * 0.5 - 100.0 * ui_scale, title_y + 42.0 * ui_scale),
+		"选择旅途难度", HORIZONTAL_ALIGNMENT_CENTER, int(200.0 * ui_scale), int(19 * ui_scale), Color(0.7, 0.65, 0.55),
 	)
-	var start_y := vp.y * 0.38
-	var row_h := 88 * font_mult
-	for i in GameState.DIFFICULTY_OPTIONS.size():
+	var cards := get_difficulty_card_rects(vp)
+	for i in cards.size():
 		var key: String = GameState.DIFFICULTY_OPTIONS[i]
 		var name: String = GameState.DIFFICULTY_NAMES[key]
 		var diff: Dictionary = DataLoader.difficulty_data.get(key, {})
 		var desc: String = diff.get("description", "")
 		var stats: String = _format_difficulty_stats(diff)
 		var is_selected := key == selected_difficulty
-		var y := start_y + i * row_h
+		var card: Rect2 = cards[i]
 		var bg_color := Color(0.25, 0.2, 0.15) if is_selected else Color(0.18, 0.15, 0.12)
 		var text_color := Color(1.0, 0.9, 0.6) if is_selected else Color(0.6, 0.55, 0.45)
-		canvas.draw_rect(Rect2(vp.x / 2 - 180 * font_mult, y - 10, 360 * font_mult, row_h - 12 * font_mult), bg_color)
+		canvas.draw_rect(card, bg_color)
 		if is_selected:
-			canvas.draw_rect(Rect2(vp.x / 2 - 180 * font_mult, y - 10, 4, row_h - 12 * font_mult), Color(0.9, 0.7, 0.2))
+			canvas.draw_rect(Rect2(card.position, Vector2(maxf(4.0, 4.0 * ui_scale), card.size.y)), Color(0.9, 0.7, 0.2))
+		var text_x := card.position.x + 18.0 * ui_scale
 		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 12),
-			name, HORIZONTAL_ALIGNMENT_LEFT, -1, int(22 * font_mult), text_color,
+			ThemeDB.fallback_font, Vector2(text_x, card.position.y + 29.0 * ui_scale),
+			name, HORIZONTAL_ALIGNMENT_LEFT, int(card.size.x - 36.0 * ui_scale), int(23 * ui_scale), text_color,
 		)
 		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 34),
-			desc, HORIZONTAL_ALIGNMENT_LEFT, -1, int(12 * font_mult), Color(0.5, 0.48, 0.42),
+			ThemeDB.fallback_font, Vector2(text_x, card.position.y + 52.0 * ui_scale),
+			desc, HORIZONTAL_ALIGNMENT_LEFT, int(card.size.x - 36.0 * ui_scale), int(13 * ui_scale), Color(0.58, 0.55, 0.48),
 		)
 		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 160 * font_mult, y + 52),
-			stats, HORIZONTAL_ALIGNMENT_LEFT, -1, int(11 * font_mult), Color(0.55, 0.75, 0.55),
+			ThemeDB.fallback_font, Vector2(text_x, card.position.y + 72.0 * ui_scale),
+			stats, HORIZONTAL_ALIGNMENT_LEFT, int(card.size.x - 36.0 * ui_scale), int(12 * ui_scale), Color(0.55, 0.78, 0.55),
 		)
 	canvas.draw_string(
-		ThemeDB.fallback_font, Vector2(vp.x / 2 - 100 * font_mult, vp.y * 0.85),
-		"↑↓ 选择  回车/→ 确认", HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * font_mult), Color(0.5, 0.48, 0.42),
+		ThemeDB.fallback_font, Vector2(vp.x * 0.5 - 150.0 * ui_scale, vp.y - 64.0 * ui_scale),
+		"↑↓ 选择 · 回车确认 · 点击卡片开始", HORIZONTAL_ALIGNMENT_CENTER, int(300.0 * ui_scale), int(14 * ui_scale), Color(0.55, 0.52, 0.46),
 	)
 	if continue_hint != "":
 		canvas.draw_string(
-			ThemeDB.fallback_font, Vector2(vp.x / 2 - 140 * font_mult, vp.y * 0.92),
-			continue_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, int(14 * font_mult), Color(0.4, 0.75, 0.45),
+			ThemeDB.fallback_font, Vector2(vp.x * 0.5 - 170.0 * ui_scale, vp.y - 34.0 * ui_scale),
+			continue_hint, HORIZONTAL_ALIGNMENT_CENTER, int(340.0 * ui_scale), int(13 * ui_scale), Color(0.4, 0.78, 0.45),
 		)
+
+
+func get_difficulty_card_rects(vp: Vector2) -> Array[Rect2]:
+	var scale := _difficulty_ui_scale(vp)
+	var gap := 10.0 * scale
+	var card_h := 84.0 * scale
+	var card_w := minf(vp.x - 28.0, 560.0 * scale)
+	var total_h := card_h * GameState.DIFFICULTY_OPTIONS.size() + gap * (GameState.DIFFICULTY_OPTIONS.size() - 1)
+	var start_y := clampf(vp.y * 0.33, 190.0 * scale, vp.y - total_h - 92.0 * scale)
+	var result: Array[Rect2] = []
+	for i in GameState.DIFFICULTY_OPTIONS.size():
+		result.append(Rect2(vp.x * 0.5 - card_w * 0.5, start_y + i * (card_h + gap), card_w, card_h))
+	return result
+
+
+func _difficulty_ui_scale(vp: Vector2) -> float:
+	return clampf(minf(vp.x / 560.0, vp.y / 720.0), 0.86, 1.15)
 
 func draw_error_screen(canvas: CanvasItem, vp: Vector2) -> void:
 	canvas.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0.15, 0.1, 0.08))

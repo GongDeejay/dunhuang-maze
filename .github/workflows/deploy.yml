@@ -1,0 +1,133 @@
+name: Build and Deploy Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy.yml"
+      - "assets/**"
+      - "addons/**"
+      - "deploy/**"
+      - "tests/**"
+      - "run_tests.sh"
+      - "scripts/**"
+      - "scenes/**"
+      - "tools/**"
+      - "project.godot"
+      - "export_presets.cfg"
+  workflow_dispatch:
+
+concurrency:
+  group: dunhuang-maze-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: "4.7"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/dunhuang-godot
+          key: godot-${{ runner.os }}-${{ env.GODOT_VERSION }}-web
+
+      - name: Install Godot and Web templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cache="$HOME/.cache/dunhuang-godot"
+          mkdir -p "$cache" "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          editor_zip="$cache/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          template_zip="$cache/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          test -f "$editor_zip" || curl -fL --retry 3 -o "$editor_zip" \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          test -f "$template_zip" || curl -fL --retry 3 -o "$template_zip" \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -qo "$editor_zip" -d "$RUNNER_TEMP/godot"
+          chmod +x "$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          sudo ln -s "$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          unzip -qo "$template_zip" -d "$RUNNER_TEMP/templates"
+          cp -R "$RUNNER_TEMP/templates/templates/." "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+
+      - name: Import and test
+        run: |
+          BECKETT_ENABLE=0 godot --headless --path . --import --quit
+          BECKETT_ENABLE=0 ./run_tests.sh
+
+      - name: Export versioned Web build
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_id="${GITHUB_SHA:0:12}"
+          executable="game-${build_id}"
+          mkdir -p dist
+          BECKETT_ENABLE=0 godot --headless --path . --export-release Web "dist/${executable}.html"
+          mv "dist/${executable}.html" dist/index.html
+          python3 tools/optimize_web_export.py dist
+          cp deploy/nginx.conf.example dist/nginx.conf.example
+          python3 tools/generate_web_manifest.py dist
+
+      - name: Verify startup payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          test "$(find dist -name '*.pck' -size -2M | wc -l)" -eq 1
+          test "$(find dist -name '*.wasm.gz' | wc -l)" -eq 1
+          du -h dist/* | sort -h
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dunhuang-maze-web-${{ github.sha }}
+          path: dist/
+          retention-days: 14
+
+      - name: Check deployment credentials
+        id: deploy_config
+        shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.TENCENT_CVM_SSH_KEY }}
+        run: |
+          if [[ -n "$DEPLOY_KEY" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Build succeeded, but TENCENT_CVM_SSH_KEY is not configured; deployment skipped."
+          fi
+
+      - name: Configure SSH
+        if: steps.deploy_config.outputs.enabled == 'true'
+        shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.TENCENT_CVM_SSH_KEY }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          install -m 600 /dev/null "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -H 43.133.145.77 >> "$HOME/.ssh/known_hosts"
+
+      - name: Deploy versioned assets before publishing entry page
+        if: steps.deploy_config.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ vars.TENCENT_DEPLOY_USER || 'root' }}@43.133.145.77:/www/wwwroot/maze.mplusm.site/"
+          rsync -az --delay-updates \
+            --exclude index.html --exclude .well-known/ \
+            dist/ "$target"
+          rsync -az dist/index.html "$target"
+
+      - name: Verify production
+        if: steps.deploy_config.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          curl -fL --retry 5 --retry-delay 3 https://maze.mplusm.site/index.html -o /dev/null
+          curl -fsSI https://maze.mplusm.site/index.html | grep -qi 'cross-origin-opener-policy: same-origin'

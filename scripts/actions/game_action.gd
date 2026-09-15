@@ -13,6 +13,7 @@ enum Type {
 	CONFIRM,
 	CANCEL,
 	CLICK_AT,
+	TOGGLE_PAUSE,
 }
 
 var type: Type = Type.NONE
@@ -69,4 +70,10 @@ static func click_at(pos: Vector2) -> GameAction:
 	var a := GameAction.new()
 	a.type = Type.CLICK_AT
 	a.position = pos
+	return a
+
+
+static func toggle_pause() -> GameAction:
+	var a := GameAction.new()
+	a.type = Type.TOGGLE_PAUSE
 	return a

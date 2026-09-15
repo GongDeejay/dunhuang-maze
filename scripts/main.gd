@@ -39,8 +39,13 @@ var selected_inventory_slot: int = 0
 var show_new_journey_confirm: bool = false
 var tutorial_done: bool = false
 var first_combat_warned: bool = false
+var first_item_tip_shown: bool = false
+var first_family_tip_shown: bool = false
+var guide_assist_active: bool = false
+var moves_since_progress: int = 0
 var low_hp_pulse: float = 0.0
 var input_handler := InputHandler.new()
+var attack_cooldown := 0.0
 
 # Aliases for TurnResolver compatibility
 var move_count: int:
@@ -53,7 +58,12 @@ var game_over: bool:
 	get: return game.game_over
 	set(v): game.game_over = v
 var game_state: String:
-	get: return "difficulty_select" if game.is_difficulty_select() else "playing"
+	get:
+		if game.is_difficulty_select():
+			return "difficulty_select"
+		if game.is_paused():
+			return "paused"
+		return "playing"
 var selected_difficulty: String:
 	get: return game.selected_difficulty
 var current_level_index: int:
@@ -77,6 +87,7 @@ func _ready() -> void:
 	inventory.inventory_changed.connect(_on_inventory_changed)
 	key_tracker = KeyTracker.new()
 	key_tracker.key_collected.connect(func(_c, _r): _update_mobile_ui())
+	key_tracker.all_keys_collected.connect(_on_all_family_found)
 	ui_panel = UIPanel.new()
 	game_view_composer = GameViewComposer.new(maze_renderer, mobile_renderer, ui_panel)
 	mobile_controls = MobileControls.new()
@@ -94,6 +105,12 @@ func _ready() -> void:
 	_try_load_save()
 	_refresh_layout()
 	_request_redraw()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and game != null and game.is_playing():
+		game.toggle_pause()
+		_request_redraw()
 
 func _try_load_save() -> void:
 	var save := SaveManager.load_progress()
@@ -149,6 +166,7 @@ func _refresh_layout() -> void:
 	current_layout = UILayoutDirector.compute(vp, touch)
 	if mobile_controls:
 		mobile_controls.apply_layout(current_layout)
+		mobile_controls.visible = not game.is_difficulty_select() and not show_new_journey_confirm
 
 
 func _input(event: InputEvent) -> void:
@@ -160,6 +178,8 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _on_mobile_action(action: String) -> void:
+	if not game.can_move() and action in ["use_item", "cycle_item"]:
+		return
 	match action:
 		"use_item":
 			_use_item_from_inventory(selected_inventory_slot)
@@ -167,6 +187,9 @@ func _on_mobile_action(action: String) -> void:
 			_cycle_inventory_slot(1)
 		"regenerate":
 			_handle_regenerate()
+		"pause":
+			game.toggle_pause()
+			_request_redraw()
 		"menu":
 			game.return_to_menu()
 			_request_redraw()
@@ -188,6 +211,7 @@ func _ensure_data_loaded() -> void:
 		DataLoader.player_stats = {"max_hp": 20, "base_atk": 5, "reveal_radius": 3}
 
 func _new_game(level_idx: int = -1) -> void:
+	attack_cooldown = 0.0
 	if level_idx >= 0:
 		game.current_level_index = level_idx
 
@@ -232,8 +256,13 @@ func _new_game(level_idx: int = -1) -> void:
 	current_terrain_name = maze.get_terrain_name(player.pos.x, player.pos.y)
 	selected_inventory_slot = 0
 	first_combat_warned = false
+	first_item_tip_shown = false
+	first_family_tip_shown = false
+	guide_assist_active = false
+	moves_since_progress = 0
 	_add_log("进入 %s - 找到 %d 个家人，一起离开" % [level.get("name", ""), level_key_count])
 	_show_tutorial_if_needed()
+	_prime_monster_intents()
 	AudioManager.play_level_start()
 	SaveManager.save_progress(current_level_index, selected_difficulty, player.level, player.xp)
 	_request_redraw()
@@ -242,9 +271,30 @@ func _show_tutorial_if_needed() -> void:
 	if current_level_index != 0 or tutorial_done:
 		return
 	tutorial_done = true
-	_add_log("【引导】WASD 移动，在迷宫中寻找散落的家人")
-	_add_log("【引导】集齐家人后，前往出口「门」离开")
-	_add_log("【引导】1-5 选择背包道具，E 使用；侧栏箭头为路径指引")
+	_add_tutorial("【目标】寻找散落的家人；用 WASD、方向键或滑动移动")
+
+
+func _add_tutorial(message: String) -> void:
+	_add_log(message)
+	log_timer = 8.0
+
+
+func _on_all_family_found() -> void:
+	guide_assist_active = true
+	_add_tutorial("【目标更新】家人已到齐！跟随蓝色指引前往出口「门」")
+
+
+func _prime_monster_intents() -> void:
+	var occupied: Dictionary = {player.pos: true}
+	for m in monsters:
+		if is_instance_valid(m):
+			occupied[m.pos] = true
+	for m in monsters:
+		if not is_instance_valid(m):
+			continue
+		occupied.erase(m.pos)
+		m.plan_next_move(maze, occupied, player.pos)
+		occupied[m.pos] = true
 
 func _cycle_inventory_slot(delta: int) -> void:
 	if inventory.get_count() == 0:
@@ -262,7 +312,7 @@ func _select_inventory_slot(index: int) -> void:
 	_request_redraw()
 
 func _get_guide_direction() -> int:
-	if maze == null or game_won or game_over:
+	if maze == null or game_won or game_over or not guide_assist_active:
 		return -1
 	var target := PathGuide.nearest_target(
 		maze, player.pos, items, exit_pos,
@@ -281,8 +331,13 @@ func _pick_up_item(item: ItemEntity) -> void:
 	item.picked_up.emit(item.item_key)
 
 	if item.item_type == "key":
+		moves_since_progress = 0
+		guide_assist_active = false
 		key_tracker.add_key()
 		_add_log("获得 %s (%s)" % [item.display_name, key_tracker.get_progress()])
+		if not first_family_tip_shown:
+			first_family_tip_shown = true
+			_add_tutorial("【家人】小地图以绿色标记已发现的家人；集齐后才能离开")
 		items.erase(item)
 		if is_instance_valid(item):
 			item.queue_free()
@@ -317,6 +372,9 @@ func _pick_up_item(item: ItemEntity) -> void:
 		else:
 			inventory.add_item(item.item_key)
 			_add_log("获得 %s" % item.display_name)
+	if item.item_type != "key" and not first_item_tip_shown:
+		first_item_tip_shown = true
+		_add_tutorial("【道具】已放入背包：数字键/「换」选择，E/「用」使用")
 
 	items.erase(item)
 	if is_instance_valid(item):
@@ -328,11 +386,29 @@ func _get_monster_at(pos: Vector2i) -> MonsterEntity:
 			return m
 	return null
 
+
+func _update_guide_assist() -> void:
+	moves_since_progress += 1
+	if guide_assist_active or key_tracker.has_all_keys():
+		return
+	var threshold := 18
+	match selected_difficulty:
+		"easy": threshold = 10
+		"hard": threshold = 24
+	if moves_since_progress >= threshold:
+		guide_assist_active = true
+		_add_tutorial("【迷途指引】已显示通往最近家人的蓝色方向提示")
+
 func _combat(target: MonsterEntity) -> void:
+	if attack_cooldown > 0.0 or not target.is_alive():
+		return
+	attack_cooldown = 0.35
+	if not first_combat_warned:
+		first_combat_warned = true
+		_add_tutorial("【即时战斗】怪物会持续行动；黄色箭头表示下一步意图，P 可暂停")
 	var roll := player.roll_damage()
 	var damage_to_monster: int = roll.damage
 	var is_crit: bool = roll.is_crit
-	var damage_to_player := target.atk + randi_range(-1, 1)
 
 	AudioManager.play_hit()
 
@@ -341,8 +417,13 @@ func _combat(target: MonsterEntity) -> void:
 	else:
 		_add_log("你攻击 %s 造成 %d 伤害" % [target.display_name, damage_to_monster])
 	target.take_damage(damage_to_monster)
+	player.tick_buff()
+	_request_redraw()
 
-	if damage_to_player > 0:
+
+func _monster_attack(target: MonsterEntity) -> void:
+	var damage_to_player := target.atk + randi_range(-1, 1)
+	if target.is_alive() and damage_to_player > 0:
 		var result := player.take_damage(damage_to_player)
 		if result.dodged:
 			_add_log("你闪避了 %s 的攻击!" % target.display_name)
@@ -381,15 +462,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	_apply_game_action(action)
 
 func _input_context() -> Dictionary:
+	var confirm_rects := ui_panel.get_confirm_button_rects(get_viewport_rect().size)
 	return {
 		"show_confirm": show_new_journey_confirm,
 		"difficulty_select": game.is_difficulty_select(),
 		"game_won": game_won,
 		"game_over": game_over,
+		"paused": game.is_paused(),
 		"selected_slot": selected_inventory_slot,
 		"use_mobile_ui": current_layout.show_touch_controls,
 		"allow_hud_click": not current_layout.is_side_hud(),
 		"hud_rect": current_layout.hud_rect,
+		"confirm_yes_rect": confirm_rects.yes,
+		"confirm_no_rect": confirm_rects.no,
 	}
 
 func _apply_game_action(action: GameAction) -> void:
@@ -426,6 +511,9 @@ func _apply_game_action(action: GameAction) -> void:
 		GameAction.Type.MENU:
 			game.return_to_menu()
 			_request_redraw()
+		GameAction.Type.TOGGLE_PAUSE:
+			game.toggle_pause()
+			_request_redraw()
 		GameAction.Type.MOVE:
 			if not game.can_move():
 				return
@@ -447,14 +535,9 @@ func _do_start_playing(force_new: bool) -> void:
 	)
 
 func _handle_difficulty_click(click_pos: Vector2) -> void:
-	var vp = get_viewport_rect().size
-	var min_dim = minf(vp.x, vp.y)
-	var font_mult = clampf(min_dim / 400.0, 1.0, 2.5)
-	var start_y = vp.y * 0.4
-	for i in GameState.DIFFICULTY_OPTIONS.size():
-		var y = start_y + i * 80 * font_mult
-		var btn_rect = Rect2(vp.x / 2 - 180 * font_mult, y - 10, 360 * font_mult, 65 * font_mult)
-		if btn_rect.has_point(click_pos):
+	var cards := maze_renderer.get_difficulty_card_rects(get_viewport_rect().size)
+	for i in cards.size():
+		if cards[i].has_point(click_pos):
 			game.selected_difficulty = GameState.DIFFICULTY_OPTIONS[i]
 			_start_playing()
 			break
@@ -514,7 +597,12 @@ func _try_auto_heal() -> void:
 
 func _try_move(dir: int) -> bool:
 	if maze.can_move(player.pos.x, player.pos.y, dir):
-		player.pos += Vector2i(MazeGenerator.DX[dir], MazeGenerator.DY[dir])
+		var destination := player.pos + Vector2i(MazeGenerator.DX[dir], MazeGenerator.DY[dir])
+		var target := _get_monster_at(destination)
+		if target != null:
+			_combat(target)
+			return false
+		player.pos = destination
 		player.moved.emit(player.pos)
 		return true
 	AudioManager.play_wall_hit()
@@ -577,7 +665,13 @@ func _process(delta: float) -> void:
 		exit_visible = !exit_visible
 		dirty = true
 	if game.can_move():
-		if _move_monsters():
+		attack_cooldown = maxf(0.0, attack_cooldown - delta)
+		var monster_delta := delta
+		if maze != null:
+			var terrain_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(player.pos.x, player.pos.y)]
+			var effect: Dictionary = level_terrain_effects.get(terrain_key, {})
+			monster_delta *= maxf(0.45, 1.0 - float(effect.get("move_speed_bonus", 0.0)))
+		if _move_monsters(monster_delta):
 			dirty = true
 	if dirty:
 		_request_redraw()
@@ -585,23 +679,25 @@ func _process(delta: float) -> void:
 		queue_redraw()
 		needs_redraw = false
 
-func _move_monsters() -> bool:
-	var did_combat := false
+func _move_monsters(delta: float) -> bool:
+	var changed := false
 	var occupied: Dictionary = {player.pos: true}
 	for m in monsters:
 		if is_instance_valid(m):
 			occupied[m.pos] = true
-	for m in monsters:
+	for m in monsters.duplicate():
 		if is_instance_valid(m) and m.is_alive():
-			var old_pos := m.pos
-			m.try_move(maze, occupied)
-			if m.pos == player.pos and m.pos != old_pos:
-				if not first_combat_warned:
-					first_combat_warned = true
-					_add_log("【遇敌】怪物会主动靠近攻击，注意 HP 与背包回血")
-				_combat(m)
-				did_combat = true
-	return did_combat
+			occupied.erase(m.pos)
+			var previous_intent: int = m.next_move_dir
+			var result: Dictionary = m.try_move(maze, occupied, player.pos, delta)
+			changed = changed or result.moved or previous_intent != m.next_move_dir
+			if result.attacked:
+				_monster_attack(m)
+				changed = true
+			occupied[m.pos] = true
+			if not player.is_alive():
+				break
+	return changed
 
 func _draw() -> void:
 	if game.is_difficulty_select():
@@ -612,7 +708,7 @@ func _draw() -> void:
 				self, get_viewport_rect().size,
 				"切换难度将开始新旅途",
 				"当前存档将被覆盖",
-				"→ 确认    ← 取消",
+				"回车/→ 确认 · Esc/← 取消",
 			)
 		return
 
@@ -634,13 +730,14 @@ func _draw_context() -> Dictionary:
 		"exit_visible": exit_visible,
 		"game_won": game_won,
 		"game_over": game_over,
+		"paused": game.is_paused(),
 		"visited": visited,
 		"is_revealed": _is_revealed,
 		"levels_data": levels_data,
 		"current_level_index": current_level_index,
 		"difficulty_name": game.get_difficulty_name(),
 		"move_count": move_count,
-		"terrain_name": current_terrain_name,
+		"terrain_name": _get_terrain_display(),
 		"buff_display": _get_buff_display(),
 		"combat_log": combat_log,
 		"inventory": inventory,
@@ -649,6 +746,15 @@ func _draw_context() -> Dictionary:
 		"guide_dir": _get_guide_direction(),
 		"low_hp_pulse": low_hp_pulse,
 	}
+
+
+func _get_terrain_display() -> String:
+	if maze == null:
+		return current_terrain_name
+	var terrain_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(player.pos.x, player.pos.y)]
+	var effect: Dictionary = level_terrain_effects.get(terrain_key, {})
+	var description := str(effect.get("description", ""))
+	return current_terrain_name if description.is_empty() else "%s·%s" % [current_terrain_name, description]
 
 
 func _flash_player_hurt() -> void:

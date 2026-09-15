@@ -157,6 +157,9 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		"WASD 移动", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_dim)
 	y += 15
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
+		"P / Esc 暂停", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_dim)
+	y += 15
+	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 		"R 重开本关", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_dim)
 	y += 15
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
@@ -215,7 +218,6 @@ func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: In
 func get_inventory_slot_at(global_pos: Vector2) -> int:
 	for i in inventory_hit_rects.size():
 		var rect := inventory_hit_rects[i]
-		rect.position.x += panel_origin_x
 		if rect.has_point(global_pos):
 			return i
 	return -1
@@ -240,10 +242,36 @@ func draw_overlay(owner: Node2D, vp: Vector2, title: String, sub: String, hint: 
 
 func draw_confirm_overlay(owner: Node2D, vp: Vector2, title: String, sub: String, hint: String) -> void:
 	owner.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0, 0, 0, 0.55))
-	owner.draw_rect(Rect2(vp.x / 2 - 200, vp.y / 2 - 55, 400, 110), Color(0.12, 0.1, 0.08, 0.95))
-	owner.draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 120, vp.y / 2 - 25),
-		title, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, accent)
-	owner.draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 100, vp.y / 2 + 5),
-		sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, text_secondary)
-	owner.draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 80, vp.y / 2 + 30),
-		hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, text_dim)
+	var panel_w := minf(vp.x - 28.0, 430.0)
+	var panel_h := 190.0
+	var panel := Rect2(vp.x * 0.5 - panel_w * 0.5, vp.y * 0.5 - panel_h * 0.5, panel_w, panel_h)
+	owner.draw_rect(panel, Color(0.12, 0.1, 0.08, 0.97))
+	owner.draw_rect(panel, Color(0.65, 0.5, 0.18), false, 2.0)
+	owner.draw_string(ThemeDB.fallback_font, Vector2(panel.position.x + 18, panel.position.y + 38),
+		title, HORIZONTAL_ALIGNMENT_CENTER, int(panel.size.x - 36), 21, accent)
+	owner.draw_string(ThemeDB.fallback_font, Vector2(panel.position.x + 18, panel.position.y + 70),
+		sub, HORIZONTAL_ALIGNMENT_CENTER, int(panel.size.x - 36), 14, text_secondary)
+	var buttons := get_confirm_button_rects(vp)
+	owner.draw_rect(buttons.no, Color(0.20, 0.17, 0.14))
+	owner.draw_rect(buttons.yes, Color(0.35, 0.27, 0.10))
+	owner.draw_rect(buttons.yes, accent, false, 1.5)
+	owner.draw_string(ThemeDB.fallback_font, buttons.no.position + Vector2(0, 29),
+		"取消", HORIZONTAL_ALIGNMENT_CENTER, int(buttons.no.size.x), 15, text_secondary)
+	owner.draw_string(ThemeDB.fallback_font, buttons.yes.position + Vector2(0, 29),
+		"确认新旅途", HORIZONTAL_ALIGNMENT_CENTER, int(buttons.yes.size.x), 15, text_primary)
+	owner.draw_string(ThemeDB.fallback_font, Vector2(panel.position.x + 18, panel.end.y - 14),
+		hint, HORIZONTAL_ALIGNMENT_CENTER, int(panel.size.x - 36), 11, text_dim)
+
+
+func get_confirm_button_rects(vp: Vector2) -> Dictionary:
+	var panel_w := minf(vp.x - 28.0, 430.0)
+	var panel_h := 190.0
+	var panel := Rect2(vp.x * 0.5 - panel_w * 0.5, vp.y * 0.5 - panel_h * 0.5, panel_w, panel_h)
+	var gap := 12.0
+	var margin := 18.0
+	var button_w := (panel.size.x - margin * 2.0 - gap) * 0.5
+	var y := panel.position.y + 92.0
+	return {
+		"no": Rect2(panel.position.x + margin, y, button_w, 44.0),
+		"yes": Rect2(panel.position.x + margin + button_w + gap, y, button_w, 44.0),
+	}

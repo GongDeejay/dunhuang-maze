@@ -19,7 +19,7 @@ if ! command -v "$GODOT" >/dev/null 2>&1; then
 fi
 
 echo "==> Run tests"
-BECKETT_ENABLE=0 "$GODOT" --headless --path . res://tests/test_runner.tscn
+BECKETT_ENABLE=0 GODOT="$GODOT" ./run_tests.sh
 
 mkdir -p web
 echo "==> Import assets"
@@ -27,6 +27,9 @@ BECKETT_ENABLE=0 "$GODOT" --headless --path . --import --quit 2>&1 | tail -3
 
 echo "==> Export Web → web/index.html"
 BECKETT_ENABLE=0 "$GODOT" --headless --path . --export-release "Web" "web/index.html"
+
+echo "==> Optimize startup shell + pre-compress Web assets"
+python3 tools/optimize_web_export.py web
 
 echo "==> Copy deployment docs"
 cp -f deploy/DEPLOY.md web/DEPLOY.md

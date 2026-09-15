@@ -45,8 +45,8 @@ Cross-Origin-Embedder-Policy: require-corp
 ### 推荐
 
 - **HTTPS**（生产环境）
-- **gzip / brotli** 压缩 `.wasm`、`.pck`、`.js`
-- `Cache-Control`：`index.html` 短缓存；`index.wasm` / `index.pck` 可长缓存（带版本/hash 更佳）
+- **gzip / brotli** 压缩 `.wasm`、`.pck`、`.js`；仓库导出脚本会生成 `.gz`
+- `Cache-Control`：`index.html` 不缓存；自动部署使用 `game-{git-sha}` 文件名并设置一年 immutable 缓存
 
 ## Nginx 示例
 
@@ -81,7 +81,7 @@ DevTools 竖屏：设备尺寸 **390×844** 验证顶栏 HUD；**1280×720** 验
 
 ## 增量部署（推荐日常更新）
 
-游戏逻辑变更后，通常只有 `index.pck`（及偶尔 `index.html` / `index.js`）变化，`index.wasm` 不变。
+本地增量导出仍使用 `index.*`。GitHub Actions 自动部署会使用带 Git SHA 的文件名，避免发布后旧缓存污染。
 
 ### 1. 导出并生成增量清单
 
@@ -151,10 +151,21 @@ rsync -avz --delete \
 | 资源 | 原始 | gzip 约 |
 |------|------|---------|
 | index.wasm | ~38 MB | ~9–10 MB |
-| index.pck | ~7–8 MB | ~5–6 MB |
+| index.pck（优化后） | ~0.55 MB | ~0.50 MB |
 | index.js | ~280 KB | ~80 KB |
 
-首屏需下载 wasm + pck，移动网络请确保 CDN 或服务器开启压缩。
+首屏需下载 wasm + pck。项目使用约 200KB 的运行时中文子集字体替代 7.9MB 全量字库，并为 WASM/PCK 生成预压缩文件；新增游戏文案后请运行 `./tools/subset_font.sh`。
+
+## GitHub Actions 自动部署
+
+`.github/workflows/deploy.yml` 在 `main` 分支的游戏文件变化后自动测试、导出、压缩并发布。仓库需配置 Actions Secret：
+
+- `TENCENT_CVM_SSH_KEY`：仅允许部署该站点目录的 SSH 私钥，优先使用专用 deploy 用户/密钥。
+- 可选 Actions Variable `TENCENT_DEPLOY_USER`：SSH 用户名，未设置时沿用现有 `root` 部署用户。
+
+工作流先同步带版本号的资源，最后更新 `index.html`，并保留旧资源，避免打断仍在加载旧版本的玩家。若 Secret 尚未配置，工作流仍会完成构建并保存 14 天 artifact，但会跳过生产发布。
+
+服务器需一次性将本站 Nginx 配置合并 `nginx.conf.example` 中的 `gzip_static` 和缓存规则，然后执行 `nginx -t` 并重载；上传示例文件不会自动修改 Nginx。旧版本资源可在确认没有在途加载后定期清理。
 
 ## 引擎与兼容性
 

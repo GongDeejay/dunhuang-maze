@@ -1,6 +1,7 @@
 extends Node
 
 const PathGuideScript = preload("res://scripts/path_guide.gd")
+const MainScript = preload("res://scripts/main.gd")
 
 var passed := 0
 var failed := 0
@@ -30,6 +31,12 @@ func _ready() -> void:
 	test_asset_registry()
 	test_game_director()
 	test_ui_layout_director()
+	test_pause_state()
+	test_difficulty_hitboxes()
+	test_mobile_control_bounds()
+	test_realtime_monster_intent()
+	test_realtime_player_attack()
+	test_web_font_payload()
 	print("\n=== 测试完成: %d 通过, %d 失败 ===" % [passed, failed])
 	get_tree().quit(failed)
 
@@ -367,3 +374,94 @@ func test_ui_layout_director():
 	var compact := UILayoutDirector.compute(Vector2(360, 780), true)
 	assert_eq(compact.mode, LayoutProfile.Mode.PORTRAIT_COMPACT, "narrow portrait compact")
 	assert_eq(compact.ui_scale, 2.0, "portrait ui scale 2x")
+
+
+func test_pause_state():
+	print("\n[TEST] Pause State")
+	var state := GameState.new()
+	state.start_game()
+	state.toggle_pause()
+	assert_true(state.is_paused(), "playing toggles to paused")
+	assert_true(not state.can_move(), "paused state blocks movement")
+	state.toggle_pause()
+	assert_true(state.is_playing(), "paused toggles back to playing")
+
+
+func test_difficulty_hitboxes():
+	print("\n[TEST] Difficulty Hitboxes")
+	var renderer := MazeRenderer.new()
+	for vp in [Vector2(1280, 720), Vector2(390, 844)]:
+		var cards := renderer.get_difficulty_card_rects(vp)
+		assert_eq(cards.size(), 3, "three difficulty cards at %s" % vp)
+		for i in cards.size():
+			assert_true(Rect2(Vector2.ZERO, vp).encloses(cards[i]), "difficulty card %d stays in viewport" % i)
+			if i > 0:
+				assert_true(not cards[i - 1].intersects(cards[i]), "difficulty cards do not overlap")
+
+
+func test_mobile_control_bounds():
+	print("\n[TEST] Mobile Control Bounds")
+	var profile := UILayoutDirector.compute(Vector2(390, 844), true)
+	var controls := MobileControls.new()
+	controls.apply_layout(profile)
+	for entry in controls._dpad_centers:
+		var center: Vector2 = entry.pos
+		var hit := Rect2(center - Vector2.ONE * controls.btn_radius, Vector2.ONE * controls.btn_radius * 2.0)
+		assert_true(profile.controls_rect.encloses(hit), "portrait dpad stays in controls area")
+	for action in controls._func_centers:
+		var center: Vector2 = controls._func_centers[action]
+		var half := controls.func_btn_size * 0.5
+		var hit := Rect2(center - Vector2.ONE * half, Vector2.ONE * half * 2.0)
+		assert_true(profile.controls_rect.encloses(hit), "portrait function button stays in controls area")
+	controls.free()
+
+
+func test_realtime_monster_intent():
+	print("\n[TEST] Realtime Monster Intent")
+	var maze := MazeGenerator.new(2, 1)
+	maze.grid = [[MazeGenerator.E, MazeGenerator.W]]
+	var monster := MonsterEntity.new()
+	monster.pos = Vector2i(0, 0)
+	monster.move_interval = 0.0
+	var target := Vector2i(1, 0)
+	var occupied := {target: true}
+	monster.plan_next_move(maze, occupied, target)
+	assert_eq(monster.next_move_dir, MazeGenerator.E, "monster telegraphs attack toward player")
+	var result := monster.try_move(maze, occupied, target, 0.1)
+	assert_true(result.attacked, "monster attacks when intent reaches player")
+	assert_eq(monster.pos, Vector2i(0, 0), "attacking monster remains adjacent")
+	monster.free()
+
+
+func test_web_font_payload():
+	print("\n[TEST] Web Font Payload")
+	var path := "res://assets/fonts/NotoSansSC-GameSubset.ttf"
+	assert_true(FileAccess.file_exists(path), "subset font exists")
+	assert_true(FileAccess.get_file_as_bytes(path).size() < 400_000, "subset font stays below 400 KB")
+
+
+func test_realtime_player_attack():
+	print("\n[TEST] Realtime Player Attack")
+	var controller = MainScript.new()
+	controller.first_combat_warned = true
+	controller.player = PlayerController.new()
+	controller.player.hp = 100
+	controller.player.atk = 5
+	controller.player.crit_chance = 0.0
+	controller.maze = MazeGenerator.new(2, 1)
+	controller.maze.grid = [[MazeGenerator.E, MazeGenerator.W]]
+	var monster := MonsterEntity.new()
+	monster.hp = 100
+	monster.atk = 10
+	monster.pos = Vector2i(1, 0)
+	controller.monsters.append(monster)
+	assert_true(not controller._try_move(MazeGenerator.E), "bump attacks without moving")
+	assert_eq(controller.player.pos, Vector2i.ZERO, "player never overlaps enemy")
+	assert_true(monster.hp < 100, "direction input damages adjacent enemy")
+	assert_eq(controller.player.hp, 100, "player attack does not trigger immediate retaliation")
+	var remaining_hp := monster.hp
+	controller._try_move(MazeGenerator.E)
+	assert_eq(monster.hp, remaining_hp, "attack cooldown blocks input spam")
+	controller.player.free()
+	monster.free()
+	controller.free()

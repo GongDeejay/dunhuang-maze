@@ -25,11 +25,11 @@ func _ready() -> void:
 func apply_layout(profile: LayoutProfile) -> void:
 	layout = profile
 	is_mobile = profile.show_touch_controls
-	var scale := profile.ui_scale
-	btn_radius = clampf(28.0 * scale, 28.0, 56.0)
-	btn_spacing = btn_radius * 2.15
-	func_btn_size = clampf(36.0 * scale, 36.0, 64.0)
-	swipe_threshold = 24.0 * scale
+	var controls := profile.controls_rect.size
+	btn_radius = clampf(minf(controls.x * 0.065, controls.y * 0.14), 20.0, 36.0)
+	btn_spacing = minf(btn_radius * 2.25, controls.y * 0.30)
+	func_btn_size = clampf(minf(controls.x * 0.15, controls.y * 0.28), 40.0, 56.0)
+	swipe_threshold = clampf(24.0 * profile.ui_scale, 24.0, 44.0)
 	_rebuild_hit_zones()
 	queue_redraw()
 
@@ -159,8 +159,8 @@ func _draw_portrait_controls(rect: Rect2, alpha: float, fs: int) -> void:
 
 
 func _layout_portrait_zones(rect: Rect2, _alpha: float, _fs: int) -> void:
-	var dpad_cx := rect.position.x + rect.size.x * 0.5
-	var dpad_cy := rect.position.y + rect.size.y * 0.38
+	var dpad_cx := rect.position.x + rect.size.x * 0.28
+	var dpad_cy := rect.position.y + rect.size.y * 0.50
 	var dirs := [
 		["↑", MazeGenerator.N, Vector2(dpad_cx, dpad_cy - btn_spacing)],
 		["←", MazeGenerator.W, Vector2(dpad_cx - btn_spacing, dpad_cy)],
@@ -171,15 +171,17 @@ func _layout_portrait_zones(rect: Rect2, _alpha: float, _fs: int) -> void:
 		_dpad_centers.append({"dir": d[1], "pos": d[2], "label": d[0]})
 
 	var funcs := [
-		["换", "cycle_item"], ["用", "use_item"], ["重开", "regenerate"], ["菜单", "menu"],
+		["换", "cycle_item"], ["用", "use_item"], ["暂停", "pause"], ["重开", "regenerate"], ["菜单", "menu"],
 	]
-	var btn_y := rect.position.y + rect.size.y * 0.82
-	var gap := func_btn_size + 12.0
-	var total_w := funcs.size() * gap - 12.0
-	var start_x := rect.position.x + (rect.size.x - total_w) * 0.5 + func_btn_size * 0.5
+	var cols := 3
+	var start_x := rect.position.x + rect.size.x * 0.57
+	var start_y := rect.position.y + rect.size.y * 0.32
+	var gap_x := minf(func_btn_size + 10.0, rect.size.x * 0.17)
+	var gap_y := minf(func_btn_size + 8.0, rect.size.y * 0.40)
 	for i in funcs.size():
-		var bx := start_x + i * gap
-		_func_centers[funcs[i][1]] = Vector2(bx, btn_y)
+		var bx := start_x + (i % cols) * gap_x
+		var by := start_y + (i / cols) * gap_y
+		_func_centers[funcs[i][1]] = Vector2(bx, by)
 		_func_labels[funcs[i][1]] = funcs[i][0]
 
 
@@ -199,25 +201,24 @@ func _draw_landscape_controls(rect: Rect2, alpha: float, fs: int) -> void:
 
 
 func _layout_landscape_zones(rect: Rect2, _alpha: float, _fs: int) -> void:
-	var dpad_cx := rect.position.x + rect.size.x * 0.14
-	var dpad_cy := rect.position.y + rect.size.y * 0.5
+	var center_y := rect.position.y + rect.size.y * 0.5
 	var dirs := [
-		["↑", MazeGenerator.N, Vector2(dpad_cx, dpad_cy - btn_spacing * 0.85)],
-		["←", MazeGenerator.W, Vector2(dpad_cx - btn_spacing * 0.85, dpad_cy)],
-		["→", MazeGenerator.E, Vector2(dpad_cx + btn_spacing * 0.85, dpad_cy)],
-		["↓", MazeGenerator.S, Vector2(dpad_cx, dpad_cy + btn_spacing * 0.85)],
+		["←", MazeGenerator.W, Vector2(rect.position.x + rect.size.x * 0.07, center_y)],
+		["↑", MazeGenerator.N, Vector2(rect.position.x + rect.size.x * 0.15, center_y)],
+		["↓", MazeGenerator.S, Vector2(rect.position.x + rect.size.x * 0.23, center_y)],
+		["→", MazeGenerator.E, Vector2(rect.position.x + rect.size.x * 0.31, center_y)],
 	]
 	for d in dirs:
 		_dpad_centers.append({"dir": d[1], "pos": d[2], "label": d[0]})
 
-	var func_x := rect.position.x + rect.size.x * 0.86
 	var funcs := [
-		["换", "cycle_item", 0.12],
-		["用", "use_item", 0.35],
-		["重开", "regenerate", 0.58],
-		["菜单", "menu", 0.81],
+		["换", "cycle_item", 0.56],
+		["用", "use_item", 0.65],
+		["暂停", "pause", 0.74],
+		["重开", "regenerate", 0.83],
+		["菜单", "menu", 0.92],
 	]
 	for f in funcs:
-		var pos := Vector2(func_x, rect.position.y + rect.size.y * f[2])
+		var pos := Vector2(rect.position.x + rect.size.x * f[2], center_y)
 		_func_centers[f[1]] = pos
 		_func_labels[f[1]] = f[0]

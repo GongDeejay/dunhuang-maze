@@ -35,6 +35,10 @@ var _logger: Logger = null
 
 
 func _ready() -> void:
+	if OS.has_feature("web") or OS.has_feature("release") or OS.get_environment("BECKETT_ENABLE") == "0":
+		set_process(false)
+		set_process_input(false)
+		return
 	# Keep serving while the game is paused (get_tree().paused = true) — pause
 	# menus and game-over screens are exactly when the agent needs to look at the
 	# game and click buttons; an INHERIT-mode autoload would freeze the channel.

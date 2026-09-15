@@ -6,10 +6,17 @@ func handle(
 	event: InputEvent,
 	ctx: Dictionary,
 ) -> GameAction:
+	if event is InputEventKey and event.echo and event.keycode in [KEY_P, KEY_ESCAPE]:
+		return GameAction.new()
 	if ctx.get("show_confirm", false):
-		return _handle_confirm(event)
+		return _handle_confirm(event, ctx)
 	if ctx.get("difficulty_select", false):
 		return _handle_difficulty_select(event)
+	if ctx.get("paused", false):
+		if event.is_action_pressed("ui_accept") or event.is_action_pressed("ui_cancel") \
+				or (event is InputEventKey and event.pressed and event.keycode == KEY_P):
+			return GameAction.toggle_pause()
+		return GameAction.new()
 	if ctx.get("game_won", false) or ctx.get("game_over", false):
 		if event.is_action_pressed("regenerate"):
 			return GameAction.regenerate()
@@ -18,6 +25,8 @@ func handle(
 		return GameAction.regenerate()
 	if event is InputEventKey and event.pressed:
 		match event.keycode:
+			KEY_P, KEY_ESCAPE:
+				return GameAction.toggle_pause()
 			KEY_E:
 				return GameAction.use_item(int(ctx.get("selected_slot", 0)))
 			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
@@ -43,11 +52,19 @@ func handle(
 	return GameAction.new()
 
 
-func _handle_confirm(event: InputEvent) -> GameAction:
-	if event.is_action_pressed("regenerate") or event.is_action_pressed("move_right"):
+func _handle_confirm(event: InputEvent, ctx: Dictionary) -> GameAction:
+	if event.is_action_pressed("ui_accept") or event.is_action_pressed("regenerate") or event.is_action_pressed("move_right"):
 		return GameAction.confirm()
-	if event.is_action_pressed("move_left") or event.is_action_pressed("move_up"):
+	if event.is_action_pressed("ui_cancel") or event.is_action_pressed("move_left") or event.is_action_pressed("move_up"):
 		return GameAction.cancel()
+	if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
+			or (event is InputEventScreenTouch and event.pressed):
+		var yes_rect: Rect2 = ctx.get("confirm_yes_rect", Rect2())
+		var no_rect: Rect2 = ctx.get("confirm_no_rect", Rect2())
+		if yes_rect.has_point(event.position):
+			return GameAction.confirm()
+		if no_rect.has_point(event.position):
+			return GameAction.cancel()
 	return GameAction.new()
 
 
@@ -56,7 +73,7 @@ func _handle_difficulty_select(event: InputEvent) -> GameAction:
 		return GameAction.cycle_difficulty(-1)
 	if event.is_action_pressed("move_down"):
 		return GameAction.cycle_difficulty(1)
-	if event.is_action_pressed("regenerate") or event.is_action_pressed("move_right"):
+	if event.is_action_pressed("ui_accept") or event.is_action_pressed("regenerate") or event.is_action_pressed("move_right"):
 		return GameAction.confirm()
 	if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
 			or (event is InputEventScreenTouch and event.pressed):

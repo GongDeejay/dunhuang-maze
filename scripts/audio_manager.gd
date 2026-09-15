@@ -14,6 +14,8 @@ func _ready():
 		stream.mix_rate = SAMPLE_RATE
 		stream.buffer_length = 0.1
 		gen.stream = stream
+		# Generated streams cannot use Web sample playback; force stream mode.
+		gen.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 		gen.bus = "Master"
 		add_child(gen)
 		generators.append(gen)

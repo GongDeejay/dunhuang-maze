@@ -24,7 +24,7 @@ config/features=PackedStringArray("4.7")
 DataLoader="*res://scripts/data_loader.gd"
 PlatformService="*res://scripts/core/platform_service.gd"
 GameDirector="*res://scripts/core/game_director.gd"
-BeckettRuntime="*uid://dspgi2nxto4e8"
+BeckettRuntime="*res://addons/beckett/runtime/mcp_runtime.gd"
 AudioManager="*res://scripts/audio_manager.gd"
 
 [debug]
@@ -35,7 +35,7 @@ file_logging/enable_file_logging=true
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
-window/stretch/mode="canvas_items"
+window/stretch/mode="disabled"
 window/stretch/aspect="expand"
 window/size/override_controls_size=true
 
@@ -49,7 +49,7 @@ autostart=false
 
 [gui]
 
-theme/custom_font="res://assets/fonts/NotoSansSC-Regular.ttf"
+theme/custom_font="res://assets/fonts/NotoSansSC-GameSubset.ttf"
 
 [input]
 

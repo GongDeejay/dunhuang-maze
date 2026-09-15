@@ -1,14 +1,8 @@
 name: Web Export Check
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - "scripts/**"
-      - "assets/**"
-      - "scenes/**"
-      - "project.godot"
-      - "export_presets.cfg"
+  # main pushes are already built and tested by deploy.yml.
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -25,8 +19,8 @@ jobs:
           chmod +x Godot_v${GODOT_VERSION}-stable_linux.x86_64
           sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
           mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
-          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_web_template.tpz"
-          unzip -q Godot_v${GODOT_VERSION}-stable_web_template.tpz
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q Godot_v${GODOT_VERSION}-stable_export_templates.tpz
           mv templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
 
       - name: Export Web build

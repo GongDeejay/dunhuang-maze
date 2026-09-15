@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-SKIP_NAMES = {".DS_Store", "cert.pem", "key.pem"}
+SKIP_NAMES = {".DS_Store", "cert.pem", "key.pem", "MANIFEST.json", "VERSION.txt"}
 SKIP_SUFFIXES = (".import",)
 DEPLOY_ONLY = None  # None = all non-skipped; set to filter if needed
 
@@ -100,7 +100,7 @@ def main() -> int:
         "核心文件:",
     ]
     for item in files:
-        if item["name"].startswith("index."):
+        if item["name"].startswith(("index.", "game-")):
             version_lines.append(f"  {item['name']}\t{item['bytes']} bytes\tsha256:{item['sha256'][:16]}…")
 
     (web_dir / "VERSION.txt").write_text("\n".join(version_lines) + "\n", encoding="utf-8")

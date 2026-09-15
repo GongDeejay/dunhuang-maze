@@ -17,6 +17,7 @@ static func resolve_after_move(game) -> void:
 			return
 
 	game.move_count += 1
+	game._update_guide_assist()
 
 	if not _can_continue_turn(game):
 		return

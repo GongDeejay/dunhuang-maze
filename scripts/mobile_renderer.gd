@@ -42,8 +42,8 @@ func draw_follow_in_rect(
 	var center_y := player.pos.y
 	var half_cols := view_cols / 2
 	var half_rows := view_rows / 2
-	var start_x := center_x - half_cols
-	var start_y := center_y - half_rows
+	var start_x := clampi(center_x - half_cols, 0, maxi(0, maze_width - view_cols))
+	var start_y := clampi(center_y - half_rows, 0, maxi(0, maze_height - view_rows))
 	var wall_w := maxf(cell_sz * 0.08, 3.0)
 	var draw_scale := cell_sz / float(maze_renderer.cell_size)
 
@@ -92,12 +92,12 @@ func draw_follow_in_rect(
 						continue
 					maze_renderer.draw_monster_in_cell(canvas, m, Vector2(screen_x, screen_y), cell_sz, wall_w, draw_scale)
 
-	var player_screen_x := origin.x + half_cols * cell_sz
-	var player_screen_y := origin.y + half_rows * cell_sz
+	var player_screen_x := origin.x + (player.pos.x - start_x) * cell_sz
+	var player_screen_y := origin.y + (player.pos.y - start_y) * cell_sz
 	_draw_player_in_cell(canvas, Vector2(player_screen_x, player_screen_y), cell_sz, wall_w)
 	if guide_dir >= 0:
 		maze_renderer.draw_path_arrow(
-			canvas, Vector2i(half_cols, half_rows), guide_dir,
+			canvas, player.pos - Vector2i(start_x, start_y), guide_dir,
 			origin, draw_scale,
 		)
 

@@ -52,7 +52,8 @@ static func _build_portrait(profile: LayoutProfile, vp_w: float, vp_h: float, to
 
 	var hud_h := clampf(vp_h * HUD_TOP_RATIO * clampf(profile.ui_scale / 2.0, 1.0, 1.15), HUD_TOP_MIN, HUD_TOP_MAX)
 	if profile.mode == LayoutProfile.Mode.PORTRAIT_COMPACT:
-		hud_h = clampf(vp_h * 0.17, 72.0, 120.0)
+		hud_h = 166.0
+	hud_h = maxf(hud_h, 166.0)
 
 	var controls_h := 0.0
 	if touch:

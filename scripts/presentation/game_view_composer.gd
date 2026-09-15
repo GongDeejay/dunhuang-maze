@@ -24,7 +24,9 @@ func draw(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -> void:
 		_:
 			_draw_dynamic(canvas, layout, ctx)
 
-	if ctx.get("game_over", false):
+	if ctx.get("paused", false):
+		ui_panel.draw_overlay(canvas, vp, "旅途暂停", "即时战斗已冻结", "按 P / Esc / 回车或暂停按钮继续", Color(0.9, 0.75, 0.3))
+	elif ctx.get("game_over", false):
 		ui_panel.draw_overlay(canvas, vp, "你倒下了...", "走了 %d 步" % ctx.get("move_count", 0), "按 R 重新尝试", Color(0.9, 0.3, 0.2))
 	elif ctx.get("game_won", false):
 		var level_idx: int = ctx.get("current_level_index", 0)
@@ -77,9 +79,8 @@ func _draw_dynamic(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -
 func _draw_log_strip(canvas: CanvasItem, rect: Rect2, combat_log: Array, ui_scale: float = 1.0) -> void:
 	canvas.draw_rect(rect, Color(0.08, 0.07, 0.06, 0.92))
 	var msg: String = combat_log[combat_log.size() - 1]
-	var fs := int(clampf(rect.size.y * 0.42 * ui_scale, 16, 28))
-	canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + 8, rect.position.y + rect.size.y - 8),
-		msg, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - 16), fs, Color(0.75, 0.7, 0.62))
+	canvas.draw_multiline_string(ThemeDB.fallback_font, rect.position + Vector2(8, 20),
+		msg, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - 16), 14, 2, Color(0.75, 0.7, 0.62))
 
 
 func get_inventory_slot_at(global_pos: Vector2, layout: LayoutProfile) -> int:

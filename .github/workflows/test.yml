@@ -23,4 +23,4 @@ jobs:
         run: godot --headless --path . --import --quit
 
       - name: Run headless tests
-        run: godot --headless --path . res://tests/test_runner.tscn
+        run: BECKETT_ENABLE=0 ./run_tests.sh

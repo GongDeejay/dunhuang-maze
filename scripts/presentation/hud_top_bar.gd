@@ -62,36 +62,32 @@ func _draw_portrait(
 	low_hp_pulse: float,
 ) -> void:
 	var pad := 12.0
-	var fs_title := _fs(rect, 0.30, 28, 40, ui_scale)
-	var fs_body := _fs(rect, 0.24, 24, 34, ui_scale)
-	var fs_small := _fs(rect, 0.20, 20, 28, ui_scale)
+	var fs_title := 22
+	var fs_body := 16
+	var fs_small := 14
 
 	var level_name := ""
 	if level_idx < levels_data.size():
 		level_name = levels_data[level_idx].get("name", "")
 
-	var title_max_w := rect.size.x * 0.52
+	var title_max_w := rect.size.x - pad * 2.0
 	var title_y := rect.position.y + pad + fs_title * 0.85
 	canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + pad, title_y),
 		"%s · %s" % [level_name, diff_name], HORIZONTAL_ALIGNMENT_LEFT, int(title_max_w), fs_title, accent)
 
 	_draw_inventory_chips(canvas, rect, inventory, selected_slot, compact, fs_small, true)
 
-	var heart_y := title_y + fs_title * 0.45
+	var heart_y := rect.position.y + 42.0
 	var heart_h := heart_bar.draw(
 		canvas,
 		Vector2(rect.position.x + pad, heart_y),
 		clampf(rect.size.x * 0.40, 96.0, 140.0),
 		player.hp, player.max_hp, low_hp_pulse, 5,
 	)
-	canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + pad + 108.0, heart_y + heart_h - 2),
+	canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + pad + 148.0, heart_y + heart_h - 2),
 		"%d/%d" % [player.hp, player.max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, fs_body, text_primary)
 
-	var row3_y := rect.position.y + rect.size.y - pad
-	if compact:
-		row3_y -= fs_small * 0.2
-	else:
-		row3_y -= fs_body * 0.3
+	var row3_y := rect.position.y + 84.0
 
 	var rx := rect.position.x + pad
 	if key_tracker != null:
@@ -103,20 +99,19 @@ func _draw_portrait(
 		"步 %d" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_body, text_secondary)
 	rx += rect.size.x * 0.18
 
-	if not compact:
+	canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
+		"攻%d" % player.get_effective_atk(), HORIZONTAL_ALIGNMENT_LEFT, -1, fs_small, text_secondary)
+	rx = rect.position.x + pad
+	row3_y += 23.0
+	canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
+		terrain_name, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - pad * 2.0 - 70.0), fs_small, text_secondary)
+	if guide_dir >= 0:
+		rx = rect.end.x - 70.0
 		canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
-			"攻%d" % player.get_effective_atk(), HORIZONTAL_ALIGNMENT_LEFT, -1, fs_small, text_secondary)
-		rx += rect.size.x * 0.14
-		canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
-			terrain_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_small, text_secondary)
-		if guide_dir >= 0:
-			rx += rect.size.x * 0.18
-			canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
-				"指引%s" % _dir_label(guide_dir), HORIZONTAL_ALIGNMENT_LEFT, -1, fs_small, Color(0.55, 0.85, 0.95))
-		if buff_info != "":
-			var buff_y := row3_y - fs_small * 1.1
-			canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + pad, buff_y),
-				buff_info, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - pad * 2), fs_small, Color(0.3, 0.85, 0.4))
+			"指引%s" % _dir_label(guide_dir), HORIZONTAL_ALIGNMENT_LEFT, -1, fs_small, Color(0.55, 0.85, 0.95))
+	if buff_info != "":
+		canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + 220.0, rect.position.y + 61.0),
+			buff_info, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - 232), 11, Color(0.3, 0.85, 0.4))
 
 
 func _draw_landscape_strip(
@@ -199,12 +194,12 @@ func _draw_inventory_chips(
 	var items := inventory.get_item_list()
 	if items.is_empty():
 		return
-	var chip_w := 36.0 if portrait else (32.0 if compact else 38.0)
-	var chip_h := 30.0 if portrait else (26.0 if compact else 28.0)
+	var chip_w := 44.0 if portrait else (32.0 if compact else 38.0)
+	var chip_h := 40.0 if portrait else (26.0 if compact else 28.0)
 	var gap := 5.0
 	var total_w := items.size() * chip_w + maxi(items.size() - 1, 0) * gap
 	var start_x := rect.position.x + rect.size.x - 10.0 - total_w
-	var chip_y := rect.position.y + (14.0 if portrait else (18.0 if compact else rect.size.y * 0.24))
+	var chip_y := rect.position.y + (118.0 if portrait else (18.0 if compact else rect.size.y * 0.24))
 	for i in items.size():
 		var chip_rect := Rect2(start_x + i * (chip_w + gap), chip_y, chip_w, chip_h)
 		inventory_chip_rects.append(chip_rect)

@@ -18,7 +18,7 @@ func get_continue_hint(levels_data: Array) -> String:
 	var level_name := "关卡 %d" % (level_idx + 1)
 	if level_idx < levels_data.size():
 		level_name = levels_data[level_idx].get("name", level_name)
-	return "存档: %s · %s · Lv.%d（按 → 继续）" % [
+	return "关卡检查点: %s · %s · Lv.%d（从本关重新开始）" % [
 		diff_name, level_name, int(save.get("player_level", 1)),
 	]
 

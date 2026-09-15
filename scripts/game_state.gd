@@ -1,7 +1,7 @@
 class_name GameState
 extends RefCounted
 
-enum State { DIFFICULTY_SELECT, PLAYING }
+enum State { DIFFICULTY_SELECT, PLAYING, PAUSED }
 
 const DIFFICULTY_OPTIONS: Array[String] = ["easy", "normal", "hard"]
 const DIFFICULTY_NAMES: Dictionary = {
@@ -23,6 +23,9 @@ func is_playing() -> bool:
 func is_difficulty_select() -> bool:
 	return state == State.DIFFICULTY_SELECT
 
+func is_paused() -> bool:
+	return state == State.PAUSED
+
 func can_move() -> bool:
 	return is_playing() and not game_won and not game_over
 
@@ -33,6 +36,12 @@ func start_game() -> void:
 
 func return_to_menu() -> void:
 	state = State.DIFFICULTY_SELECT
+
+func toggle_pause() -> void:
+	if state == State.PLAYING:
+		state = State.PAUSED
+	elif state == State.PAUSED:
+		state = State.PLAYING
 
 func reset_round() -> void:
 	game_won = false

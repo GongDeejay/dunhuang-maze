@@ -30,8 +30,14 @@ fi
 # Run headless tests
 echo ""
 echo "Running test suite..."
-"$GODOT" --headless --path "$SCRIPT_DIR" res://tests/test_runner.tscn 2>&1
+TEST_LOG=$(mktemp -t dunhuang-tests)
+"$GODOT" --headless --path "$SCRIPT_DIR" res://tests/test_runner.tscn > "$TEST_LOG" 2>&1
 EXIT_CODE=$?
+cat "$TEST_LOG"
+if grep -q 'SCRIPT ERROR:' "$TEST_LOG" || ! grep -Eq '测试完成: [0-9]+ 通过, 0 失败' "$TEST_LOG"; then
+    EXIT_CODE=1
+fi
+rm "$TEST_LOG"
 
 echo ""
 if [ $EXIT_CODE -eq 0 ]; then
