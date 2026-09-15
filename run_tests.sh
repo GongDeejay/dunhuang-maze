@@ -30,7 +30,7 @@ fi
 # Run headless tests
 echo ""
 echo "Running test suite..."
-TEST_LOG=$(mktemp -t dunhuang-tests)
+TEST_LOG=$(mktemp "${TMPDIR:-/tmp}/dunhuang-tests.XXXXXX") || exit 1
 "$GODOT" --headless --path "$SCRIPT_DIR" res://tests/test_runner.tscn > "$TEST_LOG" 2>&1
 EXIT_CODE=$?
 cat "$TEST_LOG"
