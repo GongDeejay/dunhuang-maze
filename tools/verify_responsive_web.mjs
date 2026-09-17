@@ -22,6 +22,7 @@ const executablePath = process.env.BROWSER_EXECUTABLE || (existsSync(macChrome) 
 const browser = await chromium.launch({ headless: true, executablePath });
 try {
   for (const profile of PROFILES) {
+    console.log(`Verifying ${profile.id}...`);
     const context = await browser.newContext({
       viewport: profile.viewport,
       isMobile: profile.mobile,
@@ -35,12 +36,15 @@ try {
     page.on('console', message => {
       if (message.type() === 'error') errors.push(`[console.error] ${message.text()}`);
     });
-    await page.goto(URL, { waitUntil: 'networkidle', timeout: 60_000 });
+    // Godot keeps worker/audio requests alive in production, so wait for DOM and then the canvas itself.
+    await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForSelector('canvas', { state: 'visible', timeout: 30_000 });
     await page.waitForFunction(() => {
       const canvas = document.querySelector('canvas');
-      return canvas && canvas.width > 0 && canvas.height > 0;
-    });
+      if (!canvas || canvas.width <= 0 || canvas.height <= 0) return false;
+      const rect = canvas.getBoundingClientRect();
+      return rect.width >= innerWidth * 0.96 && rect.height >= innerHeight * 0.96;
+    }, undefined, { timeout: 60_000 });
     const metrics = await page.locator('canvas').evaluate(canvas => {
       const rect = canvas.getBoundingClientRect();
       return {
