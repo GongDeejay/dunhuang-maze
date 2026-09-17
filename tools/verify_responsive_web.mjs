@@ -48,6 +48,8 @@ try {
     // Godot keeps worker/audio requests alive in production, so wait for DOM and then the canvas itself.
     await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForSelector('canvas', { state: 'visible', timeout: 30_000 });
+    // First-visit prologue is optional; skip while the engine continues loading.
+    if (await page.locator('#intro-skip').isVisible()) await page.locator('#intro-skip').click();
     await page.waitForFunction(() => !document.querySelector('#status'),
       undefined, { timeout: Number(process.env.BOOT_TIMEOUT || 180_000) });
     await page.waitForFunction(() => {

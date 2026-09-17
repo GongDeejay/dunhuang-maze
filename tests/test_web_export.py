@@ -1,5 +1,6 @@
 """Regression tests for runtime cache reuse and complete export references."""
 import gzip
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -8,7 +9,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from optimize_web_export import content_address_assets, optimize_html, gzip_assets
+from optimize_web_export import content_address_assets, optimize_html, gzip_assets, install_intro
 
 
 class WebExportTests(unittest.TestCase):
@@ -51,6 +52,40 @@ class WebExportTests(unittest.TestCase):
             self.assertNotIn("game-aaaa", html)
             content_address_assets(directory, directory / "index.html")
             self.assertEqual((directory / "index.html").read_text(), html)
+
+    def test_pinned_runtime_rejects_unplanned_upgrade(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            config = self.build(directory, "game-aaaa")
+            digest = hashlib.sha256()
+            for path in sorted(directory.glob(config["executable"] + ".*")):
+                if path.suffix in (".wasm", ".js"):
+                    digest.update(path.name[len(config["executable"]):].encode())
+                    digest.update(hashlib.sha256(path.read_bytes()).digest())
+            lock = {"executable": config["executable"], "sha256": digest.hexdigest()}
+            content_address_assets(directory, directory / "index.html", lock)
+            before = (directory / "index.html").read_bytes()
+            (directory / (config["executable"] + ".wasm")).write_bytes(b"different engine")
+            with self.assertRaisesRegex(ValueError, "pinned engine"):
+                content_address_assets(directory, directory / "index.html", lock)
+            self.assertEqual(before, (directory / "index.html").read_bytes())
+
+    def test_intro_is_inline_and_artwork_is_lightweight(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            html = directory / "index.html"
+            html.write_text('<style>\t\t</style><div id="status"><progress id="status-progress"></progress>'
+                            '<div id="status-notice"></div></div><script src="engine.js"></script>'
+                            '<script>statusOverlay.remove();</script>')
+            install_intro(directory, html)
+            result = html.read_text()
+            self.assertLess(result.index('window.dunhuangIntro ='), result.index('src="engine.js"'))
+            self.assertIn('window.dunhuangIntro.ready()', result)
+            self.assertIn('id="intro-retry"', result)
+            self.assertEqual(len(list(directory.glob('intro-*.webp'))), 1)
+            self.assertLess(next(directory.glob('intro-*.webp')).stat().st_size, 150000)
+            install_intro(directory, html)
+            self.assertEqual(result, html.read_text())
 
 
 if __name__ == "__main__":

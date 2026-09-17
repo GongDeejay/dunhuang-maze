@@ -8,6 +8,7 @@ import gzip
 import hashlib
 import json
 import re
+import shutil
 from pathlib import Path
 
 
@@ -38,7 +39,7 @@ html { font-family: system-ui, -apple-system, sans-serif; font-size: 100%; }
 """
 
 
-def content_address_assets(directory: Path, html_path: Path) -> None:
+def content_address_assets(directory: Path, html_path: Path, runtime_lock: dict | None = None) -> None:
     """Keep the engine URL stable across game-only releases (including worklets)."""
     html = html_path.read_text(encoding="utf-8")
     match = re.search(r'const GODOT_CONFIG = (\{[^\n]+\});', html)
@@ -58,7 +59,14 @@ def content_address_assets(directory: Path, html_path: Path) -> None:
         # Include suffixes, not build-specific names, in the runtime bundle hash.
         digest.update(source.name[len(old):].encode())
         digest.update(hashlib.sha256(source.read_bytes()).digest())
-    runtime = f"engine-{digest.hexdigest()[:24]}"
+    runtime_hash = digest.hexdigest()
+    runtime = f"engine-{runtime_hash[:24]}"
+    if runtime_lock is not None:
+        if runtime_hash != runtime_lock["sha256"] or runtime != runtime_lock["executable"]:
+            raise ValueError("Godot runtime differs from deploy/godot-runtime-lock.json. "
+                             "Ordinary releases must reuse the pinned engine. "
+                             "Upgrade the engine and lock explicitly; never overwrite its cached URL.")
+        runtime = runtime_lock["executable"]
     pack_name = f"game-{hashlib.sha256((directory / pack).read_bytes()).hexdigest()[:24]}.pck"
     mapping = {p.name: runtime + p.name[len(old):] for p in runtime_files}
     mapping[pack] = pack_name
@@ -122,6 +130,32 @@ def optimize_html(path: Path) -> str:
     return executable
 
 
+def install_intro(directory: Path, html_path: Path) -> None:
+    source = Path(__file__).resolve().parents[1] / "deploy" / "loading"
+    html = html_path.read_text(encoding="utf-8")
+    if 'id="intro-title"' in html:
+        return
+    artwork = source / "family.webp"
+    image_name = f"intro-{hashlib.sha256(artwork.read_bytes()).hexdigest()[:16]}.webp"
+    shutil.copyfile(artwork, directory / image_name)
+    html = html.replace('<link rel="preload"',
+                        f'<link rel="preload" href="{image_name}" as="image" fetchpriority="high">\n\t\t<link rel="preload"', 1)
+    markup = (source / "intro.html").read_text(encoding="utf-8").replace("__FAMILY_IMAGE__", image_name)
+    html, count = re.subn(r'<div id="status">.*?<div id="status-notice"></div>\s*</div>',
+                         lambda _: markup, html, count=1, flags=re.DOTALL)
+    if count != 1:
+        raise ValueError("Godot loading markup changed; intro integration needs review")
+    html = html.replace("\t\t</style>", (source / "intro.css").read_text(encoding="utf-8") + "\n\t\t</style>", 1)
+    intro_js = (source / "intro.js").read_text(encoding="utf-8")
+    html = html.replace('<script src="', '<script>' + intro_js + '</script>\n\t\t<script onerror="window.dunhuangIntro.fail(\'引擎下载失败，请检查网络后重试。\')" src="', 1)
+    html = html.replace("statusOverlay.remove();", "window.dunhuangIntro.ready();", 1)
+    html = html.replace('"focusCanvas":true', '"focusCanvas":false', 1)
+    html = html.replace("const engine = new Engine(GODOT_CONFIG);", "const engine = typeof Engine === 'function' ? new Engine(GODOT_CONFIG) : null;")
+    html = html.replace("(function () {\n\tconst statusOverlay", "(function () {\n\tif (!engine) return;\n\tconst statusOverlay", 1)
+    html = html.replace("function displayFailureNotice(err) {", "function displayFailureNotice(err) {\n\t\twindow.dunhuangIntro.fail('旅途暂时无法启动，请重试。');", 1)
+    html_path.write_text(html, encoding="utf-8")
+
+
 def gzip_assets(directory: Path) -> None:
     for source in directory.iterdir():
         if source.suffix not in (".wasm", ".pck", ".js"):
@@ -139,8 +173,10 @@ def main() -> None:
     parser.add_argument("--html", default="index.html")
     args = parser.parse_args()
     directory = args.directory.resolve()
-    content_address_assets(directory, directory / args.html)
+    lock_path = Path(__file__).resolve().parents[1] / "deploy" / "godot-runtime-lock.json"
+    content_address_assets(directory, directory / args.html, json.loads(lock_path.read_text()))
     executable = optimize_html(directory / args.html)
+    install_intro(directory, directory / args.html)
     gzip_assets(directory)
     print(f"Optimized Web export: {directory / args.html} ({executable})")
 
