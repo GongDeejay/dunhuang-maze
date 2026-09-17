@@ -9,7 +9,7 @@ const TERRAIN_DIR := "res://assets/sprites/terrain/"
 const HEART_DIR := "res://assets/sprites/heart/"
 
 const CELL_SPRITE_PX := 16
-const HQ_CHARACTER_PX := 32
+const HQ_CHARACTER_PX := 256
 const HEART_PX := 18
 
 const FAMILY_KEY_TO_SPRITE := {
@@ -21,10 +21,10 @@ const FAMILY_KEY_TO_SPRITE := {
 const PLAYER_SPRITE_NAMES := ["dj", "le", "mac", "mcking"]
 
 const ART_SOURCE_MAP := {
-	"dj": "res://assets/art/1.png",
-	"le": "res://assets/art/2.png",
-	"mac": "res://assets/art/3.png",
-	"mcking": "res://assets/art/4.png",
+	"dj": LOW_PLAYER_DIR + "dj.png",
+	"le": LOW_PLAYER_DIR + "le.png",
+	"mac": LOW_PLAYER_DIR + "mac.png",
+	"mcking": LOW_PLAYER_DIR + "mcking.png",
 }
 
 const ITEM_TYPE_FILES := {
@@ -57,7 +57,7 @@ const TERRAIN_VARIANTS := {
 
 static func character_sprite_path(name: String, prefer_hq: bool = false) -> String:
 	if prefer_hq:
-		var hq := HQ_PLAYER_DIR + name + ".png"
+		var hq := HQ_PLAYER_DIR + name + ".svg"
 		if ResourceLoader.exists(hq):
 			return hq
 	var low := LOW_PLAYER_DIR + name + ".png"

@@ -342,6 +342,11 @@ func test_asset_registry():
 	var dj := AssetRegistry.character_sprite_path("dj")
 	assert_true(dj.begins_with("res://"), "character path valid")
 	assert_true(AssetRegistry.character_sprite_path("dj", true).contains("high_quality"), "HQ character preferred")
+	for character in AssetRegistry.PLAYER_SPRITE_NAMES:
+		var vector_path := AssetRegistry.character_sprite_path(character, true)
+		assert_true(vector_path.ends_with(".svg"), "%s uses original pixel-vector design" % character)
+		var texture: Texture2D = load(vector_path)
+		assert_eq(texture.get_width(), AssetRegistry.HQ_CHARACTER_PX, "%s imports at high resolution" % character)
 	assert_true(ResourceLoader.exists(AssetRegistry.item_sprite_path("heal")), "heal item exists")
 	assert_eq(AssetRegistry.CELL_SPRITE_PX, 16, "cell sprite standard")
 

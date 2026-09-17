@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <!-- Lossless vector of assets/sprites/player; preserve pixel geometry and palette. -->
+  <path fill="#000000" fill-opacity="0.035294119" d="M4 0h1v1h-1Z"/>
+  <path fill="#000000" d="M5 0h6v1h-6ZM6 1h5v1h-5ZM3 2h10v1h-10ZM6 4h1v1h-1ZM9 4h1v1h-1ZM6 5h1v1h-1ZM9 5h1v1h-1ZM4 7h3v1h-3ZM9 7h3v1h-3ZM5 8h2v1h-2ZM9 8h2v1h-2Z"/>
+  <path fill="#000000" fill-opacity="0.078431375" d="M11 0h1v1h-1Z"/>
+  <path fill="#ffffff" fill-opacity="0.003921569" d="M15 0h1v1h-1ZM15 8h1v1h-1Z"/>
+  <path fill="#000000" fill-opacity="0.156862751" d="M4 1h1v1h-1Z"/>
+  <path fill="#000000" fill-opacity="0.992156863" d="M5 1h1v1h-1Z"/>
+  <path fill="#000000" fill-opacity="0.070588239" d="M11 1h1v1h-1Z"/>
+  <path fill="#ad673c" d="M5 3h6v1h-6ZM5 4h1v1h-1ZM7 4h2v1h-2ZM10 4h1v1h-1ZM5 5h1v1h-1ZM7 5h2v1h-2ZM10 5h1v1h-1ZM5 6h6v1h-6ZM7 7h2v1h-2ZM2 8h2v1h-2ZM12 8h2v1h-2ZM2 9h2v1h-2ZM12 9h2v1h-2ZM2 10h2v1h-2ZM12 10h2v1h-2ZM2 11h2v1h-2ZM12 11h2v1h-2Z"/>
+  <path fill="#000000" fill-opacity="0.039215688" d="M4 6h1v1h-1Z"/>
+  <path fill="#000000" fill-opacity="0.094117649" d="M11 6h1v1h-1Z"/>
+  <path fill="#1b67bd" d="M4 8h1v1h-1ZM7 8h1v1h-1ZM4 9h1v1h-1ZM7 9h1v1h-1ZM9 9h1v1h-1ZM4 10h1v1h-1ZM7 10h1v1h-1ZM9 10h1v1h-1ZM4 11h1v1h-1ZM7 11h1v1h-1ZM9 11h1v1h-1ZM4 12h1v1h-1ZM7 12h1v1h-1ZM9 12h1v1h-1Z"/>
+  <path fill="#4b85c5" d="M8 8h1v1h-1ZM5 9h1v1h-1ZM8 9h1v1h-1ZM10 9h1v1h-1ZM5 10h1v1h-1ZM8 10h1v1h-1ZM10 10h1v1h-1ZM5 11h1v1h-1ZM8 11h1v1h-1ZM10 11h1v1h-1ZM5 12h1v1h-1ZM8 12h1v1h-1ZM10 12h1v1h-1Z"/>
+  <path fill="#81a6c3" d="M11 8h1v1h-1ZM6 9h1v1h-1ZM11 9h1v1h-1ZM6 10h1v1h-1ZM11 10h1v1h-1ZM6 11h1v1h-1ZM11 11h1v1h-1ZM6 12h1v1h-1ZM11 12h1v1h-1Z"/>
+  <path fill="#545267" d="M5 13h2v1h-2ZM9 13h2v1h-2ZM5 14h2v1h-2ZM9 14h2v1h-2Z"/>
+  <path fill="#383838" d="M5 15h2v1h-2ZM9 15h2v1h-2Z"/>
+</svg>
