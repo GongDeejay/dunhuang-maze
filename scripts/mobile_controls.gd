@@ -53,6 +53,11 @@ func try_handle_input(event: InputEvent) -> bool:
 	if not is_mobile or not layout.show_touch_controls:
 		return false
 
+	# Godot also emits a synthetic mouse event for each touch (or vice versa).
+	# Handle only the original pointer; a time debounce would swallow fast taps.
+	if event.device == InputEvent.DEVICE_ID_EMULATION and (event is InputEventMouseButton or event is InputEventScreenTouch):
+		return layout.controls_rect.has_point(event.position) or layout.maze_rect.has_point(event.position)
+
 	if event is InputEventScreenTouch:
 		return _handle_pointer(event.position, event.pressed, not event.pressed)
 	if event is InputEventScreenDrag and maze_touch_active:

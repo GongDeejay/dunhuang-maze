@@ -135,12 +135,16 @@ def install_intro(directory: Path, html_path: Path) -> None:
     html = html_path.read_text(encoding="utf-8")
     if 'id="intro-title"' in html:
         return
-    artwork = source / "family.webp"
-    image_name = f"intro-{hashlib.sha256(artwork.read_bytes()).hexdigest()[:16]}.webp"
-    shutil.copyfile(artwork, directory / image_name)
+    markup = (source / "intro.html").read_text(encoding="utf-8")
+    images = {}
+    for scene in ("family", "storm", "search"):
+        artwork = source / f"{scene}.webp"
+        image_name = f"intro-{hashlib.sha256(artwork.read_bytes()).hexdigest()[:16]}.webp"
+        shutil.copyfile(artwork, directory / image_name)
+        images[scene] = image_name
+        markup = markup.replace(f"__{scene.upper()}_IMAGE__", image_name)
     html = html.replace('<link rel="preload"',
-                        f'<link rel="preload" href="{image_name}" as="image" fetchpriority="high">\n\t\t<link rel="preload"', 1)
-    markup = (source / "intro.html").read_text(encoding="utf-8").replace("__FAMILY_IMAGE__", image_name)
+                        f'<link rel="preload" href="{images["family"]}" as="image" fetchpriority="high">\n\t\t<link rel="preload"', 1)
     html, count = re.subn(r'<div id="status">.*?<div id="status-notice"></div>\s*</div>',
                          lambda _: markup, html, count=1, flags=re.DOTALL)
     if count != 1:

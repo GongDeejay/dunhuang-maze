@@ -34,6 +34,7 @@ func _ready() -> void:
 	test_pause_state()
 	test_difficulty_hitboxes()
 	test_mobile_control_bounds()
+	test_mobile_pointer_deduplication()
 	test_realtime_monster_intent()
 	test_realtime_player_attack()
 	test_web_font_payload()
@@ -446,6 +447,72 @@ func test_mobile_control_bounds():
 		for entry in controls._dpad_centers:
 			var dpad_hit := Rect2((entry.pos as Vector2) - Vector2.ONE * controls.btn_radius, Vector2.ONE * controls.btn_radius * 2.0)
 			assert_true(not hit.intersects(dpad_hit), "tool button does not overlap dpad")
+	controls.free()
+
+
+func test_mobile_pointer_deduplication():
+	print("\n[TEST] Mobile Pointer Deduplication")
+	var controls := MobileControls.new()
+	controls.apply_layout(UILayoutDirector.compute(Vector2(390, 844), true))
+	var moves: Array[int] = []
+	controls.move_pressed.connect(func(dir: int): moves.append(dir))
+	var touch := InputEventScreenTouch.new()
+	touch.position = controls._dpad_centers[0].pos
+	var mouse := InputEventMouseButton.new()
+	mouse.position = touch.position
+	mouse.button_index = MOUSE_BUTTON_LEFT
+	mouse.device = InputEvent.DEVICE_ID_EMULATION
+	# A touchscreen press is followed by Godot's emulated mouse press.
+	for tap in range(3):
+		touch.pressed = true
+		mouse.pressed = true
+		controls.try_handle_input(touch)
+		controls.try_handle_input(mouse)
+		touch.pressed = false
+		mouse.pressed = false
+		controls.try_handle_input(touch)
+		controls.try_handle_input(mouse)
+		assert_eq(moves.size(), tap + 1, "touch tap %d emits exactly one move without a timing debounce" % (tap + 1))
+	moves.clear()
+	# Real mouse input must still work on narrow desktop windows.
+	mouse.device = 0
+	mouse.pressed = true
+	controls.try_handle_input(mouse)
+	mouse.pressed = false
+	controls.try_handle_input(mouse)
+	assert_eq(moves.size(), 1, "real mouse click still emits one move")
+	touch.device = InputEvent.DEVICE_ID_EMULATION
+	touch.pressed = true
+	controls.try_handle_input(touch)
+	touch.pressed = false
+	controls.try_handle_input(touch)
+	assert_eq(moves.size(), 1, "emulated touch does not duplicate a real mouse click")
+	touch.device = 0
+	moves.clear()
+	# A map swipe must not run once per native/emulated pointer either.
+	touch.position = controls.layout.maze_rect.get_center()
+	mouse.position = touch.position
+	mouse.device = InputEvent.DEVICE_ID_EMULATION
+	touch.pressed = true
+	mouse.pressed = true
+	controls.try_handle_input(touch)
+	controls.try_handle_input(mouse)
+	touch.position.x += controls.swipe_threshold + 10
+	mouse.position = touch.position
+	touch.pressed = false
+	mouse.pressed = false
+	controls.try_handle_input(touch)
+	controls.try_handle_input(mouse)
+	assert_eq(moves.size(), 1, "touch swipe emits exactly one move")
+	var actions: Array[String] = []
+	controls.action_pressed.connect(func(action: String): actions.append(action))
+	touch.position = controls._func_centers.values()[0]
+	mouse.position = touch.position
+	touch.pressed = true
+	mouse.pressed = true
+	controls.try_handle_input(touch)
+	controls.try_handle_input(mouse)
+	assert_eq(actions.size(), 1, "touch tool button emits exactly one action")
 	controls.free()
 
 

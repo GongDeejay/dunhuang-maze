@@ -82,8 +82,14 @@ class WebExportTests(unittest.TestCase):
             self.assertLess(result.index('window.dunhuangIntro ='), result.index('src="engine.js"'))
             self.assertIn('window.dunhuangIntro.ready()', result)
             self.assertIn('id="intro-retry"', result)
-            self.assertEqual(len(list(directory.glob('intro-*.webp'))), 1)
-            self.assertLess(next(directory.glob('intro-*.webp')).stat().st_size, 150000)
+            artwork = list(directory.glob('intro-*.webp'))
+            self.assertEqual(len(artwork), 3)
+            for image in artwork:
+                self.assertLess(image.stat().st_size, 200000)
+                self.assertIn(image.name, result)
+            self.assertNotRegex(result, r'__(FAMILY|STORM|SEARCH)_IMAGE__')
+            self.assertIn('data-storm-src="intro-', result)
+            self.assertIn('data-search-src="intro-', result)
             install_intro(directory, html)
             self.assertEqual(result, html.read_text())
 

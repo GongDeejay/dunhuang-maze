@@ -3,6 +3,32 @@
   const overlay = document.getElementById('status');
   document.body.classList.add('intro-open');
   const key = 'dunhuang-intro-v1';
+  const artwork = overlay.querySelector('.intro-art img');
+  const illustrations = [
+    [artwork.getAttribute('src'), artwork.alt],
+    [artwork.dataset.stormSrc, '黄沙席卷敦煌山谷，一家四口在风暴中走散，彼此伸手寻找。'],
+    [artwork.dataset.searchSrc, '风暴过后，爸爸独自沿着敦煌古道的脚印，出发寻找家人。'],
+  ];
+  let pendingArtwork = -1;
+
+  function renderArtwork() {
+    if (pendingArtwork === chapter) return;
+    pendingArtwork = chapter;
+    const target = chapter;
+    const [src, alt] = illustrations[target];
+    if (artwork.getAttribute('src') === src) return;
+    // Fetch later acts only when read, keeping first-load bandwidth for the game.
+    // Keep the previous image if a download fails; stale requests cannot turn a page back.
+    const next = new Image();
+    next.decoding = 'async';
+    next.onload = () => {
+      if (chapter !== target || !overlay.isConnected) return;
+      artwork.src = src;
+      artwork.alt = alt;
+    };
+    next.onerror = () => { if (chapter === target) pendingArtwork = -1; };
+    next.src = src;
+  }
   const chapters = [
     ['一起出发', '那天，我们一起\n走进敦煌。', '爸爸、妈妈和两个孩子，沿着金色山谷慢慢前行。风很轻，阳光正好，大家约好：下一站，一起去看沙漠。', '敦煌 · 风起之前', '移动', '电脑：WASD 或方向键移动。手机：轻触方向键，也可以在地图上滑动。'],
     ['风暴突至', '一阵风，\n吹散了四个人。', '天边忽然扬起黄沙，熟悉的山谷转眼被风暴吞没。呼喊声消失在风里，再睁开眼时，身边的家人已经不见了。', '敦煌 · 黄沙遮住了归路', '即时战斗', '敌人不会等你行动。朝相邻敌人的方向移动即可攻击；留意箭头预警，及时避让。电脑按 P / Esc，手机点“暂停”可暂停战斗。'],
@@ -24,6 +50,7 @@
   function render() {
     const c = chapters[chapter];
     overlay.dataset.chapter = String(chapter);
+    renderArtwork();
     $('intro-chapter').textContent = `0${chapter + 1} / 03 · ${c[0]}`;
     $('intro-title').textContent = c[1];
     $('intro-title').style.whiteSpace = 'pre-line';
