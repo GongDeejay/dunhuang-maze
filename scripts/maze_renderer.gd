@@ -465,11 +465,11 @@ func draw_difficulty_select(canvas: CanvasItem, vp: Vector2, selected_difficulty
 		)
 		canvas.draw_string(
 			ThemeDB.fallback_font, Vector2(text_x, card.position.y + 52.0 * ui_scale),
-			desc, HORIZONTAL_ALIGNMENT_LEFT, int(card.size.x - 36.0 * ui_scale), int(13 * ui_scale), Color(0.58, 0.55, 0.48),
+			desc, HORIZONTAL_ALIGNMENT_LEFT, int(card.size.x - 36.0 * ui_scale), int(15 * ui_scale), Color(0.68, 0.65, 0.58),
 		)
 		canvas.draw_string(
 			ThemeDB.fallback_font, Vector2(text_x, card.position.y + 72.0 * ui_scale),
-			stats, HORIZONTAL_ALIGNMENT_LEFT, int(card.size.x - 36.0 * ui_scale), int(12 * ui_scale), Color(0.55, 0.78, 0.55),
+			stats, HORIZONTAL_ALIGNMENT_LEFT, int(card.size.x - 36.0 * ui_scale), int(14 * ui_scale), Color(0.55, 0.78, 0.55),
 		)
 	canvas.draw_string(
 		ThemeDB.fallback_font, Vector2(vp.x * 0.5 - 150.0 * ui_scale, vp.y - 64.0 * ui_scale),

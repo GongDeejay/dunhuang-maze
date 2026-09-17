@@ -14,6 +14,8 @@ const PROFILES = [
   { id: 'desktop-1440', viewport: { width: 1440, height: 900 }, mobile: false },
   { id: 'desktop-1920', viewport: { width: 1920, height: 1080 }, mobile: false },
   { id: 'iphone-390', viewport: { width: 390, height: 844 }, mobile: true },
+  { id: 'iphone-390-large-text', viewport: { width: 390, height: 844 }, mobile: true, dpr: 3, font: 20 },
+  { id: 'desktop-large-text', viewport: { width: 1440, height: 900 }, mobile: false, dpr: 2, font: 20 },
 ];
 
 await mkdir(OUT, { recursive: true });
@@ -27,10 +29,17 @@ try {
       viewport: profile.viewport,
       isMobile: profile.mobile,
       hasTouch: profile.mobile,
-      deviceScaleFactor: profile.mobile ? 2 : 1,
+      deviceScaleFactor: profile.dpr || (profile.mobile ? 2 : 1),
       locale: 'zh-CN',
     });
     const page = await context.newPage();
+    if (profile.font) {
+      await page.addInitScript(font => {
+        document.addEventListener('DOMContentLoaded', () => {
+          document.documentElement.style.fontSize = `${font}px`;
+        });
+      }, profile.font);
+    }
     const errors = [];
     page.on('pageerror', error => errors.push(`[pageerror] ${error.message}`));
     page.on('console', message => {
@@ -39,6 +48,8 @@ try {
     // Godot keeps worker/audio requests alive in production, so wait for DOM and then the canvas itself.
     await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForSelector('canvas', { state: 'visible', timeout: 30_000 });
+    await page.waitForFunction(() => !document.querySelector('#status'),
+      undefined, { timeout: Number(process.env.BOOT_TIMEOUT || 180_000) });
     await page.waitForFunction(() => {
       const canvas = document.querySelector('canvas');
       if (!canvas || canvas.width <= 0 || canvas.height <= 0) return false;
@@ -64,8 +75,10 @@ try {
     assert.ok(metrics.bufferHeight >= metrics.cssHeight, `${profile.id}: low-resolution canvas backing buffer`);
     assert.ok(metrics.scrollWidth <= metrics.viewportWidth, `${profile.id}: horizontal overflow`);
     assert.ok(metrics.scrollHeight <= metrics.viewportHeight, `${profile.id}: vertical overflow`);
+    await page.screenshot({ path: resolve(OUT, `${profile.id}-menu.png`), fullPage: false });
     // The middle difficulty card spans the viewport centre on all supported profiles.
-    await page.locator('canvas').click({ position: { x: metrics.cssWidth / 2, y: metrics.cssHeight / 2 } });
+    // The full-window canvas is already in view; avoid scrollIntoView on mobile visual viewports.
+    await page.mouse.click(metrics.cssWidth / 2, metrics.cssHeight / 2);
     await page.waitForTimeout(700); // Let Godot render the first gameplay frame and responsive HUD.
     await page.screenshot({ path: resolve(OUT, `${profile.id}.png`), fullPage: false });
     assert.deepEqual(errors, [], `${profile.id}: browser errors\n${errors.join('\n')}`);

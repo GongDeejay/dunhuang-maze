@@ -361,6 +361,19 @@ func test_game_director():
 
 func test_ui_layout_director():
 	print("\n[TEST] UI Layout Director")
+	assert_eq(PlatformService.browser_content_scale(2.0, 16.0), 2.0, "retina uses CSS-sized text")
+	assert_eq(PlatformService.browser_content_scale(3.0, 20.0), 3.75, "browser default font size scales all UI")
+	assert_eq(PlatformService.browser_content_scale(1.25, 16.0), 1.25, "desktop zoom preserves CSS sizing")
+	var large_text_controls := MobileControls.new()
+	var large_text_layout := UILayoutDirector.compute(Vector2(312, 675), true)
+	large_text_controls.apply_layout(large_text_layout)
+	for entry in large_text_controls._dpad_centers:
+		var radius := large_text_controls.btn_radius
+		assert_true(large_text_layout.controls_rect.encloses(Rect2(entry.pos - Vector2.ONE * radius, Vector2.ONE * radius * 2)), "large-text dpad stays inside viewport")
+	for action in large_text_controls._func_centers:
+		var half := large_text_controls.func_btn_size / 2.0
+		assert_true(large_text_layout.controls_rect.encloses(Rect2(large_text_controls._func_centers[action] - Vector2.ONE * half, Vector2.ONE * half * 2)), "large-text tools stay inside viewport")
+	large_text_controls.free()
 	var portrait := UILayoutDirector.compute(Vector2(390, 844), true)
 	assert_true(portrait.is_portrait(), "390x844 is portrait")
 	assert_eq(portrait.maze_mode, LayoutProfile.MazeMode.FOLLOW, "portrait uses follow")

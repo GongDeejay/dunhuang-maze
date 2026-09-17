@@ -100,7 +100,7 @@ def main() -> int:
         "核心文件:",
     ]
     for item in files:
-        if item["name"].startswith(("index.", "game-")):
+        if item["name"].startswith(("index.", "game-", "engine-")):
             version_lines.append(f"  {item['name']}\t{item['bytes']} bytes\tsha256:{item['sha256'][:16]}…")
 
     (web_dir / "VERSION.txt").write_text("\n".join(version_lines) + "\n", encoding="utf-8")

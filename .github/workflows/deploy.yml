@@ -59,6 +59,7 @@ jobs:
 
       - name: Import and test
         run: |
+          python3 -m unittest discover -s tests -p 'test_web_export.py'
           BECKETT_ENABLE=0 godot --headless --path . --import --quit
           BECKETT_ENABLE=0 ./run_tests.sh
 
@@ -131,3 +132,11 @@ jobs:
         run: |
           curl -fL --retry 5 --retry-delay 3 https://maze.mplusm.site/index.html -o /dev/null
           curl -fsSI https://maze.mplusm.site/index.html | grep -qi 'cross-origin-opener-policy: same-origin'
+          curl -fsSI https://maze.mplusm.site/index.html | grep -qi 'cache-control: no-cache'
+          runtime="$(find dist -name 'engine-*.wasm' -exec basename {} \;)"
+          headers="$(curl -fsSI -H 'Accept-Encoding: gzip' "https://maze.mplusm.site/$runtime")"
+          echo "$headers" | grep -qi 'content-encoding: gzip'
+          echo "$headers" | grep -qi 'immutable'
+          echo "$headers" | grep -qi 'content-type: application/wasm'
+          compressed_size="$(stat -c %s "dist/$runtime.gz")"
+          echo "$headers" | tr -d '\r' | grep -qi "content-length: $compressed_size"

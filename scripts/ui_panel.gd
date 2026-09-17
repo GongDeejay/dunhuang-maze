@@ -28,12 +28,12 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 
 	var s := clampf(ui_scale, 1.0, 1.35)
 	var title_fs := int(round(23.0 * s))
-	var body_fs := int(round(15.0 * s))
-	var small_fs := int(round(13.0 * s))
-	var tiny_fs := int(round(12.0 * s))
-	var line_h := 18.0 * s
+	var body_fs := int(round(17.0 * s))
+	var small_fs := int(round(16.0 * s))
+	var tiny_fs := int(round(14.0 * s))
+	var line_h := 22.0 * s
 	var pad := 14.0 * s
-	var y: float = 18.0 * s
+	var y: float = 28.0 * s
 	var lx: float = panel_x + pad
 
 	# Title
@@ -53,8 +53,8 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		"生命", HORIZONTAL_ALIGNMENT_LEFT, -1, body_fs, text_primary)
 	y += 5.0 * s
 	var bar_w: float = panel_w - pad * 2.0
-	heart_bar.draw(owner, Vector2(lx, y), bar_w, player.hp, player.max_hp, low_hp_pulse, 6)
-	y += 25.0 * s
+	var heart_h := heart_bar.draw(owner, Vector2(lx, y), bar_w, player.hp, player.max_hp, low_hp_pulse, 6)
+	y += heart_h + 20.0 * s
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 		"%d / %d" % [player.hp, player.max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, text_secondary)
 	if float(player.hp) / float(maxi(player.max_hp, 1)) <= 0.3:
@@ -132,32 +132,26 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 
 	y += 8
 
-	# Terrain legend
-	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-		"地形", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, text_primary)
-	y += 5
-	for t_key in DataLoader.terrain_data:
-		y += 16
-		var cfg = DataLoader.terrain_data[t_key]
-		var c = DataLoader.color_from_array(cfg.get("floor_color", [0.5, 0.5, 0.5]))
-		owner.draw_rect(Rect2(lx, y - 11, 10, 10), c)
-		owner.draw_string(ThemeDB.fallback_font, Vector2(lx + 14, y),
-			cfg.get("name", t_key), HORIZONTAL_ALIGNMENT_LEFT, -1, tiny_fs, text_secondary)
-	y += 18
-
-	# Monster legend
-	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-		"敌人", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, text_primary)
-	y += 5
-	for t_key in DataLoader.monster_data:
-		y += 15
-		var def = DataLoader.monster_data[t_key]
-		var mc = DataLoader.color_from_array(def.get("color", [0.5, 0.5, 0.5]))
-		mc = Color(minf(mc.r + 0.15, 1.0), minf(mc.g + 0.15, 1.0), minf(mc.b + 0.15, 1.0))
-		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-			def.get("symbol", "?") + " " + def.get("name", "?"),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, tiny_fs, mc)
-	y += 20
+	# Optional legends share columns; reserve room for controls and live messages.
+	var legend_h := (maxi(DataLoader.terrain_data.size(), DataLoader.monster_data.size()) + 2) * line_h
+	if y + legend_h + 9.0 * line_h < vp_h:
+		var right_x := lx + bar_w * 0.5
+		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y), "地形", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, text_primary)
+		owner.draw_string(ThemeDB.fallback_font, Vector2(right_x, y), "敌人", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, text_primary)
+		var legend_y := y
+		for t_key in DataLoader.terrain_data:
+			legend_y += line_h
+			var cfg = DataLoader.terrain_data[t_key]
+			var c = DataLoader.color_from_array(cfg.get("floor_color", [0.5, 0.5, 0.5]))
+			owner.draw_rect(Rect2(lx, legend_y - 11, 10, 10), c)
+			owner.draw_string(ThemeDB.fallback_font, Vector2(lx + 14, legend_y), cfg.get("name", t_key), HORIZONTAL_ALIGNMENT_LEFT, -1, tiny_fs, text_secondary)
+		legend_y = y
+		for t_key in DataLoader.monster_data:
+			legend_y += line_h
+			var def = DataLoader.monster_data[t_key]
+			var mc = DataLoader.color_from_array(def.get("color", [0.5, 0.5, 0.5])).lightened(0.15)
+			owner.draw_string(ThemeDB.fallback_font, Vector2(right_x, legend_y), def.get("symbol", "?") + " " + def.get("name", "?"), HORIZONTAL_ALIGNMENT_LEFT, -1, tiny_fs, mc)
+		y += legend_h
 
 	# Controls
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
@@ -189,8 +183,8 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 				combat_log[i], HORIZONTAL_ALIGNMENT_LEFT, int(panel_w - pad * 2.0), tiny_fs, Color(0.8, 0.75, 0.66))
 
 func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: Inventory, selected_slot: int, scale: float = 1.0) -> float:
-	var label_fs := int(round(13.0 * scale))
-	var item_fs := int(round(12.0 * scale))
+	var label_fs := int(round(16.0 * scale))
+	var item_fs := int(round(14.0 * scale))
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 		"背包 (%d/%d)" % [inventory.get_count(), inventory.max_size],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, label_fs, text_primary)
@@ -198,13 +192,13 @@ func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: In
 
 	var inv_items = inventory.get_item_list()
 	if inv_items.is_empty():
-		y += 16
+		y += 20.0 * scale
 		owner.draw_string(ThemeDB.fallback_font, Vector2(lx + 10, y),
 			"空", HORIZONTAL_ALIGNMENT_LEFT, -1, item_fs, text_dim)
 	else:
 		for i in inv_items.size():
-			y += 18
-			var row_rect := Rect2(lx, y - 14, w, 18)
+			y += 24.0 * scale
+			var row_rect := Rect2(lx, y - 18.0 * scale, w, 24.0 * scale)
 			inventory_hit_rects.append(row_rect)
 			if i == selected_slot:
 				owner.draw_rect(row_rect.grow(1), Color(0.35, 0.3, 0.15))

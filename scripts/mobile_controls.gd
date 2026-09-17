@@ -27,9 +27,13 @@ func apply_layout(profile: LayoutProfile) -> void:
 	is_mobile = profile.show_touch_controls
 	var controls := profile.controls_rect.size
 	var density := clampf(controls.x / 390.0, 1.0, 2.0)
+	if not profile.is_portrait():
+		density = 1.0
 	btn_radius = clampf(minf(controls.x * 0.09, controls.y * 0.19), 32.0 * density, 42.0 * density)
+	btn_radius = minf(btn_radius, controls.x * (0.088 if profile.is_portrait() else 0.035))
 	btn_spacing = minf(btn_radius * 1.65, controls.y * 0.27)
 	func_btn_size = clampf(minf(controls.x * 0.17, controls.y * 0.32), 54.0 * density, 66.0 * density)
+	func_btn_size = minf(func_btn_size, controls.x * (0.155 if profile.is_portrait() else 0.075))
 	swipe_threshold = clampf(24.0 * profile.ui_scale, 24.0, 44.0)
 	_rebuild_hit_zones()
 	queue_redraw()
@@ -118,6 +122,7 @@ func _draw() -> void:
 	draw_rect(rect, Color(0.08, 0.07, 0.06, 0.88))
 	var alpha := 0.68
 	var fs := int(clampf(rect.size.y * 0.12 * scale, 22.0 * density, 34.0 * density))
+	fs = mini(fs, int(func_btn_size / 1.55))
 
 	if layout.is_portrait():
 		_draw_portrait_controls(rect, alpha, fs)
