@@ -9,9 +9,9 @@ const HUD_TOP_RATIO := 0.24
 const HUD_TOP_MIN := 108.0
 const HUD_TOP_MAX := 200.0
 
-const HUD_SIDE_RATIO := 0.18
-const HUD_SIDE_MIN := 200.0
-const HUD_SIDE_MAX := 280.0
+const HUD_SIDE_RATIO := 0.235
+const HUD_SIDE_MIN := 300.0
+const HUD_SIDE_MAX := 420.0
 
 const HUD_STRIP_RATIO := 0.12
 const HUD_STRIP_MIN := 56.0
@@ -30,7 +30,7 @@ static func compute(viewport: Vector2, touch_controls: bool = false) -> LayoutPr
 	var profile := LayoutProfile.new()
 	profile.viewport_size = viewport
 	profile.show_touch_controls = touch_controls
-	profile.ui_scale = PlatformService.get_ui_scale(viewport) if touch_controls else 1.0
+	profile.ui_scale = PlatformService.get_ui_scale(viewport)
 	var vp_w := viewport.x
 	var vp_h := viewport.y
 	if vp_w <= 0.0 or vp_h <= 0.0:
@@ -49,16 +49,16 @@ static func compute(viewport: Vector2, touch_controls: bool = false) -> LayoutPr
 static func _build_portrait(profile: LayoutProfile, vp_w: float, vp_h: float, touch: bool) -> void:
 	profile.mode = LayoutProfile.Mode.PORTRAIT_COMPACT if vp_w < BREAKPOINT_NARROW else LayoutProfile.Mode.PORTRAIT_TOP
 	profile.maze_mode = LayoutProfile.MazeMode.FOLLOW
+	var density := clampf(vp_w / 390.0, 1.0, 2.0)
 
-	var hud_h := clampf(vp_h * HUD_TOP_RATIO * clampf(profile.ui_scale / 2.0, 1.0, 1.15), HUD_TOP_MIN, HUD_TOP_MAX)
+	var hud_h := clampf(vp_h * 0.20, 176.0 * density, 220.0 * density)
 	if profile.mode == LayoutProfile.Mode.PORTRAIT_COMPACT:
-		hud_h = 166.0
-	hud_h = maxf(hud_h, 166.0)
+		hud_h = clampf(vp_h * 0.225, 176.0 * density, 198.0 * density)
 
 	var controls_h := 0.0
 	if touch:
-		controls_h = clampf(vp_h * 0.20 * clampf(profile.ui_scale / 2.0, 1.0, 1.2), 112.0, 180.0)
-	var log_h := clampf(vp_h * LOG_RATIO, LOG_MIN, LOG_MAX)
+		controls_h = clampf(vp_h * 0.255, 204.0 * density, 242.0 * density)
+	var log_h := clampf(vp_h * 0.075, 54.0 * density, 68.0 * density)
 
 	profile.hud_rect = Rect2(0.0, 0.0, vp_w, hud_h)
 	var maze_top := hud_h
@@ -82,9 +82,9 @@ static func _build_tablet_landscape(profile: LayoutProfile, vp_w: float, vp_h: f
 	profile.mode = LayoutProfile.Mode.TABLET_LANDSCAPE
 	profile.maze_mode = LayoutProfile.MazeMode.FOLLOW
 
-	var strip_h := clampf(vp_h * 0.14, 64.0, 96.0)
-	var controls_h := clampf(vp_h * 0.12, 56.0, 96.0) if touch else 0.0
-	var log_h := clampf(vp_h * 0.06, 28.0, 44.0)
+	var strip_h := clampf(vp_h * 0.17, 82.0, 118.0)
+	var controls_h := clampf(vp_h * 0.18, 88.0, 126.0) if touch else 0.0
+	var log_h := clampf(vp_h * 0.075, 40.0, 54.0)
 
 	profile.hud_rect = Rect2(0.0, 0.0, vp_w, strip_h)
 	var maze_top := strip_h

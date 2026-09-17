@@ -24,5 +24,8 @@ web/key.pem
 .vscode/
 .cursor/
 
+# Local visual-verification evidence
+artifacts/
+
 # Exported files (regenerate locally)
 .godot/exported/

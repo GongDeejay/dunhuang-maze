@@ -44,7 +44,7 @@ func get_ui_scale(viewport_size: Vector2 = Vector2.ZERO) -> float:
 		if tree != null and tree.root != null:
 			viewport_size = tree.root.get_visible_rect().size
 	if not use_mobile_ui and not is_portrait_viewport(viewport_size):
-		return 1.0
+		return clampf(minf(viewport_size.x / 1280.0, viewport_size.y / 720.0), 1.0, 1.4)
 	if is_portrait_viewport(viewport_size):
 		return 2.0
 	if use_mobile_ui:

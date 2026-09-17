@@ -61,10 +61,11 @@ func _draw_portrait(
 	selected_slot: int,
 	low_hp_pulse: float,
 ) -> void:
-	var pad := 12.0
-	var fs_title := 22
-	var fs_body := 16
-	var fs_small := 14
+	var density := clampf(rect.size.x / 390.0, 1.0, 2.0)
+	var pad := 12.0 * density
+	var fs_title := int(23.0 * density)
+	var fs_body := int(17.0 * density)
+	var fs_small := int(15.0 * density)
 
 	var level_name := ""
 	if level_idx < levels_data.size():
@@ -77,17 +78,17 @@ func _draw_portrait(
 
 	_draw_inventory_chips(canvas, rect, inventory, selected_slot, compact, fs_small, true)
 
-	var heart_y := rect.position.y + 42.0
+	var heart_y := rect.position.y + 42.0 * density
 	var heart_h := heart_bar.draw(
 		canvas,
 		Vector2(rect.position.x + pad, heart_y),
-		clampf(rect.size.x * 0.40, 96.0, 140.0),
-		player.hp, player.max_hp, low_hp_pulse, 5,
+		clampf(rect.size.x * 0.40, 96.0 * density, 140.0 * density),
+		player.hp, player.max_hp, low_hp_pulse, 5, 28.0 * density,
 	)
-	canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + pad + 148.0, heart_y + heart_h - 2),
+	canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + pad + 148.0 * density, heart_y + heart_h - 2),
 		"%d/%d" % [player.hp, player.max_hp], HORIZONTAL_ALIGNMENT_LEFT, -1, fs_body, text_primary)
 
-	var row3_y := rect.position.y + 84.0
+	var row3_y := rect.position.y + 84.0 * density
 
 	var rx := rect.position.x + pad
 	if key_tracker != null:
@@ -102,7 +103,7 @@ func _draw_portrait(
 	canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
 		"攻%d" % player.get_effective_atk(), HORIZONTAL_ALIGNMENT_LEFT, -1, fs_small, text_secondary)
 	rx = rect.position.x + pad
-	row3_y += 23.0
+	row3_y += 23.0 * density
 	canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
 		terrain_name, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - pad * 2.0 - 70.0), fs_small, text_secondary)
 	if guide_dir >= 0:
@@ -110,8 +111,8 @@ func _draw_portrait(
 		canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
 			"指引%s" % _dir_label(guide_dir), HORIZONTAL_ALIGNMENT_LEFT, -1, fs_small, Color(0.55, 0.85, 0.95))
 	if buff_info != "":
-		canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + 220.0, rect.position.y + 61.0),
-			buff_info, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - 232), 11, Color(0.3, 0.85, 0.4))
+		canvas.draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + 220.0 * density, rect.position.y + 61.0 * density),
+			buff_info, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - 232.0 * density), int(12.0 * density), Color(0.3, 0.85, 0.4))
 
 
 func _draw_landscape_strip(
@@ -194,12 +195,13 @@ func _draw_inventory_chips(
 	var items := inventory.get_item_list()
 	if items.is_empty():
 		return
-	var chip_w := 44.0 if portrait else (32.0 if compact else 38.0)
-	var chip_h := 40.0 if portrait else (26.0 if compact else 28.0)
-	var gap := 5.0
+	var density := clampf(rect.size.x / 390.0, 1.0, 2.0) if portrait else 1.0
+	var chip_w := 50.0 * density if portrait else (38.0 if compact else 44.0)
+	var chip_h := 44.0 * density if portrait else (32.0 if compact else 36.0)
+	var gap := 5.0 * density
 	var total_w := items.size() * chip_w + maxi(items.size() - 1, 0) * gap
-	var start_x := rect.position.x + rect.size.x - 10.0 - total_w
-	var chip_y := rect.position.y + (118.0 if portrait else (18.0 if compact else rect.size.y * 0.24))
+	var start_x := rect.position.x + rect.size.x - 10.0 * density - total_w
+	var chip_y := rect.position.y + (118.0 * density if portrait else (18.0 if compact else rect.size.y * 0.24))
 	for i in items.size():
 		var chip_rect := Rect2(start_x + i * (chip_w + gap), chip_y, chip_w, chip_h)
 		inventory_chip_rects.append(chip_rect)

@@ -37,7 +37,7 @@ func load_sprites() -> void:
 	_load_terrain_variants()
 
 func _load_character_sprite(name: String) -> Texture2D:
-	var path := AssetRegistry.character_sprite_path(name)
+	var path := AssetRegistry.character_sprite_path(name, true)
 	if ResourceLoader.exists(path):
 		return load(path)
 	return null
@@ -94,7 +94,9 @@ func get_terrain_sprite(maze: MazeGenerator, x: int, y: int) -> Texture2D:
 
 func draw_pc_view(
 	canvas: CanvasItem,
-	vp: Vector2,
+	maze_rect: Rect2,
+	hud_rect: Rect2,
+	ui_scale: float,
 	maze: MazeGenerator,
 	maze_width: int,
 	maze_height: int,
@@ -120,19 +122,19 @@ func draw_pc_view(
 	guide_dir: int = -1,
 	low_hp_pulse: float = 0.0,
 ) -> void:
-	var panel_w: float = 220.0
-	var game_w: float = vp.x - panel_w
-	var game_h: float = vp.y - 40.0
 	var maze_pixel_w: float = maze_width * cell_size
 	var maze_pixel_h: float = maze_height * cell_size
-	var scale_x: float = game_w / maze_pixel_w
-	var scale_y: float = game_h / maze_pixel_h
-	var draw_scale: float = minf(minf(scale_x, scale_y), 1.0)
+	var inset := clampf(12.0 * ui_scale, 12.0, 20.0)
+	var available := maze_rect.grow(-inset)
+	var scale_x: float = available.size.x / maze_pixel_w
+	var scale_y: float = available.size.y / maze_pixel_h
+	# PC 浏览器按可用区域真正放大；上限避免超宽屏下像素块过度粗大。
+	var draw_scale: float = clampf(minf(scale_x, scale_y), 0.45, 2.0)
 	var scaled_w: float = maze_pixel_w * draw_scale
 	var scaled_h: float = maze_pixel_h * draw_scale
-	var offset := Vector2((game_w - scaled_w) / 2.0, (game_h - scaled_h) / 2.0)
+	var offset := available.position + (available.size - Vector2(scaled_w, scaled_h)) * 0.5
 
-	canvas.draw_rect(Rect2(0, 0, game_w, game_h), Color(0.85, 0.80, 0.70))
+	canvas.draw_rect(maze_rect, Color(0.85, 0.80, 0.70))
 	canvas.draw_rect(Rect2(offset.x - 2, offset.y - 2, scaled_w + 4, scaled_h + 4), Color(0.15, 0.12, 0.08))
 	canvas.draw_rect(Rect2(offset, Vector2(scaled_w, scaled_h)), Color(0.92, 0.88, 0.78))
 
@@ -145,15 +147,15 @@ func draw_pc_view(
 	if guide_dir >= 0:
 		draw_path_arrow(canvas, player.pos, guide_dir, offset, draw_scale)
 
-	canvas.draw_rect(Rect2(game_w, 0, panel_w, vp.y), Color(0.12, 0.10, 0.08))
+	canvas.draw_rect(hud_rect, Color(0.12, 0.10, 0.08))
 	ui_panel.draw_panel(
-		canvas, game_w, panel_w, vp.y,
+		canvas, hud_rect.position.x, hud_rect.size.x, hud_rect.size.y,
 		player, maze, maze_width, maze_height, exit_pos,
 		levels_data, current_level_index, difficulty_name,
 		move_count, current_terrain_name, buff_display,
 		visited, is_revealed,
 		combat_log, inventory, key_tracker,
-		selected_slot, items, guide_dir, low_hp_pulse,
+		selected_slot, items, guide_dir, low_hp_pulse, ui_scale,
 	)
 
 func draw_cells(
@@ -264,7 +266,7 @@ func draw_items(
 		if it.item_type == "key":
 			var family_sprite := get_family_sprite(it.item_key)
 			if family_sprite:
-				draw_sprite_in_cell(canvas, family_sprite, ip, cs, wt)
+				draw_sprite_in_cell(canvas, family_sprite, ip, cs, wt * 0.45)
 			else:
 				var pal: Array = key_palettes[key_index % 3]
 				draw_character(canvas, ip, cs / 16.0, pal[0], pal[1], pal[2])
@@ -309,33 +311,81 @@ func draw_monster_in_cell(
 ) -> void:
 	if not is_instance_valid(m):
 		return
-	canvas.draw_rect(Rect2(cell_origin + Vector2(wt, wt), Vector2(cs - wt * 2, cs - wt * 2)), m.color.darkened(0.3))
-	canvas.draw_string(
-		ThemeDB.fallback_font, cell_origin + Vector2(cs * 0.3, cs * 0.65),
-		m.symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * scale), m.color,
-	)
+	_draw_monster_avatar(canvas, m.monster_type, cell_origin, cs, wt, m.color)
 	var hp_ratio := float(m.hp) / float(maxi(m.max_hp, 1))
-	var bar_w := cs - wt * 2 - 4.0
+	var bar_h := maxf(4.0, cs * 0.065)
+	var bar_w := cs - wt * 2.0 - 4.0
 	var bar_x := cell_origin.x + wt + 2.0
-	var bar_y := cell_origin.y + cs - wt - 6.0
-	canvas.draw_rect(Rect2(bar_x, bar_y, bar_w, 4.0), Color(0.2, 0.1, 0.1))
-	canvas.draw_rect(Rect2(bar_x, bar_y, bar_w * hp_ratio, 4.0), Color(0.8, 0.2, 0.2))
+	var bar_y := cell_origin.y + cs - wt - bar_h - 1.0
+	canvas.draw_rect(Rect2(bar_x, bar_y, bar_w, bar_h), Color(0.16, 0.07, 0.06, 0.95))
+	canvas.draw_rect(Rect2(bar_x, bar_y, bar_w * hp_ratio, bar_h), Color(0.9, 0.22, 0.18))
 	
 	# Draw intent arrow above monster
 	var intent := m.get_intent_arrow()
 	if intent != "":
 		var intent_fs := int(cs * 0.25)
 		canvas.draw_string(
-			ThemeDB.fallback_font, cell_origin + Vector2(cs * 0.35, cs * 0.25),
-			intent, HORIZONTAL_ALIGNMENT_LEFT, -1, intent_fs, Color(1.0, 0.8, 0.2, 0.9),
+			ThemeDB.fallback_font, cell_origin + Vector2(0.0, cs * 0.24),
+			intent, HORIZONTAL_ALIGNMENT_CENTER, int(cs), intent_fs, Color(1.0, 0.85, 0.25, 0.95),
 		)
+
+
+func _draw_monster_avatar(
+	canvas: CanvasItem,
+	monster_type: String,
+	o: Vector2,
+	cs: float,
+	wt: float,
+	base_color: Color,
+) -> void:
+	# 怪物使用按格子比例绘制的矢量剪影，避免字体图标放大后的低分辨率问题。
+	var center := o + Vector2(cs * 0.5, cs * 0.52)
+	var body := base_color.lightened(0.12)
+	var shade := base_color.darkened(0.28)
+	var line_w := maxf(2.0, cs * 0.055)
+	var eye_r := maxf(1.5, cs * 0.035)
+	canvas.draw_rect(Rect2(o + Vector2(wt, wt), Vector2(cs - wt * 2.0, cs - wt * 2.0)), shade.darkened(0.12))
+	match monster_type:
+		"sand":
+			canvas.draw_circle(center, cs * 0.20, body)
+			canvas.draw_circle(center + Vector2(-cs * 0.18, cs * 0.05), cs * 0.10, body)
+			canvas.draw_line(center + Vector2(cs * 0.13, -cs * 0.10), center + Vector2(cs * 0.30, -cs * 0.23), body, line_w)
+			canvas.draw_circle(center + Vector2(cs * 0.31, -cs * 0.24), cs * 0.055, body)
+			for side in [-1.0, 1.0]:
+				canvas.draw_line(center + Vector2(side * cs * 0.10, cs * 0.10), center + Vector2(side * cs * 0.31, cs * 0.23), body, line_w)
+				canvas.draw_circle(center + Vector2(side * cs * 0.31, cs * 0.23), cs * 0.055, body)
+		"desert":
+			for i in 4:
+				var seg := center + Vector2((float(i) - 1.5) * cs * 0.12, sin(float(i) * 1.7) * cs * 0.07)
+				canvas.draw_circle(seg, cs * (0.14 - float(i) * 0.012), body.lightened(float(i) * 0.025))
+			canvas.draw_line(center + Vector2(-cs * 0.23, -cs * 0.08), center + Vector2(-cs * 0.32, -cs * 0.20), body, line_w * 0.7)
+			canvas.draw_line(center + Vector2(-cs * 0.17, -cs * 0.10), center + Vector2(-cs * 0.20, -cs * 0.24), body, line_w * 0.7)
+		"grotto":
+			canvas.draw_rect(Rect2(center - Vector2(cs * 0.20, cs * 0.19), Vector2(cs * 0.40, cs * 0.38)), body)
+			canvas.draw_rect(Rect2(center - Vector2(cs * 0.28, cs * 0.10), Vector2(cs * 0.12, cs * 0.27)), body.darkened(0.05))
+			canvas.draw_rect(Rect2(center + Vector2(cs * 0.16, -cs * 0.10), Vector2(cs * 0.12, cs * 0.27)), body.darkened(0.05))
+			canvas.draw_colored_polygon(PackedVector2Array([center + Vector2(-cs * 0.18, -cs * 0.19), center + Vector2(-cs * 0.06, -cs * 0.32), center + Vector2(cs * 0.02, -cs * 0.19)]), body)
+			canvas.draw_colored_polygon(PackedVector2Array([center + Vector2(cs * 0.05, -cs * 0.19), center + Vector2(cs * 0.16, -cs * 0.31), center + Vector2(cs * 0.20, -cs * 0.19)]), body)
+		"oasis":
+			canvas.draw_circle(center + Vector2(0, cs * 0.05), cs * 0.23, body)
+			canvas.draw_circle(center + Vector2(-cs * 0.13, -cs * 0.13), cs * 0.12, body.lightened(0.08))
+			canvas.draw_circle(center + Vector2(cs * 0.12, -cs * 0.16), cs * 0.10, body.lightened(0.15))
+			canvas.draw_colored_polygon(PackedVector2Array([center + Vector2(-cs * 0.20, cs * 0.12), center + Vector2(0, cs * 0.31), center + Vector2(cs * 0.20, cs * 0.12)]), body)
+		_:
+			canvas.draw_circle(center + Vector2(0, -cs * 0.08), cs * 0.17, body)
+			canvas.draw_colored_polygon(PackedVector2Array([center + Vector2(-cs * 0.25, cs * 0.25), center + Vector2(-cs * 0.18, -cs * 0.02), center + Vector2(0, -cs * 0.20), center + Vector2(cs * 0.18, -cs * 0.02), center + Vector2(cs * 0.25, cs * 0.25)]), body)
+			canvas.draw_line(center + Vector2(cs * 0.22, -cs * 0.02), center + Vector2(cs * 0.31, cs * 0.26), Color(0.18, 0.13, 0.08), line_w)
+	canvas.draw_circle(center + Vector2(-cs * 0.065, -cs * 0.075), eye_r, Color(1.0, 0.88, 0.42))
+	canvas.draw_circle(center + Vector2(cs * 0.065, -cs * 0.075), eye_r, Color(1.0, 0.88, 0.42))
+	canvas.draw_circle(center + Vector2(-cs * 0.065, -cs * 0.075), eye_r * 0.45, Color(0.08, 0.05, 0.03))
+	canvas.draw_circle(center + Vector2(cs * 0.065, -cs * 0.075), eye_r * 0.45, Color(0.08, 0.05, 0.03))
 
 func draw_player(canvas: CanvasItem, player: PlayerController, offset: Vector2, scale: float) -> void:
 	var cs: float = cell_size * scale
 	var wt: float = wall_thickness * scale
 	var pp := offset + Vector2(player.pos.x * cs, player.pos.y * cs)
 	if player_sprite:
-		draw_sprite_in_cell(canvas, player_sprite, pp, cs, wt)
+		draw_sprite_in_cell(canvas, player_sprite, pp, cs, wt * 0.45)
 	else:
 		draw_character(canvas, pp, cs / 16.0, Color(0.27, 0.51, 0.71), Color(0.85, 0.65, 0.13), Color(1.0, 0.85, 0.72))
 

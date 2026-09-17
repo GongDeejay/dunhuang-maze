@@ -71,6 +71,8 @@ var current_level_index: int:
 
 func _ready() -> void:
 	_ensure_data_loaded()
+	# 像素美术放大时保持硬边，避免浏览器缩放后的模糊插值。
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	cell_size = PlatformService.get_target_cell_size(cell_size)
 	maze_renderer = MazeRenderer.new()
 	maze_renderer.cell_size = cell_size

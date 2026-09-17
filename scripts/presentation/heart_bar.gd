@@ -33,6 +33,7 @@ func draw(
 	max_hp: int,
 	low_hp_pulse: float = 0.0,
 	slot_count: int = -1,
+	max_heart_size: float = 28.0,
 ) -> float:
 	var count := slot_count if slot_count > 0 else slot_count_for_width(max_width)
 	count = clampi(count, MIN_SLOTS, MAX_SLOTS)
@@ -41,7 +42,7 @@ func draw(
 		return _draw_fallback(canvas, origin, max_width, hp_ratio, low_hp_pulse)
 
 	var gap := 3.0
-	var size := clampf((max_width - gap * float(count - 1)) / float(count), 16.0, 22.0)
+	var size := clampf((max_width - gap * float(count - 1)) / float(count), 18.0, max_heart_size)
 	var filled := int(round(hp_ratio * float(count)))
 	filled = clampi(filled, 0, count)
 

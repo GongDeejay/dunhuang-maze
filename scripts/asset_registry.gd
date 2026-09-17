@@ -56,13 +56,13 @@ const TERRAIN_VARIANTS := {
 
 
 static func character_sprite_path(name: String, prefer_hq: bool = false) -> String:
-	var low := LOW_PLAYER_DIR + name + ".png"
-	if ResourceLoader.exists(low):
-		return low
 	if prefer_hq:
 		var hq := HQ_PLAYER_DIR + name + ".png"
 		if ResourceLoader.exists(hq):
 			return hq
+	var low := LOW_PLAYER_DIR + name + ".png"
+	if ResourceLoader.exists(low):
+		return low
 	return low
 
 

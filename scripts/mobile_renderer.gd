@@ -29,11 +29,12 @@ func draw_follow_in_rect(
 	var origin := maze_rect.position
 	var area_w := maze_rect.size.x
 	var area_h := maze_rect.size.y
+	var density := clampf(area_w / 390.0, 1.0, 2.0)
 
 	# ui_scale 2.0 → 更少格子、更大像素（iPhone 可读）
 	var col_div := maxf(2.5, 5.0 / ui_scale)
 	var row_div := maxf(3.0, 6.5 / ui_scale)
-	var target_cell := clampf(minf(area_w / col_div, area_h / row_div), 48.0 * ui_scale, 120.0)
+	var target_cell := clampf(minf(area_w / col_div, area_h / row_div), 48.0 * ui_scale * density, 120.0 * density)
 	var view_cols := maxi(5, int(area_w / target_cell))
 	var view_rows := maxi(5, int(area_h / target_cell))
 	var cell_sz := minf(area_w / float(view_cols), area_h / float(view_rows))
@@ -104,7 +105,7 @@ func draw_follow_in_rect(
 
 func _draw_player_in_cell(canvas: CanvasItem, o: Vector2, cs: float, wt: float) -> void:
 	if maze_renderer.player_sprite:
-		maze_renderer.draw_sprite_in_cell(canvas, maze_renderer.player_sprite, o, cs, wt)
+		maze_renderer.draw_sprite_in_cell(canvas, maze_renderer.player_sprite, o, cs, wt * 0.45)
 	else:
 		maze_renderer.draw_character(canvas, o, cs / 16.0, Color(0.27, 0.51, 0.71), Color(0.85, 0.65, 0.13), Color(1.0, 0.85, 0.72))
 
@@ -113,7 +114,7 @@ func _draw_item_in_cell(canvas: CanvasItem, item, o: Vector2, cs: float, wt: flo
 	if item.item_type == "key":
 		var family_sprite := maze_renderer.get_family_sprite(item.item_key)
 		if family_sprite:
-			maze_renderer.draw_sprite_in_cell(canvas, family_sprite, o, cs, wt)
+			maze_renderer.draw_sprite_in_cell(canvas, family_sprite, o, cs, wt * 0.45)
 		else:
 			maze_renderer.draw_character(canvas, o, cs / 16.0, Color(0.86, 0.24, 0.24), Color(0.2, 0.2, 0.2), Color(1.0, 0.85, 0.72))
 		return

@@ -41,7 +41,7 @@ func draw(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -> void:
 
 func _draw_desktop(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -> void:
 	maze_renderer.draw_pc_view(
-		canvas, layout.viewport_size,
+		canvas, layout.maze_rect, layout.hud_rect, layout.ui_scale,
 		ctx.maze, ctx.maze_width, ctx.maze_height,
 		ctx.player, ctx.monsters, ctx.items, ctx.exit_pos,
 		ctx.exit_visible, ctx.game_won, ctx.visited, ctx.is_revealed,
@@ -79,8 +79,10 @@ func _draw_dynamic(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -
 func _draw_log_strip(canvas: CanvasItem, rect: Rect2, combat_log: Array, ui_scale: float = 1.0) -> void:
 	canvas.draw_rect(rect, Color(0.08, 0.07, 0.06, 0.92))
 	var msg: String = combat_log[combat_log.size() - 1]
-	canvas.draw_multiline_string(ThemeDB.fallback_font, rect.position + Vector2(8, 20),
-		msg, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - 16), 14, 2, Color(0.75, 0.7, 0.62))
+	var density := clampf(rect.size.x / 390.0, 1.0, 2.0)
+	var fs := int(clampf(rect.size.y * 0.30, 16.0 * density, 20.0 * density))
+	canvas.draw_multiline_string(ThemeDB.fallback_font, rect.position + Vector2(12.0 * density, fs + 6.0 * density),
+		msg, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - 24.0 * density), fs, 2, Color(0.82, 0.77, 0.68))
 
 
 func get_inventory_slot_at(global_pos: Vector2, layout: LayoutProfile) -> int:

@@ -341,6 +341,7 @@ func test_asset_registry():
 	print("\n[TEST] Asset Registry")
 	var dj := AssetRegistry.character_sprite_path("dj")
 	assert_true(dj.begins_with("res://"), "character path valid")
+	assert_true(AssetRegistry.character_sprite_path("dj", true).contains("high_quality"), "HQ character preferred")
 	assert_true(ResourceLoader.exists(AssetRegistry.item_sprite_path("heal")), "heal item exists")
 	assert_eq(AssetRegistry.CELL_SPRITE_PX, 16, "cell sprite standard")
 
@@ -366,6 +367,11 @@ func test_ui_layout_director():
 	assert_eq(desktop.mode, LayoutProfile.Mode.DESKTOP_SIDE, "1280x720 desktop side")
 	assert_true(desktop.is_side_hud(), "desktop side hud")
 	assert_eq(desktop.maze_mode, LayoutProfile.MazeMode.FIT_FULL, "desktop fit full")
+	assert_true(desktop.hud_rect.size.x >= 300.0, "desktop HUD stays readable")
+
+	var large_desktop := UILayoutDirector.compute(Vector2(1920, 1080), false)
+	assert_true(large_desktop.ui_scale > 1.0, "large desktop UI scales with browser")
+	assert_true(large_desktop.maze_rect.end.x == large_desktop.hud_rect.position.x, "desktop regions meet without gap")
 
 	var tablet := UILayoutDirector.compute(Vector2(800, 600), true)
 	assert_eq(tablet.mode, LayoutProfile.Mode.TABLET_LANDSCAPE, "800x600 tablet landscape")
@@ -374,6 +380,10 @@ func test_ui_layout_director():
 	var compact := UILayoutDirector.compute(Vector2(360, 780), true)
 	assert_eq(compact.mode, LayoutProfile.Mode.PORTRAIT_COMPACT, "narrow portrait compact")
 	assert_eq(compact.ui_scale, 2.0, "portrait ui scale 2x")
+
+	var hidpi_phone := UILayoutDirector.compute(Vector2(780, 1688), true)
+	assert_true(hidpi_phone.hud_rect.size.y >= 320.0, "HiDPI portrait HUD scales in physical pixels")
+	assert_true(hidpi_phone.controls_rect.size.y >= 400.0, "HiDPI portrait controls scale in physical pixels")
 
 
 func test_pause_state():
@@ -404,6 +414,8 @@ func test_mobile_control_bounds():
 	var profile := UILayoutDirector.compute(Vector2(390, 844), true)
 	var controls := MobileControls.new()
 	controls.apply_layout(profile)
+	assert_true(controls.btn_radius >= 32.0, "portrait dpad has a large visual target")
+	assert_true(controls.func_btn_size >= 54.0, "portrait tool buttons meet touch target size")
 	for entry in controls._dpad_centers:
 		var center: Vector2 = entry.pos
 		var hit := Rect2(center - Vector2.ONE * controls.btn_radius, Vector2.ONE * controls.btn_radius * 2.0)
@@ -413,6 +425,9 @@ func test_mobile_control_bounds():
 		var half := controls.func_btn_size * 0.5
 		var hit := Rect2(center - Vector2.ONE * half, Vector2.ONE * half * 2.0)
 		assert_true(profile.controls_rect.encloses(hit), "portrait function button stays in controls area")
+		for entry in controls._dpad_centers:
+			var dpad_hit := Rect2((entry.pos as Vector2) - Vector2.ONE * controls.btn_radius, Vector2.ONE * controls.btn_radius * 2.0)
+			assert_true(not hit.intersects(dpad_hit), "tool button does not overlap dpad")
 	controls.free()
 
 
