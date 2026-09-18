@@ -15,6 +15,7 @@ var xp: int
 var move_timer: float = 0.0
 var move_interval: float = 2.0
 var next_move_dir: int = -1
+var patrol_cells: Dictionary = {}
 
 func setup(terrain_key: String, spawn_pos: Vector2i, scale: float = 1.0) -> void:
 	pos = spawn_pos
@@ -42,6 +43,8 @@ func plan_next_move(maze: MazeGenerator, occupied: Dictionary, target_pos: Vecto
 		if maze.can_move(pos.x, pos.y, d):
 			var next := pos + Vector2i(MazeGenerator.DX[d], MazeGenerator.DY[d])
 			if not maze.in_bounds(next.x, next.y):
+				continue
+			if not patrol_cells.is_empty() and not patrol_cells.has(next):
 				continue
 			if occupied.has(next) and next != target_pos:
 				continue

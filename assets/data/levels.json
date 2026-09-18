@@ -2,14 +2,15 @@
   "levels": [
     {
       "name": "汉唐古道",
-      "description": "古老的商道，还有人走过的痕迹",
-      "maze_width": 25,
-      "maze_height": 20,
+      "description": "沿足迹找到妈妈，选择古道或风沙近路，再到营地会合",
+      "maze_width": 17,
+      "maze_height": 13,
       "monster_density": 0.08,
       "difficulty": 1,
       "monster_scale": 1.0,
       "waypoints": 3,
-      "key_count": 2,
+      "key_count": 1,
+      "family_key": "family_1",
       "terrain_effect": {
         "desert": {"move_damage": 1, "description": "沙暴侵蚀"},
         "grotto": {"reveal_penalty": -2, "description": "洞窟黑暗"},
@@ -26,7 +27,8 @@
       "difficulty": 2,
       "monster_scale": 1.2,
       "waypoints": 4,
-      "key_count": 3,
+      "key_count": 1,
+      "family_key": "family_2",
       "terrain_effect": {
         "desert": {"move_damage": 1, "description": "沙暴肆虐"},
         "grotto": {"reveal_penalty": -2, "description": "洞窟黑暗"},
@@ -43,7 +45,8 @@
       "difficulty": 3,
       "monster_scale": 1.4,
       "waypoints": 5,
-      "key_count": 3,
+      "key_count": 1,
+      "family_key": "family_3",
       "terrain_effect": {
         "desert": {"move_damage": 2, "description": "沙暴肆虐"},
         "grotto": {"reveal_penalty": -3, "description": "洞窟黑暗"},

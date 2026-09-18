@@ -141,6 +141,9 @@ func draw_pc_view(
 	draw_cells(canvas, maze, maze_width, maze_height, offset, draw_scale, visited, is_revealed)
 	draw_pillars(canvas, maze, maze_width, maze_height, offset, draw_scale)
 	draw_exit(canvas, exit_pos, offset, draw_scale, is_revealed, exit_visible, game_won)
+	for pos in maze.landmarks:
+		if is_revealed.call(pos) or maze.landmarks[pos].get("discovered", false):
+			draw_landmark(canvas, maze.landmarks[pos], offset + Vector2(pos) * cell_size * draw_scale, cell_size * draw_scale)
 	draw_items(canvas, items, offset, draw_scale, is_revealed)
 	draw_monsters(canvas, monsters, offset, draw_scale, is_revealed, player.pos)
 	draw_player(canvas, player, offset, draw_scale)
@@ -243,6 +246,16 @@ func draw_exit(
 		ThemeDB.fallback_font, ep + Vector2(cs * 0.3, cs * 0.65),
 		"门", HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * scale), Color.WHITE,
 	)
+
+func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs: float) -> void:
+	var color := Color("d8b76b")
+	if landmark.kind == "spring": color = Color("79c5c4")
+	elif landmark.kind in ["camp", "shortcut"]: color = Color("8bbf7a")
+	var badge := Rect2(origin + Vector2(cs * 0.18, cs * 0.18), Vector2.ONE * cs * 0.64)
+	canvas.draw_rect(badge, Color("30291e"))
+	canvas.draw_rect(badge, color, false, maxf(1, cs * 0.03))
+	canvas.draw_string(ThemeDB.fallback_font, origin + Vector2(0, cs * 0.68), landmark.symbol,
+		HORIZONTAL_ALIGNMENT_CENTER, int(cs), int(cs * 0.43), color)
 
 func draw_items(
 	canvas: CanvasItem,

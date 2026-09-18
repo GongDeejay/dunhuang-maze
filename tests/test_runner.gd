@@ -12,6 +12,7 @@ func _ready() -> void:
 	print("=== 敦煌迷途 自动测试 ===\n")
 	test_json_loading()
 	test_maze_generation()
+	test_first_journey()
 	test_terrain_system()
 	test_monster_data()
 	test_level_data()
@@ -98,6 +99,92 @@ func test_terrain_system():
 	assert_eq(maze.get_terrain_name(0, 0), "古道", "start terrain name is 古道")
 	assert_eq(maze.TERRAIN_KEY.size(), 5, "5 terrain keys defined")
 
+func test_first_journey():
+	print("\n[TEST] First Journey Routes and Story")
+	for sample in range(24):
+		seed(sample)
+		var maze := MazeGenerator.new(FirstJourney.SIZE.x, FirstJourney.SIZE.y)
+		var journey := FirstJourney.new()
+		journey.build(maze)
+		var reachable := maze.get_reachable_cells()
+		assert_true(reachable.has(FirstJourney.FAMILY) and reachable.has(FirstJourney.CAMP) and reachable.has(FirstJourney.MURAL), "seed %d: family, camp and optional reward reachable" % sample)
+		assert_true(journey.safe_route.size() > journey.short_route.size(), "seed %d: safe route is a real detour" % sample)
+		var safe_damage := 0
+		var short_damage := 0
+		for pos in journey.safe_route:
+			if maze.get_terrain(pos.x, pos.y) == MazeGenerator.Terrain.DESERT: safe_damage += 1
+		for pos in journey.short_route:
+			if maze.get_terrain(pos.x, pos.y) == MazeGenerator.Terrain.DESERT: short_damage += 1
+		assert_eq(safe_damage, 0, "safe route has no wind damage")
+		assert_eq(short_damage, 4, "short route has exactly four announced hazard cells")
+		assert_true(maze.has_wall(FirstJourney.FAMILY.x, FirstJourney.FAMILY.y, MazeGenerator.E), "shortcut closed before rescue")
+		var before := PathGuide.bfs_path(maze, FirstJourney.FAMILY, FirstJourney.CAMP).size()
+		var player := PlayerController.new()
+		player.max_hp = 30
+		player.hp = 10
+		assert_true(not journey.enter(FirstJourney.SPRING, maze, player).is_empty(), "spring offers a reading beat")
+		assert_eq(player.hp, 16, "spring heals six")
+		journey.enter(FirstJourney.SPRING, maze, player)
+		assert_eq(player.hp, 16, "spring cannot be farmed")
+		journey.enter(FirstJourney.MURAL, maze, player)
+		assert_eq(player.hp, 24, "mural gives guaranteed supplies")
+		assert_eq(player.reveal_bonus, 1, "mural increases view this level")
+		journey.enter(FirstJourney.MURAL, maze, player)
+		assert_eq(player.reveal_bonus, 1, "mural reward is one-time")
+		journey.rescue(maze, player)
+		assert_true(journey.rescued, "family rescue recorded")
+		assert_true(PathGuide.bfs_path(maze, FirstJourney.FAMILY, FirstJourney.CAMP).size() < before, "rescue opens a genuinely shorter return route")
+		assert_true(journey.rescue(maze, player).is_empty(), "rescue cannot grant duplicate rewards")
+		player.free()
+	# Integration: use production Main, not just the route builder.
+	DataLoader.set_difficulty("normal")
+	var controller = MainScript.new()
+	add_child(controller)
+	controller.game.start_game()
+	controller._new_game(0)
+	assert_eq(controller.monsters.size(), 3, "first level has three bounded encounters")
+	assert_eq(controller.key_tracker.required_keys, 1, "first goal is one family member")
+	assert_true(controller._story_open(), "opening objective is readable")
+	var initial_pos: Vector2i = controller.player.pos
+	controller._on_mobile_move(MazeGenerator.E)
+	controller._apply_game_action(GameAction.move(MazeGenerator.E))
+	controller._process(10.0)
+	assert_eq(controller.player.pos, initial_pos, "both touch and keyboard blocked during story")
+	for monster in controller.monsters:
+		assert_eq(monster.move_timer, 0.0, "story freezes enemy timer")
+		for tick in range(30):
+			monster.try_move(controller.maze, {}, Vector2i.ZERO, 3.0)
+		assert_true(monster.patrol_cells.has(monster.pos), "enemies cannot wander into safety zones")
+	controller.journey_card.close()
+	controller._on_mobile_move(MazeGenerator.E)
+	assert_eq(controller.player.pos, Vector2i(1, 0), "input resumes after story")
+	controller.moves_since_progress = 17
+	controller.player.pos = Vector2i(2, 0)
+	controller._update_guide_assist()
+	assert_eq(controller.moves_since_progress, 0, "new exploration resets lost counter")
+	assert_true(not controller.guide_assist_active, "new exploration does not trigger auto-navigation")
+	var family: ItemEntity = controller._get_item_at(FirstJourney.FAMILY)
+	controller._pick_up_item(family)
+	assert_true(controller.first_journey.rescued and controller.key_tracker.has_all_keys(), "rescue and objective count agree")
+	assert_true(controller.guide_assist_active, "return route guidance enabled after rescue")
+	controller.journey_card.close()
+	controller.player.pos = FirstJourney.CAMP
+	TurnResolver.resolve_after_move(controller)
+	assert_true(controller.game_won, "camp completes first chapter")
+	assert_true(controller._story_open() and controller.advance_after_story, "completion offers a readable continue card")
+	controller.journey_card.close()
+	assert_eq(controller.current_level_index, 1, "completion button advances to second chapter")
+	assert_true(controller.first_journey == null and not controller._story_open(), "later level restores original gameplay flow")
+	assert_eq(controller.maze_width, 30, "second level map size unchanged")
+	var family_keys: Array[String] = []
+	for item in controller.items:
+		if item.item_type == "key": family_keys.append(item.item_key)
+	assert_eq(family_keys, ["family_2"], "second level seeks older child, not rescued mother")
+	controller._new_game(0)
+	assert_true(not controller.first_journey.rescued and not controller.first_journey.mural_found, "restart resets first-level story rewards")
+	controller.free()
+	SaveManager.clear_save()
+
 func test_monster_data():
 	print("\n[TEST] Monster Data")
 	var dl = _make_data_loader()
@@ -122,7 +209,7 @@ func test_level_data():
 	assert_eq(levels[0].get("name", ""), "汉唐古道", "level 1 name")
 	assert_eq(levels[1].get("name", ""), "无人区", "level 2 name")
 	assert_eq(levels[2].get("name", ""), "三危山", "level 3 name")
-	assert_eq(levels[0].get("maze_width", 0), 25, "level 1 width")
+	assert_eq(levels[0].get("maze_width", 0), 17, "level 1 compact authored width")
 	assert_eq(levels[1].get("maze_width", 0), 30, "level 2 width")
 	assert_eq(levels[2].get("maze_width", 0), 35, "level 3 width")
 	var grotto_effect = levels[0].get("terrain_effect", {}).get("grotto", {})
@@ -181,7 +268,7 @@ func test_item_entity():
 
 	var family = ItemEntity.new()
 	family.setup("family_1", Vector2i(1, 2))
-	assert_eq(family.display_name, "乐僔", "family display name")
+	assert_eq(family.display_name, "妈妈", "family display name matches prologue")
 	family.free()
 	item.free()
 	dl.free()

@@ -84,7 +84,7 @@
     "description": "失散的家人，找到他们一起离开"
   },
   "family_1": {
-    "name": "乐僔",
+    "name": "妈妈",
     "symbol": "僧",
     "type": "key",
     "value": 1,
@@ -93,7 +93,7 @@
     "description": "失散的家人，找到他们一起离开"
   },
   "family_2": {
-    "name": "马可",
+    "name": "哥哥",
     "symbol": "商",
     "type": "key",
     "value": 1,
@@ -102,7 +102,7 @@
     "description": "失散的家人，找到他们一起离开"
   },
   "family_3": {
-    "name": "麦克金",
+    "name": "弟弟",
     "symbol": "老",
     "type": "key",
     "value": 1,

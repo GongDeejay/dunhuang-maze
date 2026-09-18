@@ -57,6 +57,7 @@ static func spawn_items(
 	maze_height: int,
 	monsters: Array[MonsterEntity],
 	key_count: int,
+	family_keys: Array = FAMILY_KEYS,
 ) -> Array[ItemEntity]:
 	for child in parent.get_children():
 		if child is ItemEntity and is_instance_valid(child):
@@ -108,7 +109,7 @@ static func spawn_items(
 		if not occupied.has(pos) and reachable.has(pos):
 			occupied[pos] = true
 			var family_item := ItemEntity.new()
-			family_item.setup(FAMILY_KEYS[i % FAMILY_KEYS.size()], pos)
+			family_item.setup(family_keys[i % family_keys.size()], pos)
 			parent.add_child(family_item)
 			items.append(family_item)
 

@@ -45,6 +45,7 @@ static func resolve_after_move(game) -> void:
 				)
 			else:
 				SaveManager.clear_save()
+			game._on_level_completed()
 		else:
 			game._add_log("家人还没到齐！还需要找到 %d 个人" % game.key_tracker.get_remaining())
 

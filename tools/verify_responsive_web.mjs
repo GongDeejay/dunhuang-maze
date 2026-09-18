@@ -82,6 +82,8 @@ try {
     // The full-window canvas is already in view; avoid scrollIntoView on mobile visual viewports.
     await page.mouse.click(metrics.cssWidth / 2, metrics.cssHeight / 2);
     await page.waitForTimeout(700); // Let Godot render the first gameplay frame and responsive HUD.
+    await page.keyboard.press('Enter'); // Dismiss the first-chapter objective card in a fresh profile.
+    await page.waitForTimeout(150); // One short render interval before capturing the underlying map.
     await page.screenshot({ path: resolve(OUT, `${profile.id}.png`), fullPage: false });
     assert.deepEqual(errors, [], `${profile.id}: browser errors\n${errors.join('\n')}`);
     await context.close();

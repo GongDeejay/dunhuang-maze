@@ -8,6 +8,7 @@ var text_secondary := Color(0.65, 0.6, 0.52)
 var accent := Color(0.9, 0.75, 0.3)
 var inventory_chip_rects: Array[Rect2] = []
 var heart_bar := HeartBar.new()
+var journey_objective := ""
 
 
 func draw(
@@ -105,7 +106,7 @@ func _draw_portrait(
 	rx = rect.position.x + pad
 	row3_y += 23.0 * density
 	canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
-		terrain_name, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - pad * 2.0 - 70.0), fs_small, text_secondary)
+		journey_objective if not journey_objective.is_empty() else terrain_name, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - pad * 2.0 - 70.0), fs_small, text_secondary)
 	if guide_dir >= 0:
 		rx = rect.end.x - 70.0
 		canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row3_y),
@@ -166,7 +167,7 @@ func _draw_landscape_strip(
 		var row2_y := rect.position.y + rect.size.y - pad - 2.0
 		var rx := rect.position.x + pad
 		canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row2_y),
-			"攻%d · %s" % [player.get_effective_atk(), terrain_name], HORIZONTAL_ALIGNMENT_LEFT, -1, fs_small, text_secondary)
+			journey_objective if not journey_objective.is_empty() else "攻%d · %s" % [player.get_effective_atk(), terrain_name], HORIZONTAL_ALIGNMENT_LEFT, -1, fs_small, text_secondary)
 		rx += 130.0
 		if guide_dir >= 0:
 			canvas.draw_string(ThemeDB.fallback_font, Vector2(rx, row2_y),

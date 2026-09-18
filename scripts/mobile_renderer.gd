@@ -83,6 +83,9 @@ func draw_follow_in_rect(
 					"门", HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * draw_scale), Color.WHITE,
 				)
 
+			var landmark_pos := Vector2i(gx, gy)
+			if maze.landmarks.has(landmark_pos) and (is_revealed.call(landmark_pos) or maze.landmarks[landmark_pos].get("discovered", false)):
+				maze_renderer.draw_landmark(canvas, maze.landmarks[landmark_pos], Vector2(screen_x, screen_y), cell_sz)
 			for it in items:
 				if is_instance_valid(it) and it.pos == Vector2i(gx, gy) and is_revealed.call(it.pos):
 					_draw_item_in_cell(canvas, it, Vector2(screen_x, screen_y), cell_sz, wall_w)

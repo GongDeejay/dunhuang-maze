@@ -46,6 +46,9 @@ var moves_since_progress: int = 0
 var low_hp_pulse: float = 0.0
 var input_handler := InputHandler.new()
 var attack_cooldown := 0.0
+var first_journey: FirstJourney
+var journey_card: JourneyCard
+var advance_after_story := false
 
 # Aliases for TurnResolver compatibility
 var move_count: int:
@@ -92,6 +95,9 @@ func _ready() -> void:
 	key_tracker.all_keys_collected.connect(_on_all_family_found)
 	ui_panel = UIPanel.new()
 	game_view_composer = GameViewComposer.new(maze_renderer, mobile_renderer, ui_panel)
+	journey_card = JourneyCard.new()
+	add_child(journey_card)
+	journey_card.dismissed.connect(_on_story_dismissed)
 	mobile_controls = MobileControls.new()
 	mobile_controls.move_pressed.connect(_on_mobile_move)
 	mobile_controls.action_pressed.connect(_on_mobile_action)
@@ -141,6 +147,7 @@ func _request_redraw() -> void:
 		mobile_controls.queue_redraw()
 
 func _on_mobile_move(dir: int) -> void:
+	if _story_open(): return
 	if game.is_difficulty_select():
 		if dir == MazeGenerator.N:
 			game.cycle_difficulty(-1)
@@ -172,6 +179,7 @@ func _refresh_layout() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if _story_open(): return
 	if game.is_difficulty_select():
 		return
 	if not current_layout.show_touch_controls:
@@ -180,6 +188,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _on_mobile_action(action: String) -> void:
+	if _story_open(): return
 	if not game.can_move() and action in ["use_item", "cycle_item"]:
 		return
 	match action:
@@ -214,6 +223,9 @@ func _ensure_data_loaded() -> void:
 
 func _new_game(level_idx: int = -1) -> void:
 	attack_cooldown = 0.0
+	if journey_card: journey_card.visible = false
+	advance_after_story = false
+	first_journey = null
 	if level_idx >= 0:
 		game.current_level_index = level_idx
 
@@ -230,7 +242,11 @@ func _new_game(level_idx: int = -1) -> void:
 	var waypoint_count = level.get("waypoints", 3)
 
 	maze = MazeGenerator.new(maze_width, maze_height)
-	maze.generate(-1, waypoint_count)
+	if current_level_index == 0:
+		first_journey = FirstJourney.new()
+		first_journey.build(maze)
+	else:
+		maze.generate(-1, waypoint_count)
 
 	var diff = DataLoader.get_difficulty()
 	var hp_mult = diff.get("hp_multiplier", 1.0)
@@ -246,14 +262,21 @@ func _new_game(level_idx: int = -1) -> void:
 	visited = {}
 	combat_log.clear()
 	key_tracker.setup(level_key_count)
-	monsters = EntitySpawner.spawn_monsters(
-		self, maze, maze_width, maze_height,
-		level_monster_density, level_monster_scale,
-		_on_monster_defeated,
-	)
-	items = EntitySpawner.spawn_items(
-		self, maze, maze_width, maze_height, monsters, level_key_count,
-	)
+	if first_journey:
+		for child in get_children():
+			if child is MonsterEntity or child is ItemEntity: child.queue_free()
+		var spawned := first_journey.spawn(self, _on_monster_defeated)
+		monsters = spawned.monsters
+		items = spawned.items
+	else:
+		monsters = EntitySpawner.spawn_monsters(
+			self, maze, maze_width, maze_height,
+			level_monster_density, level_monster_scale, _on_monster_defeated,
+		)
+		items = EntitySpawner.spawn_items(
+			self, maze, maze_width, maze_height, monsters, level_key_count,
+			[str(level.get("family_key", "family_1"))],
+		)
 	_mark_visited(player.pos)
 	current_terrain_name = maze.get_terrain_name(player.pos.x, player.pos.y)
 	selected_inventory_slot = 0
@@ -267,9 +290,32 @@ func _new_game(level_idx: int = -1) -> void:
 	_prime_monster_intents()
 	AudioManager.play_level_start()
 	SaveManager.save_progress(current_level_index, selected_difficulty, player.level, player.xp)
+	if first_journey:
+		_show_story({"title": "第一章 · 古道上的足迹", "body": "风停了，妈妈和两个孩子还没有消息。\n先沿着脚印寻找妈妈，再到东南的营地会合。路口有路牌，不必走遍所有岔路。\n读提示时战斗暂停；关闭提示后继续。", "button": "出发，寻找妈妈"})
 	_request_redraw()
 
+func _story_open() -> bool:
+	return journey_card != null and journey_card.visible
+
+func _show_story(card: Dictionary) -> void:
+	if journey_card and not card.is_empty():
+		journey_card.open_card(card)
+		_request_redraw()
+
+func _on_story_dismissed() -> void:
+	if advance_after_story:
+		advance_after_story = false
+		_handle_regenerate()
+	_request_redraw()
+
+func _on_level_completed() -> void:
+	if not first_journey: return
+	advance_after_story = true
+	var discovery := "还发现了石窟壁画和补给。" if first_journey.mural_found else "石窟的秘密，可以留待下次探索。"
+	_show_story({"title": "与妈妈平安会合", "body": "你们沿着古道来到营地，终于能安心歇一口气。\n这次走了 %d 步，%s\n妈妈先留在安全的营地。下一站：无人区，寻找哥哥。" % [move_count, discovery], "button": "继续 · 寻找哥哥"})
+
 func _show_tutorial_if_needed() -> void:
+	if first_journey: return
 	if current_level_index != 0 or tutorial_done:
 		return
 	tutorial_done = true
@@ -283,7 +329,7 @@ func _add_tutorial(message: String) -> void:
 
 func _on_all_family_found() -> void:
 	guide_assist_active = true
-	_add_tutorial("【目标更新】家人已到齐！跟随蓝色指引前往出口「门」")
+	_add_tutorial("【目标更新】妈妈找到了！跟随指引到营地会合" if first_journey else "【目标更新】本关家人找到了！跟随蓝色指引前往出口「门」")
 
 
 func _prime_monster_intents() -> void:
@@ -335,9 +381,11 @@ func _pick_up_item(item: ItemEntity) -> void:
 	if item.item_type == "key":
 		moves_since_progress = 0
 		guide_assist_active = false
+		if first_journey:
+			_show_story(first_journey.rescue(maze, player))
 		key_tracker.add_key()
-		_add_log("获得 %s (%s)" % [item.display_name, key_tracker.get_progress()])
-		if not first_family_tip_shown:
+		_add_log("找到 %s (%s)" % [item.display_name, key_tracker.get_progress()])
+		if not first_family_tip_shown and not first_journey:
 			first_family_tip_shown = true
 			_add_tutorial("【家人】小地图以绿色标记已发现的家人；集齐后才能离开")
 		items.erase(item)
@@ -390,6 +438,10 @@ func _get_monster_at(pos: Vector2i) -> MonsterEntity:
 
 
 func _update_guide_assist() -> void:
+	# Discovering new ground is progress, not evidence of being lost.
+	if first_journey and not visited.has(player.pos):
+		moves_since_progress = 0
+		return
 	moves_since_progress += 1
 	if guide_assist_active or key_tracker.has_all_keys():
 		return
@@ -458,6 +510,11 @@ func _add_log(msg: String) -> void:
 	_request_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _story_open():
+		if event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ENTER, KEY_SPACE, KEY_ESCAPE]:
+			journey_card.close()
+		get_viewport().set_input_as_handled()
+		return
 	var action := input_handler.handle(event, _input_context())
 	if action.type == GameAction.Type.NONE:
 		return
@@ -480,6 +537,7 @@ func _input_context() -> Dictionary:
 	}
 
 func _apply_game_action(action: GameAction) -> void:
+	if _story_open(): return
 	match action.type:
 		GameAction.Type.CONFIRM:
 			if show_new_journey_confirm:
@@ -559,6 +617,8 @@ func _apply_terrain_effect() -> void:
 			_try_auto_heal()
 			_update_mobile_ui()
 	if effect.has("move_heal") and effect.move_heal > 0:
+		# First-level water is a one-time encounter, not an infinite walking heal.
+		if first_journey: return
 		var heal = int(effect.move_heal * diff.get("heal_multiplier", 1.0))
 		player.heal(heal)
 		_add_log("%s: 恢复 %d HP" % [effect.get("description", ""), heal])
@@ -612,6 +672,10 @@ func _try_move(dir: int) -> bool:
 
 func _mark_visited(pos: Vector2i) -> void:
 	visited[pos] = true
+	if first_journey:
+		_show_story(first_journey.enter(pos, maze, player))
+		for landmark_pos in maze.landmarks:
+			if _is_revealed(landmark_pos): maze.landmarks[landmark_pos]["discovered"] = true
 
 func _is_revealed(pos: Vector2i) -> bool:
 	if player.get_effective_reveal_bonus() >= 999:
@@ -666,7 +730,7 @@ func _process(delta: float) -> void:
 		exit_blink_timer = 0.0
 		exit_visible = !exit_visible
 		dirty = true
-	if game.can_move():
+	if game.can_move() and not _story_open():
 		attack_cooldown = maxf(0.0, attack_cooldown - delta)
 		var monster_delta := delta
 		if maze != null:
@@ -747,6 +811,8 @@ func _draw_context() -> Dictionary:
 		"selected_slot": selected_inventory_slot,
 		"guide_dir": _get_guide_direction(),
 		"low_hp_pulse": low_hp_pulse,
+		"journey_objective": first_journey.objective() if first_journey else "",
+		"first_journey": first_journey != null,
 	}
 
 

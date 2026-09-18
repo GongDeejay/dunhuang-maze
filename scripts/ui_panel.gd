@@ -11,6 +11,7 @@ var hp_red := Color(0.9, 0.15, 0.1)
 var inventory_hit_rects: Array[Rect2] = []
 var panel_origin_x: float = 0.0
 var heart_bar := HeartBar.new()
+var journey_objective := ""
 
 func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		player, maze, maze_w: int, maze_h: int, exit_pos: Vector2i,
@@ -79,7 +80,7 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		"步数: %d" % move_count, HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, text_primary)
 	y += line_h
 	owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-		"地形: %s" % terrain_name, HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, text_primary)
+		("目标: " + journey_objective) if not journey_objective.is_empty() else ("地形: " + terrain_name), HORIZONTAL_ALIGNMENT_LEFT, int(bar_w), small_fs, text_primary)
 	y += line_h
 
 	if buff_info != "":
@@ -109,6 +110,9 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 				fc = fc.darkened(0.4)
 			owner.draw_rect(Rect2(mx + mmx * cell_px, y + my * cell_px, cell_px, cell_px), fc)
 	var mep = Vector2(mx + exit_pos.x * cell_px, y + exit_pos.y * cell_px)
+	for pos in maze.landmarks:
+		if maze.landmarks[pos].get("discovered", false):
+			owner.draw_rect(Rect2(mx + pos.x * cell_px, y + pos.y * cell_px, cell_px, cell_px), accent)
 	owner.draw_rect(Rect2(mep, Vector2(cell_px, cell_px)), Color(0.2, 0.8, 0.3))
 	var mpp = Vector2(mx + player.pos.x * cell_px, y + player.pos.y * cell_px)
 	owner.draw_rect(Rect2(mpp, Vector2(cell_px, cell_px)), Color(0.9, 0.15, 0.1))

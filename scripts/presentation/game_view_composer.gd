@@ -15,6 +15,8 @@ func _init(renderer: MazeRenderer, mobile: MobileRenderer, panel: UIPanel) -> vo
 
 
 func draw(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -> void:
+	ui_panel.journey_objective = ctx.get("journey_objective", "")
+	hud_top_bar.journey_objective = ctx.get("journey_objective", "")
 	var vp: Vector2 = layout.viewport_size
 	canvas.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0.12, 0.10, 0.08))
 
@@ -29,6 +31,7 @@ func draw(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -> void:
 	elif ctx.get("game_over", false):
 		ui_panel.draw_overlay(canvas, vp, "你倒下了...", "走了 %d 步" % ctx.get("move_count", 0), "按 R 重新尝试", Color(0.9, 0.3, 0.2))
 	elif ctx.get("game_won", false):
+		if ctx.get("first_journey", false): return # Interactive JourneyCard handles this chapter's ending.
 		var level_idx: int = ctx.get("current_level_index", 0)
 		var levels: Array = ctx.get("levels_data", [])
 		var is_final := level_idx + 1 >= levels.size()
