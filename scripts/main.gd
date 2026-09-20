@@ -50,6 +50,12 @@ var first_journey: FirstJourney
 var journey_card: JourneyCard
 var advance_after_story := false
 var third_chapter: ThirdChapter
+var mogao_journey: MogaoJourney
+var pattern_panel: PatternPanel
+var pattern_prompt: Button
+var modal_release_guard := false
+var modal_closed_frame := -1
+var held_inputs: Dictionary = {}
 
 # Aliases for TurnResolver compatibility
 var move_count: int:
@@ -99,6 +105,20 @@ func _ready() -> void:
 	journey_card = JourneyCard.new()
 	add_child(journey_card)
 	journey_card.dismissed.connect(_on_story_dismissed)
+	pattern_panel = PatternPanel.new()
+	add_child(pattern_panel)
+	pattern_panel.dismissed.connect(_on_pattern_closed)
+	pattern_panel.unlocked.connect(_on_pattern_unlocked)
+	var prompt_layer := CanvasLayer.new()
+	prompt_layer.layer = 110
+	add_child(prompt_layer)
+	pattern_prompt = Button.new()
+	pattern_prompt.text = "护纹木匣 · 查看纹样 [F]"
+	pattern_prompt.add_theme_font_size_override("font_size", 17)
+	pattern_prompt.custom_minimum_size.y = 48
+	pattern_prompt.visible = false
+	pattern_prompt.pressed.connect(_inspect_pattern)
+	prompt_layer.add_child(pattern_prompt)
 	mobile_controls = MobileControls.new()
 	mobile_controls.move_pressed.connect(_on_mobile_move)
 	mobile_controls.action_pressed.connect(_on_mobile_action)
@@ -118,6 +138,9 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if third_chapter != null: return
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		held_inputs.clear()
+		if pattern_panel and pattern_panel.visible: pattern_panel.suspend()
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and game != null and game.is_playing():
 		game.toggle_pause()
 		_request_redraw()
@@ -150,7 +173,7 @@ func _request_redraw() -> void:
 
 func _on_mobile_move(dir: int) -> void:
 	if third_chapter != null: return
-	if _story_open(): return
+	if _modal_open() or _input_guarded(): return
 	if game.is_difficulty_select():
 		if dir == MazeGenerator.N:
 			game.cycle_difficulty(-1)
@@ -176,16 +199,38 @@ func _refresh_layout() -> void:
 	PlatformService.refresh(vp)
 	var touch := PlatformService.use_mobile_ui or DisplayServer.is_touchscreen_available() or PlatformService.is_portrait_viewport(vp)
 	current_layout = UILayoutDirector.compute(vp, touch)
+	if mogao_journey and mogao_journey.encounter_focus(player.pos) and current_layout.is_portrait() and current_layout.maze_rect.size.y < 230:
+		# Reclaim blank HUD space and the nonessential log strip only at the safe gate.
+		# Keep the existing D-pad sizes and inventory chips intact.
+		var hud_height := 112.0
+		current_layout.hud_rect.size.y = hud_height
+		current_layout.maze_rect = Rect2(0, hud_height, vp.x, current_layout.controls_rect.position.y - hud_height)
+		current_layout.log_rect = Rect2()
 	if mobile_controls:
 		mobile_controls.apply_layout(current_layout)
-		mobile_controls.visible = third_chapter == null and not game.is_difficulty_select() and not show_new_journey_confirm
+		mobile_controls.visible = third_chapter == null and not game.is_difficulty_select() and not show_new_journey_confirm and not _pattern_open() and not _gate_revealing()
+	if pattern_prompt:
+		var resume_reveal := _gate_revealing() and game.is_paused()
+		pattern_prompt.visible = resume_reveal or (mogao_journey != null and game.can_move() and not _modal_open() and mogao_journey.can_inspect(maze, player.pos))
+		pattern_prompt.text = "点击继续" if resume_reveal else ("查看纹样" if touch else "查看纹样 [F]")
+		var area := current_layout.maze_rect
+		pattern_prompt.size = Vector2(minf(180, maxf(0, area.size.x - 16)), 48)
+		pattern_prompt.position = Vector2(area.get_center().x - pattern_prompt.size.x / 2, area.end.y - 78)
+		if not current_layout.is_portrait() and not current_layout.is_side_hud():
+			pattern_prompt.position.x = area.end.x - pattern_prompt.size.x - 8
 
 
 func _input(event: InputEvent) -> void:
 	if third_chapter != null: return
-	if _story_open(): return
+	_track_held_input(event)
+	if _modal_open(): return
+	if _input_guarded():
+		get_viewport().set_input_as_handled()
+		return
 	if game.is_difficulty_select():
 		return
+	if pattern_prompt and pattern_prompt.visible and (event is InputEventScreenTouch or event is InputEventMouseButton):
+		if pattern_prompt.get_global_rect().has_point(event.position): return
 	if not current_layout.show_touch_controls:
 		return
 	if mobile_controls.try_handle_input(event):
@@ -193,7 +238,7 @@ func _input(event: InputEvent) -> void:
 
 func _on_mobile_action(action: String) -> void:
 	if third_chapter != null: return
-	if _story_open(): return
+	if _modal_open() or _input_guarded(): return
 	if not game.can_move() and action in ["use_item", "cycle_item"]:
 		return
 	match action:
@@ -232,6 +277,10 @@ func _new_game(level_idx: int = -1) -> void:
 	if journey_card: journey_card.visible = false
 	advance_after_story = false
 	first_journey = null
+	mogao_journey = null
+	if pattern_panel: pattern_panel.visible = false
+	held_inputs.clear()
+	modal_release_guard = false
 	if level_idx >= 0:
 		game.current_level_index = level_idx
 	if current_level_index == 2:
@@ -254,6 +303,9 @@ func _new_game(level_idx: int = -1) -> void:
 	if current_level_index == 0:
 		first_journey = FirstJourney.new()
 		first_journey.build(maze)
+	elif current_level_index == 1:
+		mogao_journey = MogaoJourney.new()
+		mogao_journey.build(maze)
 	else:
 		maze.generate(-1, waypoint_count)
 
@@ -281,10 +333,13 @@ func _new_game(level_idx: int = -1) -> void:
 		monsters = EntitySpawner.spawn_monsters(
 			self, maze, maze_width, maze_height,
 			level_monster_density, level_monster_scale, _on_monster_defeated,
+			mogao_journey.spawn_exclusions if mogao_journey else {},
 		)
 		items = EntitySpawner.spawn_items(
 			self, maze, maze_width, maze_height, monsters, level_key_count,
 			[str(level.get("family_key", "family_1"))],
+			mogao_journey.spawn_exclusions if mogao_journey else {},
+			MogaoJourney.FAMILY if mogao_journey else Vector2i(-1, -1),
 		)
 	_mark_visited(player.pos)
 	current_terrain_name = maze.get_terrain_name(player.pos.x, player.pos.y)
@@ -301,10 +356,68 @@ func _new_game(level_idx: int = -1) -> void:
 	SaveManager.save_progress(current_level_index, selected_difficulty, player.level, player.xp)
 	if first_journey:
 		_show_story({"title": "第一章 · 古道上的足迹", "body": "风停了，妈妈和两个孩子还没有消息。\n先沿着脚印寻找妈妈，再到东南的营地会合。路口有路牌，不必走遍所有岔路。\n读提示时战斗暂停；关闭提示后继续。", "button": "出发，寻找妈妈"})
+	elif mogao_journey:
+		_show_story({"title": "第二章 · 莫高窟", "body": "窟前的风小了些，哥哥的脚印伸向栈道深处。\n前面有暗廊，也有紧闭的近路门。拨正护纹木匣可以抄近路，不解机关也能继续走。\n先找到哥哥，再一起离开。", "button": "沿栈道寻找哥哥"})
 	_request_redraw()
 
 func _story_open() -> bool:
 	return journey_card != null and journey_card.visible
+
+func _pattern_open() -> bool:
+	return pattern_panel != null and pattern_panel.visible
+
+func _modal_open() -> bool:
+	return _story_open() or _pattern_open() or _gate_revealing()
+
+func _gate_revealing() -> bool:
+	return mogao_journey != null and mogao_journey.revealing()
+
+func _input_guarded() -> bool:
+	return modal_release_guard or (modal_closed_frame >= 0 and Engine.get_process_frames() <= modal_closed_frame + 1)
+
+func _track_held_input(event: InputEvent) -> void:
+	if event.device == InputEvent.DEVICE_ID_EMULATION: return
+	var token := ""
+	var pressed := false
+	if event is InputEventKey:
+		token = "key:%d" % event.keycode
+		pressed = event.pressed
+	elif event is InputEventScreenTouch:
+		token = "touch:%d" % event.index
+		pressed = event.pressed
+	elif event is InputEventMouseButton:
+		if event.button_index not in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]: return
+		token = "mouse:%d" % event.button_index
+		pressed = event.pressed
+	if token.is_empty(): return
+	if pressed: held_inputs[token] = true
+	else: held_inputs.erase(token)
+	if held_inputs.is_empty(): modal_release_guard = false
+
+func _inspect_pattern() -> void:
+	if _gate_revealing() and game.is_paused():
+		game.toggle_pause()
+		_request_redraw()
+		return
+	if not mogao_journey or not game.can_move() or _modal_open() or _input_guarded(): return
+	if not mogao_journey.can_inspect(maze, player.pos): return
+	mobile_controls.maze_touch_active = false
+	pattern_panel.open(mogao_journey.puzzle)
+	_refresh_layout()
+
+func _on_pattern_closed() -> void:
+	mobile_controls.maze_touch_active = false
+	modal_release_guard = not held_inputs.is_empty()
+	modal_closed_frame = Engine.get_process_frames()
+	if mogao_journey and mogao_journey.begin_reveal():
+		AudioManager.play_gate_open()
+	# Returning from a browser focus loss keeps the existing explicit pause intact.
+	_refresh_layout()
+	_request_redraw()
+
+func _on_pattern_unlocked() -> void:
+	if mogao_journey and mogao_journey.open_gate(maze):
+		_prime_monster_intents()
 
 func _close_third_chapter() -> void:
 	if third_chapter == null: return
@@ -351,10 +464,14 @@ func _on_story_dismissed() -> void:
 	_request_redraw()
 
 func _on_level_completed() -> void:
+	if mogao_journey:
+		advance_after_story = true
+		_show_story({"title": "平安走出莫高窟", "body": "你们平安走出窟前栈道。哥哥将沿安全路线与妈妈会合。\n还有弟弟。三危山的风里，或许能听见他的声音。", "button": "继续 · 前往三危山"})
+		return
 	if not first_journey: return
 	advance_after_story = true
 	var discovery := "还发现了石窟壁画和补给。" if first_journey.mural_found else "石窟的秘密，可以留待下次探索。"
-	_show_story({"title": "与妈妈平安会合", "body": "你们沿着古道来到营地，终于能安心歇一口气。\n这次走了 %d 步，%s\n妈妈先留在安全的营地。下一站：无人区，寻找哥哥。" % [move_count, discovery], "button": "继续 · 寻找哥哥"})
+	_show_story({"title": "与妈妈平安会合", "body": "你们沿着古道来到营地，终于能安心歇一口气。\n这次走了 %d 步，%s\n妈妈先留在安全的营地。下一站：莫高窟，寻找哥哥。" % [move_count, discovery], "button": "继续 · 寻找哥哥"})
 
 func _show_tutorial_if_needed() -> void:
 	if first_journey: return
@@ -402,6 +519,8 @@ func _select_inventory_slot(index: int) -> void:
 	_request_redraw()
 
 func _get_guide_direction() -> int:
+	if mogao_journey and mogao_journey.guiding_to_gate() and not game_won and not game_over:
+		return PathGuide.next_direction(maze, player.pos, MogaoJourney.GATE)
 	if maze == null or game_won or game_over or not guide_assist_active:
 		return -1
 	var target := PathGuide.nearest_target(
@@ -425,6 +544,8 @@ func _pick_up_item(item: ItemEntity) -> void:
 		guide_assist_active = false
 		if first_journey:
 			_show_story(first_journey.rescue(maze, player))
+		elif mogao_journey:
+			_show_story(mogao_journey.rescue())
 		key_tracker.add_key()
 		_add_log("找到 %s (%s)" % [item.display_name, key_tracker.get_progress()])
 		if not first_family_tip_shown and not first_journey:
@@ -553,9 +674,21 @@ func _add_log(msg: String) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if third_chapter != null: return
+	if _gate_revealing():
+		# A focus-loss pause must remain resumable even while the reveal is frozen.
+		if game.is_paused() and event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_P, KEY_ESCAPE, KEY_ENTER]: game.toggle_pause()
+		get_viewport().set_input_as_handled()
+		return
+	if _pattern_open() or _input_guarded():
+		get_viewport().set_input_as_handled()
+		return
 	if _story_open():
 		if event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ENTER, KEY_SPACE, KEY_ESCAPE]:
 			journey_card.close()
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
+		_inspect_pattern()
 		get_viewport().set_input_as_handled()
 		return
 	var action := input_handler.handle(event, _input_context())
@@ -581,7 +714,7 @@ func _input_context() -> Dictionary:
 
 func _apply_game_action(action: GameAction) -> void:
 	if third_chapter != null: return
-	if _story_open(): return
+	if _modal_open() or _input_guarded(): return
 	match action.type:
 		GameAction.Type.CONFIRM:
 			if show_new_journey_confirm:
@@ -718,6 +851,9 @@ func _mark_visited(pos: Vector2i) -> void:
 	visited[pos] = true
 	if first_journey:
 		_show_story(first_journey.enter(pos, maze, player))
+	elif mogao_journey:
+		_show_story(mogao_journey.enter(pos))
+	if first_journey or mogao_journey:
 		for landmark_pos in maze.landmarks:
 			if _is_revealed(landmark_pos): maze.landmarks[landmark_pos]["discovered"] = true
 
@@ -754,6 +890,13 @@ func _get_buff_display() -> String:
 
 func _process(delta: float) -> void:
 	if third_chapter != null: return
+	var was_revealing := _gate_revealing()
+	if was_revealing and game.can_move():
+		mogao_journey.tick_reveal(maze, delta)
+		if not _gate_revealing():
+			modal_release_guard = not held_inputs.is_empty()
+			modal_closed_frame = Engine.get_process_frames()
+		_request_redraw()
 	var vp := get_viewport_rect().size
 	PlatformService.refresh(vp)
 	_refresh_layout()
@@ -775,7 +918,7 @@ func _process(delta: float) -> void:
 		exit_blink_timer = 0.0
 		exit_visible = !exit_visible
 		dirty = true
-	if game.can_move() and not _story_open():
+	if game.can_move() and not _modal_open() and not was_revealing:
 		attack_cooldown = maxf(0.0, attack_cooldown - delta)
 		var monster_delta := delta
 		if maze != null:
@@ -842,7 +985,7 @@ func _draw_context() -> Dictionary:
 		"exit_visible": exit_visible,
 		"game_won": game_won,
 		"game_over": game_over,
-		"paused": game.is_paused(),
+		"paused": game.is_paused() and not _pattern_open(),
 		"visited": visited,
 		"is_revealed": _is_revealed,
 		"levels_data": levels_data,
@@ -857,8 +1000,11 @@ func _draw_context() -> Dictionary:
 		"selected_slot": selected_inventory_slot,
 		"guide_dir": _get_guide_direction(),
 		"low_hp_pulse": low_hp_pulse,
-		"journey_objective": first_journey.objective() if first_journey else "",
-		"first_journey": first_journey != null,
+		"journey_objective": first_journey.objective() if first_journey else (mogao_journey.objective() if mogao_journey else ""),
+		"first_journey": first_journey != null or mogao_journey != null,
+		"mogao_focus": mogao_journey != null and mogao_journey.encounter_focus(player.pos),
+		"gate_revealing": _gate_revealing(),
+		"gate_guiding": mogao_journey != null and mogao_journey.guiding_to_gate(),
 	}
 
 
@@ -866,6 +1012,7 @@ func _get_terrain_display() -> String:
 	if maze == null:
 		return current_terrain_name
 	var terrain_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(player.pos.x, player.pos.y)]
+	if mogao_journey: return mogao_journey.terrain_name(terrain_key)
 	var effect: Dictionary = level_terrain_effects.get(terrain_key, {})
 	var description := str(effect.get("description", ""))
 	return current_terrain_name if description.is_empty() else "%s·%s" % [current_terrain_name, description]

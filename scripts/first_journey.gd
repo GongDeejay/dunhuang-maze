@@ -107,7 +107,7 @@ func rescue(maze: MazeGenerator, player: PlayerController) -> Dictionary:
 	player.heal(4)
 	_carve(maze, [FAMILY, Vector2i(16, 4), CAMP], MazeGenerator.Terrain.ANCIENT_ROAD)
 	maze.landmarks[Vector2i(16, 4)] = {"symbol": "归", "kind": "shortcut"}
-	return {"title": "终于找到妈妈了", "body": "“你没事，太好了！孩子们往无人区去了。”\n妈妈帮你包扎，恢复 4 点体力，并指出右侧通往营地的旧路。\n捷径已经打开。先一起到营地，再去找孩子们。", "button": "一起回营地"}
+	return {"title": "终于找到妈妈了", "body": "“你没事，太好了！孩子们往莫高窟那边去了。”\n妈妈帮你包扎，恢复 4 点体力，并指出右侧通往营地的旧路。\n捷径已经打开。先一起到营地，再去找孩子们。", "button": "一起回营地"}
 
 func objective() -> String:
 	return "与妈妈前往营地" if rescued else "沿足迹寻找妈妈"

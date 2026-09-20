@@ -13,6 +13,7 @@ static func spawn_monsters(
 	density: float,
 	scale: float,
 	on_defeated: Callable,
+	exclusions: Dictionary = {},
 ) -> Array[MonsterEntity]:
 	for m in parent.get_children():
 		if m is MonsterEntity and is_instance_valid(m):
@@ -23,7 +24,11 @@ static func spawn_monsters(
 		Vector2i(0, 0): true,
 		Vector2i(maze_width - 1, maze_height - 1): true,
 	}
-	var target_count := int(maze_width * maze_height * density)
+	var reachable := maze.get_reachable_cells() if not exclusions.is_empty() else {}
+	var allowed: Dictionary = {}
+	for pos in reachable:
+		if not exclusions.has(pos): allowed[pos] = true
+	var target_count := int((allowed.size() if not exclusions.is_empty() else maze_width * maze_height) * density)
 	var spawned := 0
 	var attempts := 0
 	var max_attempts := target_count * 20
@@ -31,7 +36,7 @@ static func spawn_monsters(
 	while spawned < target_count and attempts < max_attempts:
 		attempts += 1
 		var pos := Vector2i(randi_range(0, maze_width - 1), randi_range(0, maze_height - 1))
-		if occupied.has(pos):
+		if occupied.has(pos) or (not exclusions.is_empty() and not allowed.has(pos)):
 			continue
 		occupied[pos] = true
 
@@ -39,6 +44,7 @@ static func spawn_monsters(
 		var monster := MonsterEntity.new()
 		var diff := DataLoader.get_difficulty()
 		monster.setup(terrain_key, pos, scale * diff.get("monster_hp_multiplier", 1.0))
+		if not exclusions.is_empty(): monster.patrol_cells = allowed
 		monster.atk = int(monster.atk * diff.get("monster_atk_multiplier", 1.0))
 		var move_speed: float = DataLoader.player_stats.get("move_speed", 1.0)
 		monster.move_interval /= move_speed
@@ -58,6 +64,8 @@ static func spawn_items(
 	monsters: Array[MonsterEntity],
 	key_count: int,
 	family_keys: Array = FAMILY_KEYS,
+	exclusions: Dictionary = {},
+	fixed_family: Vector2i = Vector2i(-1, -1),
 ) -> Array[ItemEntity]:
 	for child in parent.get_children():
 		if child is ItemEntity and is_instance_valid(child):
@@ -71,6 +79,18 @@ static func spawn_items(
 	for m in monsters:
 		if is_instance_valid(m):
 			occupied[m.pos] = true
+	for pos in exclusions: occupied[pos] = true
+	var reachable := maze.get_reachable_cells()
+	if not exclusions.is_empty():
+		for y in maze_height:
+			for x in maze_width:
+				if not reachable.has(Vector2i(x, y)): occupied[Vector2i(x, y)] = true
+	if fixed_family.x >= 0:
+		occupied[fixed_family] = true
+		var family_item := ItemEntity.new()
+		family_item.setup(str(family_keys[0]), fixed_family)
+		parent.add_child(family_item)
+		items.append(family_item)
 
 	var diff := DataLoader.get_difficulty()
 	var pottery_ratio: float = diff.get("pottery_ratio", 0.70)
@@ -99,8 +119,7 @@ static func spawn_items(
 		items.append(item)
 		spawned += 1
 
-	var reachable := maze.get_reachable_cells()
-	for i in key_count:
+	for i in (0 if fixed_family.x >= 0 else key_count):
 		var pos := Vector2i(randi_range(0, maze_width - 1), randi_range(0, maze_height - 1))
 		var key_attempts := 0
 		while (occupied.has(pos) or not reachable.has(pos)) and key_attempts < 100:

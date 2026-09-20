@@ -22,6 +22,7 @@ func draw_follow_in_rect(
 	is_revealed: Callable,
 	guide_dir: int = -1,
 	ui_scale: float = 1.0,
+	focus: Rect2i = Rect2i(),
 ) -> void:
 	if maze_rect.size.x <= 1.0 or maze_rect.size.y <= 1.0:
 		return
@@ -37,7 +38,11 @@ func draw_follow_in_rect(
 	var target_cell := clampf(minf(area_w / col_div, area_h / row_div), 48.0 * ui_scale * density, 120.0 * density)
 	var view_cols := maxi(5, int(area_w / target_cell))
 	var view_rows := maxi(5, int(area_h / target_cell))
+	if focus.has_area():
+		view_cols = focus.size.x
+		view_rows = focus.size.y
 	var cell_sz := minf(area_w / float(view_cols), area_h / float(view_rows))
+	if focus.has_area(): origin += (maze_rect.size - Vector2(view_cols, view_rows) * cell_sz) / 2
 
 	var center_x := player.pos.x
 	var center_y := player.pos.y
@@ -45,6 +50,9 @@ func draw_follow_in_rect(
 	var half_rows := view_rows / 2
 	var start_x := clampi(center_x - half_cols, 0, maxi(0, maze_width - view_cols))
 	var start_y := clampi(center_y - half_rows, 0, maxi(0, maze_height - view_rows))
+	if focus.has_area():
+		start_x = focus.position.x
+		start_y = focus.position.y
 	var wall_w := maxf(cell_sz * 0.08, 3.0)
 	var draw_scale := cell_sz / float(maze_renderer.cell_size)
 
@@ -63,13 +71,15 @@ func draw_follow_in_rect(
 
 			var t_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(gx, gy)]
 			var cfg := DataLoader.get_terrain_config(t_key)
-			var floor_color := DataLoader.color_from_array(cfg.get("floor_color", [0.8, 0.8, 0.8]))
+			var floor_color := maze_renderer.get_floor_color(maze, gx, gy)
 			if not is_revealed.call(Vector2i(gx, gy)) and not visited.get(Vector2i(gx, gy), false):
 				floor_color = Color(0.15, 0.12, 0.10)
 
 			canvas.draw_rect(Rect2(screen_x, screen_y, cell_sz, cell_sz), floor_color)
 			var terrain_sprite := maze_renderer.get_terrain_sprite(maze, gx, gy)
-			if terrain_sprite and is_revealed.call(Vector2i(gx, gy)):
+			if maze.theme_key == "mogao" and is_revealed.call(Vector2i(gx, gy)):
+				maze_renderer.draw_mogao_floor(canvas, maze, Vector2i(gx, gy), Vector2(screen_x, screen_y), cell_sz)
+			elif terrain_sprite and is_revealed.call(Vector2i(gx, gy)):
 				canvas.draw_texture_rect(terrain_sprite, Rect2(screen_x, screen_y, cell_sz, cell_sz), false)
 
 			var cell: int = maze.grid[gy][gx]

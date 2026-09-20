@@ -13,6 +13,7 @@ func _ready() -> void:
 	test_json_loading()
 	test_maze_generation()
 	test_first_journey()
+	preload("res://tests/test_mogao_journey.gd").run(self)
 	await preload("res://tests/test_third_chapter.gd").run(self)
 	test_terrain_system()
 	test_monster_data()
@@ -175,7 +176,7 @@ func test_first_journey():
 	assert_true(controller._story_open() and controller.advance_after_story, "completion offers a readable continue card")
 	controller.journey_card.close()
 	assert_eq(controller.current_level_index, 1, "completion button advances to second chapter")
-	assert_true(controller.first_journey == null and not controller._story_open(), "later level restores original gameplay flow")
+	assert_true(controller.first_journey == null and controller.mogao_journey != null and controller._story_open(), "Mogao chapter has its own opening story")
 	assert_eq(controller.maze_width, 30, "second level map size unchanged")
 	var family_keys: Array[String] = []
 	for item in controller.items:
@@ -208,7 +209,7 @@ func test_level_data():
 	var levels = dl.get_level_data()
 	assert_eq(levels.size(), 3, "3 levels")
 	assert_eq(levels[0].get("name", ""), "汉唐古道", "level 1 name")
-	assert_eq(levels[1].get("name", ""), "无人区", "level 2 name")
+	assert_eq(levels[1].get("name", ""), "莫高窟", "level 2 name")
 	assert_eq(levels[2].get("name", ""), "三危山", "level 3 name")
 	assert_eq(levels[0].get("maze_width", 0), 17, "level 1 compact authored width")
 	assert_eq(levels[1].get("maze_width", 0), 30, "level 2 width")

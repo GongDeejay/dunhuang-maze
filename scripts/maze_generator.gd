@@ -32,6 +32,7 @@ var grid: Array = []
 var terrain: Array = []
 var waypoints: Array = []
 var landmarks: Dictionary = {}
+var theme_key := ""
 
 func _init(w: int, h: int):
 	width = w

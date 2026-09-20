@@ -61,7 +61,7 @@ try {
         seen.add(s.card.title);
       }
       await tap(await point(s.card));
-      await page.waitForFunction(() => !window.firstJourneyProbe.card.open);
+      await page.waitForFunction(level => !window.firstJourneyProbe.card.open || window.firstJourneyProbe.level !== level, s.level);
     }
     // Card reading freezes real combat and ignores direction input.
     const before = await state();

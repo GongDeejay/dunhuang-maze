@@ -96,6 +96,10 @@ func play_pickup() -> void:
 	await get_tree().create_timer(0.06).timeout
 	_play_tone(784, 0.12, 0.35, 0)
 
+func play_gate_open() -> void:
+	# Short wooden latch sound, synthesized locally: no download or late callbacks.
+	_play_tone(145, 0.09, 0.22, 2)
+
 func play_level_start() -> void:
 	if _play_sample("level_start"):
 		return

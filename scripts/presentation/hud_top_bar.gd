@@ -192,6 +192,7 @@ func _draw_inventory_chips(
 	compact: bool,
 	fs_small: int,
 	portrait: bool,
+	y_override: float = -1.0,
 ) -> void:
 	var items := inventory.get_item_list()
 	if items.is_empty():
@@ -203,6 +204,7 @@ func _draw_inventory_chips(
 	var total_w := items.size() * chip_w + maxi(items.size() - 1, 0) * gap
 	var start_x := rect.position.x + rect.size.x - 10.0 * density - total_w
 	var chip_y := rect.position.y + (118.0 * density if portrait else (18.0 if compact else rect.size.y * 0.24))
+	if y_override >= 0: chip_y = rect.position.y + y_override
 	for i in items.size():
 		var chip_rect := Rect2(start_x + i * (chip_w + gap), chip_y, chip_w, chip_h)
 		inventory_chip_rects.append(chip_rect)

@@ -15,11 +15,12 @@ import tempfile
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("chapter", choices=["first", "third"])
+    parser.add_argument("chapter", choices=["first", "third", "mogao"])
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    scene = "first_journey_probe" if args.chapter == "first" else "third_chapter_probe"
-    output = root / "artifacts" / ("first-journey-probe-export" if args.chapter == "first" else "third-probe-export")
+    scenes = {"first": "first_journey_probe", "third": "third_chapter_probe", "mogao": "mogao_probe"}
+    scene = scenes[args.chapter]
+    output = root / "artifacts" / ("first-journey-probe-export" if args.chapter == "first" else f"{args.chapter}-probe-export")
     output.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, BECKETT_ENABLE="0")
     godot = os.environ.get("GODOT", "godot")
@@ -29,10 +30,12 @@ def main():
             shutil.copytree(root / folder, project / folder, ignore=shutil.ignore_patterns("__pycache__"))
         config = (root / "project.godot").read_text()
         config = re.sub(r'^run/main_scene=.*$', f'run/main_scene="res://tests/{scene}.tscn"', config, flags=re.M)
+        if args.chapter == "mogao":
+            config = re.sub(r'^config/name=.*$', 'config/name="Dunhuang Mogao Slice Preview"', config, flags=re.M)
         (project / "project.godot").write_text(config)
-        excluded_probe = "third_chapter_*" if args.chapter == "first" else "first_journey_*"
+        excluded_probes = ", ".join(f"tests/{name}*" for key, name in scenes.items() if key != args.chapter)
         presets = (root / "export_presets.cfg").read_text().replace(
-            "tests/**", f"tests/test_*, tests/mobile_input_*, tests/{excluded_probe}")
+            "tests/**", f"tests/test_*, tests/mobile_input_*, {excluded_probes}")
         (project / "export_presets.cfg").write_text(presets)
         subprocess.run([godot, "--headless", "--path", str(project), "--import", "--quit"], check=True, env=env)
         subprocess.run([godot, "--headless", "--path", str(project), "--export-release", "Web", str(output / "index.html")], check=True, env=env)

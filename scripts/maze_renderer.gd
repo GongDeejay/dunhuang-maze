@@ -184,17 +184,19 @@ func draw_cells(
 
 			var t_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(x, y)]
 			var cfg := DataLoader.get_terrain_config(t_key)
-			var floor_color := DataLoader.color_from_array(cfg.get("floor_color", [0.8, 0.8, 0.8]))
+			var floor_color := get_floor_color(maze, x, y)
 			if not is_revealed.call(pos):
 				floor_color = floor_color.darkened(0.4)
 
 			canvas.draw_rect(Rect2(cell_pos + Vector2(wt, wt), Vector2(cs - wt * 2, cs - wt * 2)), floor_color)
 
 			var terrain_sprite := get_terrain_sprite(maze, x, y)
-			if terrain_sprite and is_revealed.call(pos):
+			if maze.theme_key == "mogao" and is_revealed.call(pos):
+				draw_mogao_floor(canvas, maze, pos, cell_pos, cs)
+			elif terrain_sprite and is_revealed.call(pos):
 				canvas.draw_texture_rect(terrain_sprite, Rect2(cell_pos + Vector2(wt, wt), Vector2(cs - wt * 2, cs - wt * 2)), false)
 
-			var detail_sym: String = cfg.get("detail_symbol", "")
+			var detail_sym: String = "" if maze.theme_key == "mogao" else cfg.get("detail_symbol", "")
 			if detail_sym != "":
 				var detail_color := _terrain_symbol_color(t_key, floor_color)
 				canvas.draw_string(
@@ -203,6 +205,34 @@ func draw_cells(
 				)
 
 			_draw_walls(canvas, maze.grid[y][x], cell_pos, cs, wt, x, y, maze_width, maze_height)
+
+func get_floor_color(maze: MazeGenerator, x: int, y: int) -> Color:
+	var key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(x, y)]
+	if maze.theme_key == "mogao":
+		return {"sand": Color("c2986a"), "desert": Color("c4854f"), "grotto": Color("725441"), "oasis": Color("719d94"), "ancient_road": Color("aa8060")}[key]
+	return DataLoader.color_from_array(DataLoader.get_terrain_config(key).get("floor_color", [0.8, 0.8, 0.8]))
+
+func draw_mogao_floor(canvas: CanvasItem, maze: MazeGenerator, pos: Vector2i, origin: Vector2, cs: float) -> void:
+	if maze.grid[pos.y][pos.x] == 0:
+		canvas.draw_rect(Rect2(origin, Vector2.ONE * cs), Color("604b3b"))
+		canvas.draw_line(origin + Vector2(0, cs * 0.5), origin + Vector2(cs, cs * 0.5), Color("715744"), maxf(1, cs * 0.025))
+		return
+	var t := maze.get_terrain(pos.x, pos.y)
+	var light: float = maze.landmarks.get(pos, {}).get("light", 0.0)
+	if light > 0:
+		canvas.draw_rect(Rect2(origin + Vector2.ONE * cs * 0.06, Vector2.ONE * cs * 0.88), Color(0.98, 0.78, 0.4, light * 0.55))
+		for y in [0.12, 0.88]:
+			canvas.draw_line(origin + Vector2(0.05, y) * cs, origin + Vector2(0.95, y) * cs, Color(1.0, 0.87, 0.59, light), maxf(2, cs * 0.04), true)
+	if t == MazeGenerator.Terrain.ANCIENT_ROAD:
+		for line in range(1, 4):
+			canvas.draw_line(origin + Vector2(cs * 0.12, cs * line / 4.0), origin + Vector2(cs * 0.88, cs * line / 4.0), Color("74533c"), maxf(1, cs * 0.035))
+	elif t == MazeGenerator.Terrain.GROTTO:
+		var c := origin + Vector2(cs * 0.5, cs * 0.46)
+		canvas.draw_arc(c, cs * 0.27, PI, TAU, 12, Color("c2a078"), maxf(1, cs * 0.045), true)
+		for dx in [-0.27, 0.27]:
+			canvas.draw_line(c + Vector2(dx * cs, 0), c + Vector2(dx * cs, cs * 0.3), Color("c2a078"), maxf(1, cs * 0.045))
+	elif t == MazeGenerator.Terrain.OASIS:
+		canvas.draw_arc(origin + Vector2.ONE * cs / 2, cs * 0.27, 0, TAU, 20, Color("c3e0cf"), maxf(1, cs * 0.04), true)
 
 func draw_pillars(
 	canvas: CanvasItem,
@@ -248,14 +278,47 @@ func draw_exit(
 	)
 
 func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs: float) -> void:
+	if landmark.kind == "pattern_gate":
+		var opened: float = landmark.get("visual_open", 0.0)
+		var wood := Color("ad7947")
+		# Two shrinking leaves expose the real traversable tile between the posts.
+		for x in [0.08, 0.86]:
+			canvas.draw_rect(Rect2(origin + Vector2(x, 0.1) * cs, Vector2(0.06, 0.8) * cs), Color("e1bb78"))
+		canvas.draw_rect(Rect2(origin + Vector2(0.06, 0.08) * cs, Vector2(0.88, 0.09) * cs), Color("d0a361"))
+		var width := 0.36 * (1.0 - opened)
+		for x in [0.14, 0.86 - width]:
+			canvas.draw_rect(Rect2(origin + Vector2(x, 0.18) * cs, Vector2(width, 0.66) * cs), wood)
+			for y in [0.3, 0.68]:
+				canvas.draw_line(origin + Vector2(x, y) * cs, origin + Vector2(x + width, y) * cs, Color("644530"), maxf(1, cs * 0.04))
+		if opened < 0.6:
+			_draw_pattern_seal(canvas, origin + Vector2(0.5, 0.48) * cs, cs * 0.12, Color("9cdbd9"))
+		else:
+			canvas.draw_line(origin + Vector2(0.27, 0.54) * cs, origin + Vector2(0.74, 0.54) * cs, Color("f4d68c"), maxf(2, cs * 0.045), true)
+			canvas.draw_polyline(PackedVector2Array([origin + Vector2(0.59, 0.41) * cs, origin + Vector2(0.75, 0.54) * cs, origin + Vector2(0.59, 0.67) * cs]), Color("f4d68c"), maxf(2, cs * 0.045), true)
+		return
+	if landmark.kind == "scarf":
+		canvas.draw_line(origin + Vector2(0.65, 0.2) * cs, origin + Vector2(0.65, 0.87) * cs, Color("c5aa77"), maxf(2, cs * 0.08))
+		canvas.draw_colored_polygon(PackedVector2Array([origin + Vector2(0.25, 0.26) * cs, origin + Vector2(0.73, 0.22) * cs, origin + Vector2(0.7, 0.41) * cs, origin + Vector2(0.55, 0.43) * cs, origin + Vector2(0.55, 0.78) * cs, origin + Vector2(0.38, 0.69) * cs, origin + Vector2(0.4, 0.42) * cs, origin + Vector2(0.22, 0.46) * cs]), Color("71c9f0"))
+		canvas.draw_line(origin + Vector2(0.3, 0.31) * cs, origin + Vector2(0.65, 0.29) * cs, Color("d3f1ff"), maxf(1, cs * 0.04), true)
+		return
+	if landmark.kind == "pattern":
+		canvas.draw_rect(Rect2(origin + Vector2(0.13, 0.36) * cs, Vector2(0.74, 0.46) * cs), Color("9e713e"))
+		canvas.draw_rect(Rect2(origin + Vector2(0.13, 0.29) * cs, Vector2(0.74, 0.13) * cs), Color("dab779"))
+		_draw_pattern_seal(canvas, origin + Vector2(0.5, 0.56) * cs, cs * 0.13, Color("9cdbd9"))
+		return
 	var color := Color("d8b76b")
 	if landmark.kind == "spring": color = Color("79c5c4")
 	elif landmark.kind in ["camp", "shortcut"]: color = Color("8bbf7a")
+	elif landmark.kind == "pattern": color = Color("99d3d0")
+	elif landmark.kind == "pattern_gate": color = Color("8bbf7a") if landmark.get("open", false) else Color("e1ab77")
 	var badge := Rect2(origin + Vector2(cs * 0.18, cs * 0.18), Vector2.ONE * cs * 0.64)
 	canvas.draw_rect(badge, Color("30291e"))
 	canvas.draw_rect(badge, color, false, maxf(1, cs * 0.03))
 	canvas.draw_string(ThemeDB.fallback_font, origin + Vector2(0, cs * 0.68), landmark.symbol,
 		HORIZONTAL_ALIGNMENT_CENTER, int(cs), int(cs * 0.43), color)
+
+func _draw_pattern_seal(canvas: CanvasItem, center: Vector2, radius: float, color: Color) -> void:
+	canvas.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -radius), center + Vector2(radius, 0), center + Vector2(0, radius), center + Vector2(-radius, 0)]), color)
 
 func draw_items(
 	canvas: CanvasItem,

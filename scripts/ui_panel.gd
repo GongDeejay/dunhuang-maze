@@ -148,7 +148,9 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 			var cfg = DataLoader.terrain_data[t_key]
 			var c = DataLoader.color_from_array(cfg.get("floor_color", [0.5, 0.5, 0.5]))
 			owner.draw_rect(Rect2(lx, legend_y - 11, 10, 10), c)
-			owner.draw_string(ThemeDB.fallback_font, Vector2(lx + 14, legend_y), cfg.get("name", t_key), HORIZONTAL_ALIGNMENT_LEFT, -1, tiny_fs, text_secondary)
+			var legend_name: String = cfg.get("name", t_key)
+			if maze.theme_key == "mogao": legend_name = {"sand": "积沙", "desert": "风口", "grotto": "暗廊", "oasis": "水点", "ancient_road": "栈道"}.get(t_key, legend_name)
+			owner.draw_string(ThemeDB.fallback_font, Vector2(lx + 14, legend_y), legend_name, HORIZONTAL_ALIGNMENT_LEFT, -1, tiny_fs, text_secondary)
 		legend_y = y
 		for t_key in DataLoader.monster_data:
 			legend_y += line_h
