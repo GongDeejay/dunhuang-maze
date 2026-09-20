@@ -13,6 +13,7 @@ func _ready() -> void:
 	test_json_loading()
 	test_maze_generation()
 	test_first_journey()
+	await preload("res://tests/test_third_chapter.gd").run(self)
 	test_terrain_system()
 	test_monster_data()
 	test_level_data()

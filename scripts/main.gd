@@ -49,6 +49,7 @@ var attack_cooldown := 0.0
 var first_journey: FirstJourney
 var journey_card: JourneyCard
 var advance_after_story := false
+var third_chapter: ThirdChapter
 
 # Aliases for TurnResolver compatibility
 var move_count: int:
@@ -116,6 +117,7 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
+	if third_chapter != null: return
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and game != null and game.is_playing():
 		game.toggle_pause()
 		_request_redraw()
@@ -147,6 +149,7 @@ func _request_redraw() -> void:
 		mobile_controls.queue_redraw()
 
 func _on_mobile_move(dir: int) -> void:
+	if third_chapter != null: return
 	if _story_open(): return
 	if game.is_difficulty_select():
 		if dir == MazeGenerator.N:
@@ -175,10 +178,11 @@ func _refresh_layout() -> void:
 	current_layout = UILayoutDirector.compute(vp, touch)
 	if mobile_controls:
 		mobile_controls.apply_layout(current_layout)
-		mobile_controls.visible = not game.is_difficulty_select() and not show_new_journey_confirm
+		mobile_controls.visible = third_chapter == null and not game.is_difficulty_select() and not show_new_journey_confirm
 
 
 func _input(event: InputEvent) -> void:
+	if third_chapter != null: return
 	if _story_open(): return
 	if game.is_difficulty_select():
 		return
@@ -188,6 +192,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _on_mobile_action(action: String) -> void:
+	if third_chapter != null: return
 	if _story_open(): return
 	if not game.can_move() and action in ["use_item", "cycle_item"]:
 		return
@@ -222,12 +227,16 @@ func _ensure_data_loaded() -> void:
 		DataLoader.player_stats = {"max_hp": 20, "base_atk": 5, "reveal_radius": 3}
 
 func _new_game(level_idx: int = -1) -> void:
+	_close_third_chapter()
 	attack_cooldown = 0.0
 	if journey_card: journey_card.visible = false
 	advance_after_story = false
 	first_journey = null
 	if level_idx >= 0:
 		game.current_level_index = level_idx
+	if current_level_index == 2:
+		_start_third_chapter()
+		return
 
 	if levels_data.is_empty():
 		levels_data = [{"name": "未知", "maze_width": 20, "maze_height": 15, "monster_density": 0.12, "key_count": 1}]
@@ -296,6 +305,39 @@ func _new_game(level_idx: int = -1) -> void:
 
 func _story_open() -> bool:
 	return journey_card != null and journey_card.visible
+
+func _close_third_chapter() -> void:
+	if third_chapter == null: return
+	third_chapter.shutdown()
+	third_chapter.queue_free()
+	third_chapter = null
+
+func _start_third_chapter() -> void:
+	for child in get_children():
+		if child is MonsterEntity or child is ItemEntity: child.queue_free()
+	monsters.clear()
+	items.clear()
+	maze = null
+	game.start_game()
+	third_chapter = ThirdChapter.new()
+	third_chapter.difficulty = selected_difficulty
+	third_chapter.max_hp = int(18 * float(DataLoader.get_difficulty().get("hp_multiplier", 1.0)))
+	third_chapter.hp = third_chapter.max_hp
+	third_chapter.menu_requested.connect(func():
+		_close_third_chapter()
+		game.return_to_menu()
+		_request_redraw())
+	third_chapter.replay_requested.connect(func():
+		player.level = 1
+		player.xp = 0
+		_new_game(0))
+	third_chapter.completed.connect(func():
+		game.game_won = true
+		SaveManager.clear_save())
+	add_child(third_chapter)
+	SaveManager.save_progress(2, selected_difficulty, player.level, player.xp)
+	_refresh_layout()
+	queue_redraw()
 
 func _show_story(card: Dictionary) -> void:
 	if journey_card and not card.is_empty():
@@ -510,6 +552,7 @@ func _add_log(msg: String) -> void:
 	_request_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if third_chapter != null: return
 	if _story_open():
 		if event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ENTER, KEY_SPACE, KEY_ESCAPE]:
 			journey_card.close()
@@ -537,6 +580,7 @@ func _input_context() -> Dictionary:
 	}
 
 func _apply_game_action(action: GameAction) -> void:
+	if third_chapter != null: return
 	if _story_open(): return
 	match action.type:
 		GameAction.Type.CONFIRM:
@@ -709,6 +753,7 @@ func _get_buff_display() -> String:
 	return "Buff: " + " ".join(parts)
 
 func _process(delta: float) -> void:
+	if third_chapter != null: return
 	var vp := get_viewport_rect().size
 	PlatformService.refresh(vp)
 	_refresh_layout()
@@ -766,6 +811,7 @@ func _move_monsters(delta: float) -> bool:
 	return changed
 
 func _draw() -> void:
+	if third_chapter != null: return
 	if game.is_difficulty_select():
 		var save_hint := _get_continue_hint()
 		maze_renderer.draw_difficulty_select(self, get_viewport_rect().size, selected_difficulty, save_hint)
