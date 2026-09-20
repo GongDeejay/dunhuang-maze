@@ -19,6 +19,7 @@ var sensitivity: HSlider
 var sensitivity_label: Label
 var content_margin: MarginContainer
 var stick_center := Vector2.ZERO
+var stick_radius := 58.0
 var stick_vector := Vector2.ZERO
 var touch := false
 var danger := 0.0
@@ -121,14 +122,20 @@ func layout() -> void:
 		status.position.y = 78
 		objective.size.y = 30
 	stick_center = Vector2(78, size.y - 143 if not compact else size.y - 113)
+	stick_radius = 48.0 if size.x < 340 else 58.0
+	if size.x < 340: stick_center.x = 66
 	pause_button.position = Vector2(size.x - 180, size.y - 60)
 	pause_button.size = Vector2(76, 48)
 	menu_button.position = Vector2(size.x - 94, size.y - 60)
 	menu_button.size = Vector2(76, 48)
-	interact_button.position = Vector2(size.x - 190, size.y - 121)
-	interact_button.size = Vector2(172, 52)
-	hint.position = Vector2(18, size.y - (232 if touch and not compact else 180))
-	hint.size = Vector2(size.x - 36, 60)
+	var action_width := minf(172, size.x - stick_center.x - stick_radius - 30) if touch else 172.0
+	interact_button.position = Vector2(size.x - action_width - 18, size.y - 121)
+	interact_button.size = Vector2(action_width, 52)
+	hint.position = Vector2(18, 136 if touch else size.y - 180)
+	hint.size = Vector2(size.x - 36, 0)
+	if touch and compact:
+		hint.position = Vector2(160, maxf(116, size.y - 170))
+		hint.size = Vector2(size.x - 370, 0)
 	overlay.size = size
 	var width := minf(620, size.x)
 	content_margin.position = Vector2((size.x - width) * 0.5, 0)
@@ -151,24 +158,26 @@ func show_card(card_title: String, text: String, first: String, second: String =
 	sensitivity.visible = settings
 	sensitivity_label.visible = settings
 	overlay.show()
+	for control in [title, objective, status, hint, interact_button, pause_button, menu_button]: control.hide()
 	primary.grab_focus()
 	queue_redraw()
 
 func close_card() -> void:
 	overlay.hide()
+	for control in [title, objective, status, hint, interact_button, pause_button, menu_button]: control.show()
 	primary.release_focus()
 	secondary.release_focus()
 	queue_redraw()
 
 func _draw() -> void:
-	draw_rect(Rect2(0, 0, size.x, 126 if size.y >= 460 else 108), Color(0.09, 0.07, 0.05, 0.8))
 	if overlay != null and overlay.visible: return
+	draw_rect(Rect2(0, 0, size.x, 126 if size.y >= 460 else 108), Color(0.09, 0.07, 0.05, 0.8))
 	var center := size * 0.5
 	draw_circle(center, 2.5, Color(1, 0.95, 0.8, 0.85))
 	if danger > 0:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.8, 0.2, 0.05, danger * 0.13), false, 10)
 	if touch:
-		draw_circle(stick_center, 58, Color(0.15, 0.11, 0.07, 0.65))
-		draw_arc(stick_center, 58, 0, TAU, 48, Color("e7c28b"), 2, true)
+		draw_circle(stick_center, stick_radius, Color(0.15, 0.11, 0.07, 0.65))
+		draw_arc(stick_center, stick_radius, 0, TAU, 48, Color("e7c28b"), 2, true)
 		draw_circle(stick_center + stick_vector * 36, 22, Color(0.9, 0.77, 0.55, 0.8))
 		draw_string(ThemeDB.fallback_font, stick_center + Vector2(-18, 82), "移动", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("fff1ce"))

@@ -75,6 +75,7 @@ func _ready() -> void:
 	_make_wind()
 	_old_scale = get_viewport().scaling_3d_scale
 	_update_render_size()
+	message = "沿脚印前进；右侧滑动观察" if hud.touch else "沿脚印前进；点击场景后移动鼠标观察"
 	hud.show_card("第三章 · 风中的归路", "弟弟还在三危山。妈妈和哥哥会在远处的塔下等你们。\n\n电脑：WASD 行走，拖动鼠标或点击场景后移动鼠标观察，E 互动。\n手机：左侧摇杆行走，右侧滑动观察。\n\n不需要跳跃。暂停中可以调整观察灵敏度。", "走进沙谷")
 	_refresh_hud()
 
@@ -144,6 +145,7 @@ func _update_render_size() -> void:
 	var target := 960.0 if hud.touch else 1440.0
 	get_viewport().scaling_3d_scale = clampf(target / maxf(pixels.x, pixels.y), 0.25, 1.0)
 	reset_input()
+	if wind_audio and mode == "playing": wind_audio.stream_paused = false
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
@@ -167,7 +169,7 @@ func _input(event: InputEvent) -> void:
 				stick = Vector2.ZERO
 			if event.index == look_touch: look_touch = -1
 		elif mode == "playing" and not hud.ui_hit(event.position):
-			if event.position.distance_to(hud.stick_center) <= 75 and move_touch < 0:
+			if event.position.distance_to(hud.stick_center) <= hud.stick_radius + 12 and move_touch < 0:
 				move_touch = event.index
 				stick = ((event.position - hud.stick_center) / 48).limit_length()
 			elif event.position.x > hud.size.x * 0.45 and look_touch < 0:
@@ -274,7 +276,7 @@ func interact() -> void:
 			hp = max_hp
 			mode = "rescue"
 			reset_input()
-			hud.show_card("终于找到弟弟了", "弟弟：“爸爸，我听见你了。”\n\n爸爸：“走，我们回家。”\n\n右侧旧路已经打开。沿着高塔的方向回营地，妈妈和哥哥在那里等你们。", "一起回营地")
+			hud.show_card("终于找到弟弟了", "弟弟：“爸爸，我听见你了。”\n\n爸爸：“走，我们回家。”\n\n返程旧路已经打开。沿着高塔的方向回营地，妈妈和哥哥在那里等你们。", "一起回营地")
 		"enemy":
 			if attack_timer > 0: return
 			attack_timer = 0.5
@@ -322,7 +324,7 @@ func _refresh_hud() -> void:
 	hud.status.text = "体力 %d/%d  ·  %s" % [hp, max_hp, "已发现旅行手记" if relic_found else "手记可选探索"]
 	hud.hint.text = message if message_timer > 0 else ("右侧滑动观察 · 靠近后互动" if hud.touch else "WASD 移动 · 鼠标观察 · E 互动 · Esc 暂停")
 	var names := {"child": "牵起弟弟的手", "relic": "查看旅行手记", "sign": "读路牌", "enemy": "反击沙蝎"}
-	hud.interact_button.text = names.get(current_target, "靠近并看向线索")
+	hud.interact_button.text = names.get(current_target, "靠近线索")
 	hud.interact_button.disabled = current_target.is_empty()
 	hud.stick_vector = stick
 	hud.danger = maxf(damage_flash, 0.45 if enemy_phase == "warning" else 0)
@@ -371,10 +373,14 @@ func _begin_ending() -> void:
 	mode = "ending1"
 	reset_input()
 	ending_timer = 0
-	body.position = ThirdMap.world(ThirdMap.CAMP) + Vector3(0, 0.1, 6)
-	yaw = 0
+	# Film from inside the courtyard; the south side is occupied by the tower.
+	body.position = ThirdMap.world(ThirdMap.CAMP) + Vector3(0, 0.1, -6)
+	# Preserve the family's horizontal framing on narrow portrait screens.
+	camera.keep_aspect = Camera3D.KEEP_WIDTH
+	world.camp_marker.hide()
+	yaw = PI
 	pitch = 0
-	body.rotation.y = 0
+	body.rotation.y = yaw
 	camera.rotation.x = 0
 	hud.show_card("营地的灯，一直亮着", "妈妈：“都回来了。”\n\n哥哥：“这次，我们一起走。”", "跳过演出，查看合照")
 	hud.overlay.color = Color(0.04, 0.03, 0.02, 0.4)

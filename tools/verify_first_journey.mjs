@@ -41,6 +41,7 @@ try {
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
     await page.goto(process.env.URL || 'http://127.0.0.1:8062/', { waitUntil: 'domcontentloaded' });
+    if (await page.locator('#intro-skip').isVisible()) await page.locator('#intro-skip').click();
     await page.waitForFunction(() => window.firstJourneyProbe && !document.getElementById('status'), undefined, { timeout: 120000 });
     const state = () => page.evaluate(() => window.firstJourneyProbe);
     const point = async p => {

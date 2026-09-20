@@ -4,6 +4,7 @@ extends Node3D
 var gate: StaticBody3D
 var child_sprite: Sprite3D
 var scorpion_sprite: Node3D
+var camp_marker: Label3D
 var materials: Dictionary = {}
 var rock_transforms: Array[Transform3D] = []
 
@@ -97,7 +98,7 @@ func build(map: ThirdMap) -> void:
 	child_sprite = _character("mcking", ThirdMap.world(ThirdMap.CHILD), 1.65)
 	_character("le", ThirdMap.world(ThirdMap.CAMP) + Vector3(-2, 0, 0), 1.9)
 	_character("mac", ThirdMap.world(ThirdMap.CAMP) + Vector3(2, 0, 0), 1.85)
-	_label("妈妈和哥哥在这里等你们", ThirdMap.world(ThirdMap.CAMP) + Vector3(0, 2.8, 0), Color("fff2bd"))
+	camp_marker = _label("妈妈和哥哥在这里等你们", ThirdMap.world(ThirdMap.CAMP) + Vector3(0, 2.8, 0), Color("fff2bd"))
 	scorpion_sprite = Node3D.new()
 	scorpion_sprite.position = ThirdMap.world(ThirdMap.SCORPION)
 	add_child(scorpion_sprite)
@@ -187,7 +188,7 @@ func _character(key: String, pos: Vector3, height: float) -> Sprite3D:
 	add_child(sprite)
 	return sprite
 
-func _label(text: String, pos: Vector3, color: Color) -> void:
+func _label(text: String, pos: Vector3, color: Color) -> Label3D:
 	var label := Label3D.new()
 	label.text = text
 	label.font = ThemeDB.fallback_font
@@ -198,6 +199,7 @@ func _label(text: String, pos: Vector3, color: Color) -> void:
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.position = pos
 	add_child(label)
+	return label
 
 func open_gate() -> void:
 	gate.visible = false

@@ -1,6 +1,7 @@
 # Godot
 .godot/
 *.import
+!assets/ending/family.webp.import
 *.uid
 
 # macOS

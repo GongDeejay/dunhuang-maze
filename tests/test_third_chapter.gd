@@ -14,7 +14,10 @@ static func run(suite: Node) -> void:
 	suite.assert_true(not map.is_windy(ThirdMap.world(Vector2i(1, 5))), "long path sheltered")
 	var main = load("res://scripts/main.gd").new()
 	suite.add_child(main)
-	main._new_game(2)
+	main._new_game(1)
+	main.game_won = true
+	main._handle_regenerate()
+	suite.assert_eq(main.current_level_index, 2, "second chapter completion advances to third")
 	await suite.get_tree().physics_frame
 	var chapter: ThirdChapter = main.third_chapter
 	suite.assert_true(chapter != null and chapter.camera.current, "third chapter owns real 3D camera")
@@ -25,6 +28,17 @@ static func run(suite: Node) -> void:
 	chapter.held[KEY_W] = true
 	chapter._physics_process(1)
 	suite.assert_eq(chapter.body.position, initial, "welcome freezes motion")
+	chapter._on_action("primary")
+	chapter.move_touch = 0
+	chapter.look_touch = 1
+	chapter.stick = Vector2.UP
+	var lift := InputEventScreenTouch.new()
+	lift.index = 1
+	lift.pressed = false
+	chapter._input(lift)
+	suite.assert_true(chapter.move_touch == 0 and chapter.look_touch == -1 and chapter.stick == Vector2.UP, "lifting look finger preserves movement owner")
+	chapter._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	suite.assert_true(chapter.mode == "paused" and chapter.move_touch == -1 and chapter.stick == Vector2.ZERO, "focus loss pauses and clears touch")
 	chapter._on_action("primary")
 	chapter.held[KEY_W] = true
 	chapter.held[KEY_D] = true
@@ -59,6 +73,9 @@ static func run(suite: Node) -> void:
 	chapter.body.position = ThirdMap.world(ThirdMap.CAMP)
 	chapter._physics_process(0.016)
 	suite.assert_eq(chapter.mode, "ending1", "camp starts ending")
+	suite.assert_true(chapter.body.position.z < ThirdMap.world(ThirdMap.CAMP).z and is_equal_approx(chapter.yaw, PI), "ending films family from courtyard, not behind tower")
+	suite.assert_true(not chapter.hud.interact_button.visible, "ending hides gameplay controls")
+	suite.assert_eq(chapter.camera.keep_aspect, Camera3D.KEEP_WIDTH, "portrait ending keeps the whole family in frame")
 	suite.assert_true(not SaveManager.has_save(), "completed journey does not resume stale chapter")
 	chapter._on_action("primary")
 	suite.assert_eq(chapter.mode, "complete", "skip lands on family photo")

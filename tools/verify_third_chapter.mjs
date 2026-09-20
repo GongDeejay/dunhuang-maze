@@ -11,6 +11,7 @@ await mkdir(out, { recursive: true });
 const browser = await chromium.launch({headless:true, executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
 const profiles = [
   {id:'desktop-safe', width:1440, height:900, mobile:false, full:true, relic:true},
+  {id:'desktop-look', width:1280, height:720, mobile:false},
   {id:'phone-short', width:390, height:844, mobile:true, full:true},
   {id:'small-large-text', width:360, height:640, mobile:true, font:20},
   {id:'landscape', width:844, height:390, mobile:true},
@@ -28,7 +29,7 @@ function route(floor, start, goal, rescued) {
   throw new Error('No walkable route');
 }
 try{
- for(const profile of profiles){
+ for(const profile of profiles.filter(p=>!process.env.PROFILE||p.id===process.env.PROFILE)){
   const ctx=await browser.newContext({viewport:{width:profile.width,height:profile.height},isMobile:profile.mobile,hasTouch:profile.mobile,deviceScaleFactor:profile.mobile?3:1});
   const page=await ctx.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
@@ -52,7 +53,8 @@ try{
     await touches('touchStart',[{...m,id:0},{...l,id:1}]);
     await touches('touchMove',[{...m,id:0},{...l2,id:1}]);
     await page.waitForFunction(()=>window.thirdChapterProbe.moveTouch>=0&&window.thirdChapterProbe.lookTouch>=0);
-    await touches('touchEnd',[{...m,id:0}]);
+    // CDP touchEnd lists the lifted contact, not the contacts remaining down.
+    await touches('touchEnd',[{...l2,id:1}]);
     await page.waitForFunction(()=>window.thirdChapterProbe.lookTouch===-1&&window.thirdChapterProbe.moveTouch>=0);
     await touches('touchEnd',[]);
     await touches('touchStart',[{...l2,id:1}]);await touches('touchMove',[{...l,id:1}]);await touches('touchEnd',[]);
@@ -60,7 +62,13 @@ try{
     assert.ok(Math.abs((await state()).yaw)<0.005,'look drag reverses without synthetic mouse duplication');
    }
    // Pause must freeze simulation and clear any previously held movement.
-   await tap('pause');await page.waitForFunction(()=>window.thirdChapterProbe.mode==='paused');
+   if(profile.mobile){
+    s=await state();const m=await point(s.stick),p=await point(s.pause);
+    await touches('touchStart',[{...m,id:0}]);
+    await touches('touchStart',[{...m,id:0},{...p,id:1}]);
+    await touches('touchEnd',[{...p,id:1}]);await touches('touchEnd',[]);
+   }else await tap('pause');
+   await page.waitForFunction(()=>window.thirdChapterProbe.mode==='paused');
    const paused=await state();await page.keyboard.down('w');
    await page.waitForTimeout(1700); // Deliberately exceeds the scorpion windup interval.
    await page.keyboard.up('w');s=await state();assert.equal(s.elapsed,paused.elapsed);assert.equal(s.z,paused.z);
@@ -85,6 +93,25 @@ try{
    }
    // Continuous forward movement is real, and a boundary stops the player.
    await go([3,11]);await screenshot('valley');
+   if(profile.mobile){
+    s=await state();
+    const joystick={left:s.stick.x-s.stick.radius,right:s.stick.x+s.stick.radius,top:s.stick.y-s.stick.radius,bottom:s.stick.y+s.stick.radius};
+    const overlaps=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
+    assert.ok(!overlaps(joystick,s.interact)&&!overlaps(joystick,s.hint),'joystick, action and hint occupy separate regions');
+    assert.ok(s.interact.right<=s.width&&s.interact.bottom<=s.height,'action stays in viewport');
+   }
+   await hold(-1,0);
+   await page.waitForTimeout(2800); // Walk into the arrival area's physical west wall.
+   const wallX=(await state()).x;
+   await page.waitForTimeout(400); // Continued input must not penetrate the wall.
+   assert.ok(Math.abs((await state()).x-wallX)<0.05&&wallX>2,'solid boundary stops continuous movement');
+   await release(-1,0);await go([3,11]);
+   if(profile.id==='landscape'){
+    await hold(0,-1);
+    await page.setViewportSize({width:390,height:844});
+    await page.waitForFunction(()=>window.thirdChapterProbe.width<window.thirdChapterProbe.height&&window.thirdChapterProbe.moveTouch===-1);
+    await touches('touchEnd',[]);await screenshot('rotated');
+   }
    if(profile.full){
     await go([3,8]);await tap('interact');await screenshot('fork');
     if(profile.relic){
@@ -117,6 +144,14 @@ try{
     await tap('secondary');await page.waitForFunction(()=>window.thirdChapterProbe.mode==='replay_confirm');
     await tap('secondary');await page.waitForFunction(()=>window.thirdChapterProbe.mode==='complete');
     await tap('primary');await page.waitForFunction(()=>window.thirdChapterProbe.menu&&!window.thirdChapterProbe.active);
+   } else if(!profile.mobile){
+    await page.mouse.click(profile.width*.5,profile.height*.45);
+    await page.waitForFunction(()=>!!document.pointerLockElement);
+    const originalYaw=(await state()).yaw;
+    await page.mouse.move(profile.width*.5+60,profile.height*.45);
+    await page.waitForFunction(yaw=>Math.abs(window.thirdChapterProbe.yaw-yaw)>0.05,originalYaw);
+    await page.keyboard.press('p');
+    await page.waitForFunction(()=>window.thirdChapterProbe.mode==='paused'&&!document.pointerLockElement);
    }
    assert.deepEqual(errors,[],`${profile.id}: browser errors`);
    console.log(`${profile.id}: ${profile.full?'route, rescue, ending, save, menu':'layout and native input'} passed`);
