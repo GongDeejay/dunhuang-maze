@@ -116,6 +116,15 @@ jobs:
           printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
           ssh-keyscan -H 43.133.145.77 >> "$HOME/.ssh/known_hosts"
 
+      - name: Install reviewed story-image cache policy
+        if: steps.deploy_config.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          host="${{ vars.TENCENT_DEPLOY_USER || 'root' }}@43.133.145.77"
+          scp deploy/nginx-performance.conf "$host:/tmp/dunhuang-performance-${GITHUB_SHA}.inc"
+          ssh "$host" bash -s -- "$GITHUB_SHA" < deploy/install-performance.sh
+
       - name: Deploy versioned assets before publishing entry page
         if: steps.deploy_config.outputs.enabled == 'true'
         shell: bash
@@ -141,3 +150,8 @@ jobs:
           echo "$headers" | grep -qi 'content-type: application/wasm'
           compressed_size="$(stat -c %s "dist/$runtime.gz")"
           echo "$headers" | tr -d '\r' | grep -qi "content-length: $compressed_size"
+          for image in dist/intro-*.webp; do
+            image_headers="$(curl -fsSI "https://maze.mplusm.site/$(basename "$image")")"
+            echo "$image_headers" | grep -qi 'content-type: image/webp'
+            echo "$image_headers" | grep -qi 'cache-control:.*immutable'
+          done

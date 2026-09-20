@@ -103,8 +103,8 @@ def optimize_html(path: Path) -> str:
     )
     preload = (
         f'\t\t<link rel="preload" href="{executable}.wasm" as="fetch" '
-        'type="application/wasm" crossorigin>\n'
-        f'\t\t<link rel="preload" href="{pack}" as="fetch" crossorigin>\n'
+        'type="application/wasm" crossorigin fetchpriority="low">\n'
+        f'\t\t<link rel="preload" href="{pack}" as="fetch" crossorigin fetchpriority="low">\n'
     )
     html = html.replace("\t</head>", preload + "\n\t</head>", 1)
     html = html.replace(

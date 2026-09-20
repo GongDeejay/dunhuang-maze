@@ -49,6 +49,7 @@ class WebExportTests(unittest.TestCase):
                 self.assertEqual(gzip.decompress((directory / (name + ".gz")).read_bytes()), (directory / name).read_bytes())
             html = (directory / "index.html").read_text()
             self.assertIn(f'href="{config["mainPack"]}"', html)
+            self.assertIn('crossorigin fetchpriority="low"', html)
             self.assertNotIn("game-aaaa", html)
             content_address_assets(directory, directory / "index.html")
             self.assertEqual((directory / "index.html").read_text(), html)
@@ -87,11 +88,24 @@ class WebExportTests(unittest.TestCase):
             for image in artwork:
                 self.assertLess(image.stat().st_size, 200000)
                 self.assertIn(image.name, result)
+            self.assertLess(sum(image.stat().st_size for image in artwork), 300000)
+            for place in ["戈壁", "莫高窟", "三危山"]:
+                self.assertIn(place, result)
+            self.assertIn('id="intro-art-retry"', result)
             self.assertNotRegex(result, r'__(FAMILY|STORM|SEARCH)_IMAGE__')
             self.assertIn('data-storm-src="intro-', result)
             self.assertIn('data-search-src="intro-', result)
             install_intro(directory, html)
             self.assertEqual(result, html.read_text())
+
+    def test_story_cache_policy_is_scoped_to_content_hash(self):
+        root = Path(__file__).resolve().parents[1]
+        for name in ["nginx-performance.conf", "nginx.conf.example"]:
+            config = (root / "deploy" / name).read_text()
+            block = re.search(r'location ~ \^/intro-.*?\n\s*}', config, re.S)[0]
+            self.assertIn('[0-9a-f]+', block)
+            self.assertIn('try_files $uri =404', block)
+            self.assertIn('max-age=31536000, immutable', block)
 
 
 if __name__ == "__main__":

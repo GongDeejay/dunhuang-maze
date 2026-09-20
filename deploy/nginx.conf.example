@@ -29,6 +29,13 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    location ~ ^/intro-[0-9a-f]+\.webp$ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+    }
+
     location ~* ^/(game|engine)-[0-9a-f]+\.wasm$ {
         try_files $uri =404;
         types { application/wasm wasm; }

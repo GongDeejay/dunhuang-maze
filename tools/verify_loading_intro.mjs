@@ -38,7 +38,9 @@ try {
     assert.equal(await page.locator('#intro-auto').textContent(), id === 'desktop' ? '暂停播放' : '自动播放');
     await page.waitForFunction(() => document.querySelector('.intro-art img').naturalWidth > 0);
     const arrivalImage = await page.locator('.intro-art img').getAttribute('src');
-    assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').filter(e => /intro-.*\.webp/.test(e.name)).length), 1, 'only first illustration downloads on arrival');
+    await page.waitForFunction(() => performance.getEntriesByType('resource').filter(e => /intro-.*\.webp/.test(e.name)).length === 3);
+    assert.equal(await page.locator('#status').getAttribute('data-chapter'), '0', 'all art prefetched while reading act one');
+    assert.match(await page.locator('#intro-place-title').textContent(), /戈壁/);
     await page.screenshot({ path: resolve(out, `${id}-arrival.png`) });
     if (id === 'desktop') {
       await page.waitForFunction(() => document.getElementById('status').dataset.chapter === '1', undefined, { timeout: 15000 });
@@ -47,12 +49,15 @@ try {
     }
     await page.locator('#intro-next').click();
     assert.match(await page.locator('#intro-title').textContent(), /吹散/);
+    assert.match(await page.locator('#intro-place-title').textContent(), /莫高窟/);
+    assert.equal(await page.locator('.intro-reading').evaluate(el => el.scrollTop), 0, 'a new act starts at the beginning of its text');
     await page.waitForFunction(() => { const img = document.querySelector('.intro-art img'); return img.getAttribute('src') === img.dataset.stormSrc && img.complete && img.naturalWidth > 0; });
     const stormImage = await page.locator('.intro-art img').getAttribute('src');
     assert.notEqual(stormImage, arrivalImage);
     await page.screenshot({ path: resolve(out, `${id}-storm.png`) });
     await page.locator('#intro-next').click();
     assert.match(await page.locator('#intro-copy').textContent(), /一起走完/);
+    assert.match(await page.locator('#intro-place-title').textContent(), /三危山/);
     await page.waitForFunction(() => { const img = document.querySelector('.intro-art img'); return img.getAttribute('src') === img.dataset.searchSrc && img.complete && img.naturalWidth > 0; });
     const searchImage = await page.locator('.intro-art img').getAttribute('src');
     assert.notEqual(searchImage, stormImage);
