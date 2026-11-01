@@ -77,10 +77,19 @@ try {
       const previous = await state();
       if (profile.mobile) await tap(await point(previous.buttons.find(b => b.dir === dir)));
       else await page.keyboard.press(dirs.find(d => d[0] === dir)[3]);
-      await page.waitForFunction(p => {
-        const s = window.firstJourneyProbe;
-        return s.moves > p.moves || s.cooldown > 0 || s.card.open || s.over;
-      }, previous);
+      try {
+        await page.waitForFunction(p => {
+          const s = window.firstJourneyProbe;
+          return s.moves > p.moves || s.cooldown > 0 || s.card.open || s.over;
+        }, previous);
+      } catch (error) {
+        await page.screenshot({ path: resolve(out, `${profile.id}-input-failure.png`) });
+        const current = await state();
+        console.error(JSON.stringify({ profile: profile.id, previous: previous.pos, current: current.pos,
+          moves: current.moves, hp: current.hp, card: current.card, cooldown: current.cooldown,
+          document: await page.evaluate(() => ({ focus: document.hasFocus(), visibility: document.visibilityState })) }));
+        throw error;
+      }
       const next = await state();
       assert.equal(next.over, false, `${profile.id}: player survived`);
       assert.ok(next.moves - previous.moves <= 1, 'one direction input moves at most one tile');

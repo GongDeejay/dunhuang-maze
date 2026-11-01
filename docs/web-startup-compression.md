@@ -1,0 +1,51 @@
+# Web 首次加载：预压缩传输优化
+
+日期：2026-11-01。范围：现有 Godot 4.7 引擎、游戏包和既有腾讯云静态发布链路。
+
+## 当前瓶颈与测量边界
+
+本轮上线前，生产引擎为 `engine-0e92f6c922b2d3230a5f05c5`，解压后 39,509,339 字节，gzip 10,052,173 字节。支持 Brotli 的浏览器此前仍收到 gzip。已有内容指纹和 immutable 缓存解决回访复用，不能减少首次必须下载的引擎。
+
+本机到生产的本轮默认浏览器基线出现 `ERR_HTTP2_PING_FAILED`，引擎脚本下载中断，180 秒未启动；补充 HTTP/1.1 诊断中引擎仅接收约 2.8 MB 压缩数据后出现 `ERR_CONTENT_LENGTH_MISMATCH`，240 秒未启动。这些是失败样本，不应拿来计算优化百分比，也不能沿用历史 139.6 秒作为当前基线。公网链路稳定性仍需独立关注。
+
+耗时使用 `tools/measure_web_startup.mjs` 记录：资源传输完成时间、传输/解压体积、`WebAssembly.instantiateStreaming` 区间、引擎就绪和可交互时间。流式实例化与下载重叠，其整个区间不是纯编译时间；下载结束到实例化完成的尾部时间、实例化完成到引擎就绪的时间分别报告。测量自动跳过阅读页，避免把阅读时间算入加载。
+
+## 实现
+
+- 构建时为 `.wasm`、`.pck` 生成质量 11 的 Brotli 副本，保留 gzip 和原始文件。引擎解压后字节、内容指纹和请求 URL 不变。
+- Nginx 仅在请求接受 Brotli 且副本存在时内部转到 `.br`，发送正确的 `Content-Encoding`、`Vary: Accept-Encoding` 和原类型。无需安装 Brotli Nginx 模块，继续支持 WASM streaming compilation。
+- 不接受 Brotli、显式 `br;q=0` 或旧版本没有副本时，继续原有 gzip/原始传输；保留入口 revalidate 和资源 immutable、既有跨源隔离头。
+- 配置更新只接受已审核的上一版配置哈希，先备份并验证 Nginx，失败回滚，不覆盖管理员的其他修改。
+- CI 安装构建工具、验证真实 HTTP 协商与解压完整性，再按“资源先、入口后”的既有顺序发布；线上核对完整提交 SHA 和引擎字节。
+
+同一引擎的 Brotli 为 **6,900,136 字节**，比 gzip 减少 **31.36%**。这是确定的传输体积改善；公网耗时仍受连接质量、带宽、设备初始化和缓存状态影响。
+
+## 同条件实测
+
+同一正式入口候选、同一机器、临时 Nginx、40 ms 模拟延迟和 125,000 字节/秒下载上限；每种编码使用全新上下文，自动跳过阅读。两份有效冷启动均无浏览器运行错误。
+
+| 阶段 | gzip | Brotli |
+|---|---:|---:|
+| 引擎编码体积 | 10,052,173 B | 6,900,136 B |
+| 引擎传输区间 | 87.58 s | 65.56 s |
+| 下载结束后的实例化尾部 | 0.018 s | 0.020 s |
+| 实例化完成至引擎就绪 | 1.12 s | 1.18 s |
+| 导航至可交互 | 88.81 s | 66.89 s |
+
+这一对样本的可交互时间缩短约 **24.7%**。它证明相同受控链路下的收益，不代表所有公网用户的平均提速。前述公网失败样本、早期测试服务器 MIME 配置不完整的样本，以及错误点击回访“重看序章”导致人为停留的测量均不纳入对比。
+
+另用全新的普通浏览器临时配置验证磁盘缓存：不限速本地首次 1.56 秒，回访 0.64 秒；回访引擎和游戏包的 `transferSize` 均为 0。无痕上下文对大文件的内存缓存限制不代表正常浏览器缓存失效，因此回访测试使用隔离的普通配置，不读取用户现有浏览器资料。
+
+最终本地回归：1046 项 Godot 断言、7 项 Python 导出测试、真实 Nginx 编码/回退与字节校验通过；异闻 4 种视口、原序章 3 种视口、插图故障恢复、正式入口 5 种布局通过；第一关 5 条、第二关 5 条、第三关 5 种配置顺序回归全部通过，未捕获浏览器运行错误。并行测速时出现过输入等待、存活与移动超时，因此最终玩法验证在测速结束后顺序执行，没有修改正式玩法来绕过测试。
+
+## 验证命令
+
+```sh
+python3 -m unittest discover -s tests -p 'test_web_export.py'
+python3 tools/verify_http_compression.py /path/to/release --nginx /path/to/nginx
+URL=https://maze.mplusm.site/ OUTPUT=/tmp/startup.json NODE_PATH=... node tools/measure_web_startup.mjs
+```
+
+相同候选包的受控对比可设置 `THROUGHPUT=125000`（1 Mbps）、`ENCODING=gzip` 或 `ENCODING=br`。分别使用新浏览器上下文做冷启动，随后同上下文回访。回访关闭人工限速，缓存收益通过 `transferSize=0` 和实际回访就绪时间核实，不能只因复用了浏览器上下文便认定命中缓存。回访已有自动进入逻辑，测量不点击“重看序章”，避免把人为停留阅读误算为启动失败。性能测量与即时战斗回归顺序运行，避免并行浏览器负载干扰生存和输入时序。手机配置为浏览器模拟，不能替代真实设备试玩。
+
+官方依据：[Godot 4.7 Web 体积优化](https://docs.godotengine.org/en/4.7/engine_details/development/compiling/optimizing_for_size.html#web)、[Web 服务与 WASM 类型](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_for_web.html#serving-the-files)。本轮不裁剪引擎；第三关使用 3D，中文字体和现有运行时兼容性继续保持。

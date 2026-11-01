@@ -25,7 +25,7 @@ def sha256_file(path: Path) -> str:
 def git_revision(root: Path) -> str:
     try:
         out = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
+            ["git", "rev-parse", "HEAD"],
             cwd=root,
             stderr=subprocess.DEVNULL,
             text=True,

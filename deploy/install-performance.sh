@@ -6,7 +6,7 @@ revision="${1:-}"
 target=/www/server/panel/vhost/nginx/dunhuang-performance.inc
 site=/www/server/panel/vhost/nginx/maze.mplusm.site.conf
 candidate="/tmp/dunhuang-performance-${revision}.inc"
-backup="${target}.before-intro-cache-${revision}"
+backup="${target}.before-compression-${revision}"
 nginx=/www/server/nginx/sbin/nginx
 test -x "$nginx"
 test -f "$target"
@@ -17,7 +17,7 @@ if cmp -s "$candidate" "$target"; then
     exit 0
 fi
 # Stop instead of overwriting an administrator's unrelated edits.
-baseline=56af7463ef317aa754e7419b6a42256035882a76510dabf7f3e547c528994ebd
+baseline=581c697a58b1f52f7389a5c2abde653bf86871c5cfbfedf57f7d38090f53af21
 actual="$(sha256sum "$target" | cut -d ' ' -f 1)"
 if [[ "$actual" != "$baseline" ]]; then
     echo "Performance include differs from the reviewed baseline ($actual); inspect before updating." >&2
@@ -40,4 +40,4 @@ mv "${target}.next-${revision}" "$target"
 "$nginx" -t
 "$nginx" -s reload
 committed=1
-echo "Installed story-image cache policy; backup: $backup"
+echo "Installed precompressed payload policy; backup: $backup"

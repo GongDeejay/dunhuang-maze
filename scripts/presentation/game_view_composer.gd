@@ -77,12 +77,13 @@ func _draw_mogao_encounter(canvas: CanvasItem, layout: LayoutProfile, ctx: Dicti
 	mobile_renderer.draw_follow_in_rect(canvas, map_rect, ctx.maze, ctx.maze_width, ctx.maze_height,
 		ctx.player, ctx.monsters, ctx.items, ctx.exit_pos, ctx.game_won, ctx.visited, ctx.is_revealed,
 		ctx.guide_dir, layout.ui_scale, focus)
-	var caption := "木匣 → 木门 → 蓝色围巾"
+	var caption := "门后是哥哥的围巾"
 	if ctx.get("gate_revealing", false): caption = "栈道通了！木门正在打开"
 	elif ctx.get("gate_guiding", false): caption = "近路已开 · 沿蓝色箭头穿门"
 	var fs := int(clampf(area.size.x / 23.0, 16, 22))
 	canvas.draw_string(ThemeDB.fallback_font, area.position + Vector2(6, fs + 5), caption, HORIZONTAL_ALIGNMENT_CENTER, int(area.size.x - 12), fs, Color("f4d68c"))
-	canvas.draw_string(ThemeDB.fallback_font, Vector2(area.position.x + 6, area.end.y - 7), "↓ 木匣旁往下：暗廊绕行", HORIZONTAL_ALIGNMENT_CENTER, int(area.size.x - 12), 16, Color("d0bd9c"))
+	if not ctx.maze.landmarks[MogaoJourney.GATE].get("open", false):
+		canvas.draw_string(ThemeDB.fallback_font, Vector2(area.position.x + 6, area.end.y - 7), "↓ 不解机关，也能绕行", HORIZONTAL_ALIGNMENT_CENTER, int(area.size.x - 12), 16, Color("d0bd9c"))
 	if layout.is_portrait() and layout.hud_rect.size.y <= 112 and ctx.inventory.get_count() > 0:
 		# In a short, large-text viewport, keep all five selectable inventory slots
 		# without allowing the regular 176px header to squeeze away the actual door.

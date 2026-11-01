@@ -9,6 +9,7 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -171,6 +172,23 @@ def gzip_assets(directory: Path) -> None:
                     dst.write(chunk)
 
 
+def brotli_assets(directory: Path) -> None:
+    """Precompress the large payloads; decoded bytes and immutable URLs stay unchanged."""
+    brotli = shutil.which("brotli")
+    if not brotli:
+        raise RuntimeError("Install the Brotli CLI before exporting (brew install brotli / apt install brotli)")
+    for source in directory.iterdir():
+        if source.suffix not in (".wasm", ".pck"):
+            continue
+        target = source.with_name(source.name + ".br")
+        # A previous release's pinned runtime can reuse its verified compression.
+        if target.exists():
+            decoded = subprocess.run([brotli, "-d", "-c", str(target)], check=True, capture_output=True).stdout
+            if decoded == source.read_bytes():
+                continue
+        subprocess.run([brotli, "-q", "11", "-f", "-o", str(target), str(source)], check=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("directory", type=Path)
@@ -182,6 +200,7 @@ def main() -> None:
     executable = optimize_html(directory / args.html)
     install_intro(directory, directory / args.html)
     gzip_assets(directory)
+    brotli_assets(directory)
     print(f"Optimized Web export: {directory / args.html} ({executable})")
 
 

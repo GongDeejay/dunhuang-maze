@@ -6,6 +6,7 @@ Godot 4.7 敦煌主题迷宫 Roguelike — Web 优先（PC + 移动浏览器）�
 
 - [Godot 4.7](https://godotengine.org/)（含 headless 用于测试）
 - 终端已配置 `godot` 命令
+- Web 发布需 Brotli CLI（macOS：`brew install brotli`；Ubuntu：`apt install brotli`），用于预压缩引擎和游戏包；不改变引擎缓存地址。
 
 ## 运行
 

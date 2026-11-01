@@ -5,16 +5,15 @@ var puzzle: PatternPuzzle
 
 func _draw() -> void:
 	if puzzle == null: return
-	var side := minf(size.x, size.y)
-	var origin := (size - Vector2.ONE * side) / 2
-	for i in 4:
-		var rect := Rect2(origin + Vector2(i % 2, i / 2) * side / 2 + Vector2.ONE * 5, Vector2.ONE * (side / 2 - 10))
+	var side := minf(size.x / 2, size.y)
+	var origin := (size - Vector2(side * 2, side)) / 2
+	for i in 2:
+		var rect := Rect2(origin + Vector2(i * side + 5, 5), Vector2.ONE * (side - 10))
 		draw_style_box(_tile_style(i), rect)
 		var symbol := -1
 		if puzzle.phase == "observe": symbol = puzzle.board[i]
 		elif puzzle.phase == "probe" and i == puzzle.target: symbol = puzzle.probe
-		elif puzzle.phase == "feedback" and i == puzzle.target: symbol = puzzle.board[i]
-		elif puzzle.phase in ["intro", "ready", "done"]: symbol = i
+		elif puzzle.phase == "done": symbol = puzzle.board[i]
 		if symbol >= 0: _motif(symbol, rect.get_center(), rect.size.x * 0.3)
 		else:
 			for n in range(1, 5):
@@ -24,7 +23,7 @@ func _draw() -> void:
 func _tile_style(index: int) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("32291f")
-	style.border_color = Color("dec48c") if puzzle.phase in ["probe", "feedback"] and index == puzzle.target else Color("79613f")
+	style.border_color = Color("fff0b5") if puzzle.phase == "probe" and index == puzzle.target else Color("79613f")
 	style.set_border_width_all(3)
 	style.set_corner_radius_all(12)
 	return style

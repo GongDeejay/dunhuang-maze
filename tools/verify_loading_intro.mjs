@@ -17,10 +17,12 @@ const profiles = [
   { id: 'phone', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
   { id: 'small-large-text', viewport: { width: 360, height: 640 }, isMobile: true, hasTouch: true, font: 20 },
 ];
+let activePage;
 try {
   for (const { id, font, ...options } of profiles) {
     const context = await browser.newContext({ ...options, reducedMotion: id === 'desktop' ? 'no-preference' : 'reduce' });
     const page = await context.newPage();
+    activePage = page;
     if (font) await page.addInitScript(size => {
       document.addEventListener('DOMContentLoaded', () => { document.documentElement.style.fontSize = `${size}px`; });
     }, font);
@@ -90,6 +92,7 @@ try {
   // Denied localStorage and a failed engine-script download must still offer retry.
   const context = await browser.newContext();
   const page = await context.newPage();
+  activePage = page;
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.addInitScript(() => {
@@ -100,6 +103,10 @@ try {
   await page.locator('#intro-retry').waitFor({ state: 'visible' });
   assert.match(await page.locator('#status-detail').textContent(), /下载失败/);
   assert.equal(await page.locator('#intro-enter').isDisabled(), true);
+  await page.locator('#intro-show-lore').click();
+  await page.locator('#intro-lore-next').click();
+  assert.match(await page.locator('#intro-lore-copy').textContent(), /三兔共耳/);
+  assert.equal(await page.locator('#intro-retry').isVisible(), true, 'reading never hides download recovery');
   assert.deepEqual(pageErrors, [], 'loader survives unavailable engine and storage');
   await page.screenshot({ path: resolve(out, 'download-error.png') });
   await page.unroute('**/engine-*.js');
@@ -110,4 +117,7 @@ try {
   assert.deepEqual(pageErrors, [], 'retry succeeds even when local storage is denied');
   await context.close();
   console.log('Download error and blocked storage passed.');
+} catch (error) {
+  if (activePage && !activePage.isClosed()) await activePage.screenshot({ path: resolve(out, 'FAIL.png') }).catch(() => {});
+  throw error;
 } finally { await browser.close(); }

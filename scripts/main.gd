@@ -357,7 +357,7 @@ func _new_game(level_idx: int = -1) -> void:
 	if first_journey:
 		_show_story({"title": "第一章 · 古道上的足迹", "body": "风停了，妈妈和两个孩子还没有消息。\n先沿着脚印寻找妈妈，再到东南的营地会合。路口有路牌，不必走遍所有岔路。\n读提示时战斗暂停；关闭提示后继续。", "button": "出发，寻找妈妈"})
 	elif mogao_journey:
-		_show_story({"title": "第二章 · 莫高窟", "body": "窟前的风小了些，哥哥的脚印伸向栈道深处。\n前面有暗廊，也有紧闭的近路门。拨正护纹木匣可以抄近路，不解机关也能继续走。\n先找到哥哥，再一起离开。", "button": "沿栈道寻找哥哥"})
+		_show_story({"title": "第二章 · 莫高窟", "body": "哥哥的脚印伸向栈道深处。\n找到他，一起平安离开。", "button": "沿栈道寻找哥哥"})
 	_request_redraw()
 
 func _story_open() -> bool:
@@ -852,7 +852,10 @@ func _mark_visited(pos: Vector2i) -> void:
 	if first_journey:
 		_show_story(first_journey.enter(pos, maze, player))
 	elif mogao_journey:
+		var had_scarf := mogao_journey.scarf_found
 		_show_story(mogao_journey.enter(pos))
+		if not had_scarf and mogao_journey.scarf_found:
+			_add_log("是哥哥的围巾，他就在前面。")
 	if first_journey or mogao_journey:
 		for landmark_pos in maze.landmarks:
 			if _is_revealed(landmark_pos): maze.landmarks[landmark_pos]["discovered"] = true

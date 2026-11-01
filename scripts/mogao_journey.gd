@@ -122,10 +122,9 @@ func enter(pos: Vector2i) -> Dictionary:
 	previous_pos = pos
 	if pos == SCARF and not scarf_found:
 		scarf_found = true
-		return {"title": "哥哥的蓝色围巾", "body": "穿过木门，几步就到了围巾旁，省去了暗廊的一大圈。\n哥哥一定就在前面，继续沿栈道寻找。" if crossed_gate else "沿暗廊绕了一圈，你找到了门后看见的蓝色围巾。\n哥哥一定就在前面，继续沿栈道寻找。", "button": "沿着哥哥的足迹走"}
-	if pos != SIGN or events_seen.has("fork"): return {}
-	events_seen["fork"] = true
-	return {"title": "门后，是哥哥的围巾", "body": "木门后挂着哥哥的蓝色围巾。\n→ 拨正护纹木匣，打开门就能过去。\n↓ 也可以从木匣旁往下，沿暗廊绕行。\n靠近木匣按 F 或点“查看纹样”；E 仍是使用道具。", "button": "看看木门，自己选路"}
+	# The visible door/scarf and local route caption replace two interrupting cards.
+	if pos == SIGN: events_seen["fork"] = true
+	return {}
 
 func rescue() -> Dictionary:
 	if rescued: return {}

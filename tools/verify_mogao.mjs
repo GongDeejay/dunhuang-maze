@@ -129,62 +129,50 @@ try {
         await page.waitForTimeout(3200); // Exceeds the longest enemy interval; modal must freeze the entire encounter.
         s = await state();
         for (const key of ['pos', 'hp', 'moves', 'inventory', 'buff', 'cooldown', 'enemies']) assert.deepEqual(s[key], frozen[key], `${key} frozen during inspection`);
-        await click('primary');
-        await page.waitForFunction(() => window.mogaoProbe.phase === 'observe');
+        assert.equal(s.phase, 'observe', 'no tutorial or automatic observation countdown');
+        assert.equal(s.board.length, 2, 'only two motifs to remember');
+        assert.deepEqual(Object.keys(s.buttons).sort(), ['different', 'leave', 'primary', 'same']);
         await page.screenshot({ path: resolve(out, `${profile.id}-board.png`) });
-        await click('primary');
-        await page.waitForFunction(() => window.mogaoProbe.phase === 'probe');
-        await click('different');
-        await page.waitForFunction(() => window.mogaoProbe.phase === 'feedback');
-        assert.equal((await state()).latches, 0, 'demo does not count');
-        await click('primary');
-        await page.waitForFunction(() => window.mogaoProbe.phase === 'ready');
-        await click('slow_button');
-        await page.waitForFunction(() => window.mogaoProbe.slow);
         if (profile.id === 'desktop-gate') {
-          await click('primary');
-          await page.waitForFunction(() => window.mogaoProbe.phase === 'observe');
           await page.setViewportSize({ width: 1200, height: 800 });
           await page.waitForFunction(() => window.mogaoProbe.phase === 'suspended');
           assert.equal((await state()).latches, 0, 'resize interrupts, never answers a hidden board');
           await click('primary');
-          await page.waitForFunction(() => window.mogaoProbe.phase === 'ready');
+          await page.waitForFunction(() => window.mogaoProbe.phase === 'observe');
           await page.setViewportSize({ width: profile.width, height: profile.height });
           await page.waitForFunction(p => window.mogaoProbe.viewport.width === p.width && window.mogaoProbe.viewport.height === p.height, profile);
-        }
-        // Intentionally make one mistake: no damage, no lost progress, no automatic next answer.
-        const mistakes = profile.id === 'phone-landscape' ? 2 : 1;
-        for (let round = 0; round < mistakes + 2; round++) {
+          await page.waitForFunction(() => window.mogaoProbe.phase === 'suspended');
           await click('primary');
+        }
+        await click('leave');
+        await page.waitForFunction(() => !window.mogaoProbe.panelOpen);
+        assert.equal((await state()).gate, false, 'leaving never opens the unsolved gate');
+        await page.waitForTimeout(80); // Release guard before a new physical gesture.
+        await tap((await state()).prompt);
+        await page.waitForFunction(() => window.mogaoProbe.panelOpen && window.mogaoProbe.phase === 'observe');
+        const retryHp = (await state()).hp;
+        // One wrong answer returns directly to observation; one correct answer opens the real door.
+        for (let round = 0; round < 2; round++) {
           await page.waitForFunction(() => window.mogaoProbe.phase === 'observe');
           await click('primary');
           await page.waitForFunction(() => window.mogaoProbe.phase === 'probe');
+          await page.screenshot({ path: resolve(out, `${profile.id}-comparison.png`) });
           s = await state();
           let changed = s.board[s.target] !== s.probe;
-          if (round < mistakes) changed = !changed;
+          if (round === 0) changed = !changed;
           await click(changed ? 'different' : 'same');
-          await page.waitForFunction(() => ['feedback', 'done'].includes(window.mogaoProbe.phase));
-          const latches = Math.max(0, round - mistakes + 1);
-          assert.equal((await state()).latches, latches);
-          if (mistakes === 2 && round === 1) {
-            await click('simple_button');
-            await page.waitForFunction(() => window.mogaoProbe.phase === 'ready');
-          }
-          if (latches === 1) {
-            await click('leave');
-            await page.waitForFunction(() => !window.mogaoProbe.panelOpen);
-            await page.waitForTimeout(80); // Release guard expires before a new physical gesture.
-            await tap((await state()).prompt);
-            await page.waitForFunction(() => window.mogaoProbe.panelOpen);
-            assert.equal((await state()).latches, 1, 're-entry retains first latch');
+          if (round === 0) {
+            await page.waitForFunction(() => window.mogaoProbe.phase === 'observe');
+            assert.equal((await state()).latches, 0);
+            assert.equal((await state()).hp, retryHp, 'mistake never deals damage');
+          } else {
+            await page.waitForFunction(() => !window.mogaoProbe.panelOpen && window.mogaoProbe.revealing);
+            assert.equal((await state()).latches, 1, 'one success is enough');
           }
         }
         assert.equal((await state()).gate, true);
         assert.equal((await state()).rescued, false);
-        await page.screenshot({ path: resolve(out, `${profile.id}-unlocked.png`) });
-        await click('primary');
-        await page.waitForFunction(() => !window.mogaoProbe.panelOpen);
-        assert.deepEqual((await state()).pos, { x: 4, y: 2 }, 'close click does not move player');
+        assert.deepEqual((await state()).pos, { x: 4, y: 2 }, 'answer tap never moves player when panel closes automatically');
         await page.waitForFunction(() => window.mogaoProbe.revealing);
         const revealFrozen = await state();
         await page.keyboard.press('ArrowRight'); await page.keyboard.press('e');

@@ -29,6 +29,7 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # Story art is content-addressed too; never force repeat visitors to download it again.
     location ~ ^/intro-[0-9a-f]+\.webp$ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable";
@@ -36,37 +37,92 @@ server {
         add_header Cross-Origin-Embedder-Policy require-corp always;
     }
 
-    location ~* ^/(game|engine)-[0-9a-f]+\.wasm$ {
+    location ~ ^/(engine|game)-[0-9a-f]+\.wasm$ {
+        # Internal rewrite only when a precompressed companion exists. No Brotli module needed.
+        set $dunhuang_br "";
+        if ($http_accept_encoding ~* "(^|,)\s*br\s*(;\s*q=(1(\.0*)?|0\.[0-9]*[1-9][0-9]*))?\s*(,|$)") {
+            set $dunhuang_br "yes";
+        }
+        if (!-f $request_filename.br) { set $dunhuang_br ""; }
+        if ($dunhuang_br = "yes") { rewrite ^(.*)$ $1.br last; }
         try_files $uri =404;
+        add_header Vary Accept-Encoding;
         types { application/wasm wasm; }
         default_type application/wasm;
-        expires 1y;
         add_header Cache-Control "public, max-age=31536000, immutable";
-        add_header Cross-Origin-Opener-Policy "same-origin" always;
-        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
     }
 
-    location ~* ^/(game|engine)-[0-9a-f]+\.(pck|js|audio\.worklet\.js|audio\.position\.worklet\.js)$ {
+    location ~ ^/game-[0-9a-f]+\.pck$ {
+        default_type application/octet-stream;
+        # Internal rewrite only when a precompressed companion exists. No Brotli module needed.
+        set $dunhuang_br "";
+        if ($http_accept_encoding ~* "(^|,)\s*br\s*(;\s*q=(1(\.0*)?|0\.[0-9]*[1-9][0-9]*))?\s*(,|$)") {
+            set $dunhuang_br "yes";
+        }
+        if (!-f $request_filename.br) { set $dunhuang_br ""; }
+        if ($dunhuang_br = "yes") { rewrite ^(.*)$ $1.br last; }
         try_files $uri =404;
-        expires 1y;
         add_header Cache-Control "public, max-age=31536000, immutable";
-        add_header Cross-Origin-Opener-Policy "same-origin" always;
-        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Vary Accept-Encoding;
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+    }
+
+    # The browser keeps the original .wasm/.pck URL and transparently decompresses.
+    location ~ ^/(engine|game)-[0-9a-f]+\.wasm\.br$ {
+        internal;
+        gzip off;
+        gzip_static off;
+        types { }
+        default_type application/wasm;
+        try_files $uri =404;
+        add_header Content-Encoding br;
+        add_header Vary Accept-Encoding;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+    }
+
+    location ~ ^/game-[0-9a-f]+\.pck\.br$ {
+        internal;
+        gzip off;
+        gzip_static off;
+        types { }
+        default_type application/octet-stream;
+        try_files $uri =404;
+        add_header Content-Encoding br;
+        add_header Vary Accept-Encoding;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+    }
+
+    location ~ ^/(engine|game)-[0-9a-f]+\.(js|audio\.worklet\.js|audio\.position\.worklet\.js)$ {
+        types { application/javascript js; }
+        default_type application/javascript;
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
     }
 
     location = /index.html {
-        expires -1;
-        add_header Cache-Control "no-cache";
-        add_header Cross-Origin-Opener-Policy "same-origin" always;
-        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cache-Control no-cache;
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
     }
 
     location = / {
         try_files /index.html =404;
-        expires -1;
-        add_header Cache-Control "no-cache";
-        add_header Cross-Origin-Opener-Policy "same-origin" always;
-        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cache-Control no-cache;
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+    }
+
+    location = /MANIFEST.json {
+        add_header Cache-Control no-cache;
     }
 }
 

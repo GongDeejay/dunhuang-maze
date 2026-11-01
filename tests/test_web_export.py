@@ -5,11 +5,12 @@ import json
 from pathlib import Path
 import re
 import sys
+import subprocess
 import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from optimize_web_export import content_address_assets, optimize_html, gzip_assets, install_intro
+from optimize_web_export import content_address_assets, optimize_html, gzip_assets, brotli_assets, install_intro
 
 
 class WebExportTests(unittest.TestCase):
@@ -95,6 +96,14 @@ class WebExportTests(unittest.TestCase):
             self.assertNotRegex(result, r'__(FAMILY|STORM|SEARCH)_IMAGE__')
             self.assertIn('data-storm-src="intro-', result)
             self.assertIn('data-search-src="intro-', result)
+            for story in ['九色鹿', '三兔共耳', '建窟传说', '藏经洞', '反弹琵琶', '五台山图']:
+                self.assertIn(story, result)
+            self.assertIn('id="intro-show-lore"', result)
+            self.assertIn('id="intro-lore-view"', result)
+            self.assertEqual(len(re.findall(r'<script[^>]+src=', result)), 1,
+                             'lore must not introduce a remote script or library')
+            self.assertLess(len(gzip.compress(result.encode())), 16000,
+                            'the entire inline prologue must remain lightweight')
             install_intro(directory, html)
             self.assertEqual(result, html.read_text())
 
@@ -106,6 +115,18 @@ class WebExportTests(unittest.TestCase):
             self.assertIn('[0-9a-f]+', block)
             self.assertIn('try_files $uri =404', block)
             self.assertIn('max-age=31536000, immutable', block)
+
+    def test_brotli_roundtrip_and_stale_companion(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            self.build(directory, "game-aaaa", pack=b"old pack" * 100)
+            brotli_assets(directory)
+            for source in list(directory.glob("*.wasm")) + list(directory.glob("*.pck")):
+                target = source.with_name(source.name + ".br")
+                self.assertEqual(subprocess.check_output(["brotli", "-d", "-c", str(target)]), source.read_bytes())
+                source.write_bytes(b"new bytes" * 100)
+                brotli_assets(directory)
+                self.assertEqual(subprocess.check_output(["brotli", "-d", "-c", str(target)]), source.read_bytes())
 
 
 if __name__ == "__main__":

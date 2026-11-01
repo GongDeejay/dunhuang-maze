@@ -9,6 +9,11 @@
   <div class="intro-panel">
     <div class="intro-reading">
     <header class="intro-top"><span>序章 / PROLOGUE</span><button id="intro-skip" type="button">跳过剧情</button></header>
+    <div class="intro-sections" role="group" aria-label="等待时读点什么">
+      <button id="intro-show-story" type="button" aria-pressed="true" aria-controls="intro-story-view">旅途序章</button>
+      <button id="intro-show-lore" type="button" aria-pressed="false" aria-controls="intro-lore-view">敦煌异闻</button>
+    </div>
+    <div id="intro-story-view">
     <div id="intro-story" aria-live="polite" aria-atomic="true">
       <p id="intro-chapter">01 / 03 · 一起出发</p>
       <h1 id="intro-title">那天，我们一起<br>走进敦煌。</h1>
@@ -29,6 +34,21 @@
       <button id="intro-next" type="button" aria-label="下一幕">→</button>
       <button id="intro-auto" type="button">暂停播放</button>
     </nav>
+    </div>
+    <section id="intro-lore-view" aria-label="敦煌异闻" hidden>
+      <p class="intro-lore-hint">等风来，也听一段敦煌往事。手动翻阅，随时启程。</p>
+      <article aria-live="polite" aria-atomic="true">
+        <p id="intro-lore-kind"></p>
+        <h2 id="intro-lore-title"></h2>
+        <p id="intro-lore-copy"></p>
+      </article>
+      <nav class="intro-lore-nav" aria-label="异闻翻页">
+        <button id="intro-lore-prev" type="button" aria-label="上一则异闻">←</button>
+        <span id="intro-lore-page"></span>
+        <button id="intro-lore-next" type="button">下一则 →</button>
+      </nav>
+      <details id="intro-lore-source"><summary>故事出处</summary><a id="intro-lore-link" target="_blank" rel="noopener noreferrer"></a><span>（新窗口打开）</span></details>
+    </section>
     </div>
     <footer class="intro-loading">
       <div class="intro-progress-row"><span id="status-detail" role="status">正在准备旅途…</span><span class="intro-download">后台加载中</span></div>
