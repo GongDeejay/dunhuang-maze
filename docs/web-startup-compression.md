@@ -49,3 +49,15 @@ URL=https://maze.mplusm.site/ OUTPUT=/tmp/startup.json NODE_PATH=... node tools/
 相同候选包的受控对比可设置 `THROUGHPUT=125000`（1 Mbps）、`ENCODING=gzip` 或 `ENCODING=br`。分别使用新浏览器上下文做冷启动，随后同上下文回访。回访关闭人工限速，缓存收益通过 `transferSize=0` 和实际回访就绪时间核实，不能只因复用了浏览器上下文便认定命中缓存。回访已有自动进入逻辑，测量不点击“重看序章”，避免把人为停留阅读误算为启动失败。性能测量与即时战斗回归顺序运行，避免并行浏览器负载干扰生存和输入时序。手机配置为浏览器模拟，不能替代真实设备试玩。
 
 官方依据：[Godot 4.7 Web 体积优化](https://docs.godotengine.org/en/4.7/engine_details/development/compiling/optimizing_for_size.html#web)、[Web 服务与 WASM 类型](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_for_web.html#serving-the-files)。本轮不裁剪引擎；第三关使用 3D，中文字体和现有运行时兼容性继续保持。
+
+## 发布后的路径诊断与恢复修复
+
+首轮发布 `5850588ddd069bcd4a9eb3d460035a2cd03fa91b` 的 CI 成功，生产 MANIFEST、Brotli/gzip/identity 回退及完整引擎解压比对均通过。Mac 默认浏览器仍在引擎收到 3,145,728/6,900,136 字节时发生连接重置；独立 curl 在 90 秒内收到 2,555,832 字节，约 28 KB/s。
+
+低频顺序检查覆盖小型引擎脚本、Brotli 开头/3 MB 附近/末尾、gzip 开头及原始 WASM 中段。全部成功，Range 返回 206，7 份响应体均与已核验文件的对应偏移逐字节一致；HTTP/1.1 与 HTTP/2 均支持读取中段。因此未发现固定文件偏移损坏或压缩协商回归。
+
+Mac 到生产 IP 的路由使用 `utun10` 隧道接口，系统 HTTP/HTTPS/SOCKS/PAC 代理开关均关闭。父任务独立云端下载同一 Brotli 文件为 5.837 秒、6,900,136 字节，SHA256 与 MANIFEST 一致；该云端路径经过代理，不能当作某地域直连速度，但证明不是所有路径都无法传完。CI 的完整生产校验约 13 秒完成。证据更偏向当前 Mac 路径差异；尚不能确认具体隧道、运营商或按来源限制的原因，也未改变网络设置。
+
+另复现了应用恢复缺陷：Godot 的跟踪响应体在 `fetch()` 已成功后读取失败，拒绝未必传到 `startGame().catch()`，界面停在进度百分比。加载页现仅在尚未就绪时处理明确的传输 `TypeError`（`network error`、`Failed to fetch`、`Load failed`），显示中断和手动重试；不拦截无关错误，不影响已经启动的游戏，也不删除存档。
+
+新增验证 `tools/verify_loading_stream_recovery.mjs` 真实截断已开始读取的 WASM 响应，验证桌面和手机均出现重试、仍能阅读异闻、重试后真正启动、存储保留，且就绪后不再误报加载失败。恢复测试及原序章、异闻、插图和正式入口布局回归通过。恢复修复不提高链路带宽；默认公网首载仍须在获准的其他网络路径上复测。

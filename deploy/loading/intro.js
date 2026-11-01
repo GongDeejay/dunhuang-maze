@@ -222,6 +222,7 @@
       else if (!overlay.contains(document.activeElement)) enter.focus({ preventScroll: true });
     },
     fail(message) {
+      if (ready || failed || !overlay.isConnected) return;
       failed = true;
       stop(); clearTimeout(slowTimer);
       enter.disabled = true;
@@ -232,6 +233,16 @@
       $('intro-retry').hidden = false;
     },
   };
+  // Godot's tracked WASM stream can reject after fetch() has already resolved.
+  // That rejection does not always reach startGame().catch(), leaving progress stuck.
+  // Handle only transport errors while this loading overlay owns the page.
+  window.addEventListener('unhandledrejection', event => {
+    if (ready || failed || !overlay.isConnected) return;
+    const reason = event.reason;
+    if (!(reason instanceof TypeError) || !/^(network error|failed to fetch|load failed)$/i.test(reason.message)) return;
+    window.dunhuangIntro.fail('资源下载中断，请重试。');
+    event.preventDefault();
+  });
   overlay.dataset.returning = String(seen);
   if (seen) $('intro-skip').textContent = '重看序章';
   render(); renderLore(); schedule();
