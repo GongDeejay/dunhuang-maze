@@ -22,7 +22,7 @@ func _process(delta: float) -> void:
 	for m in monsters:
 		if is_instance_valid(m): enemies.append({"x": m.pos.x, "y": m.pos.y, "hp": m.hp, "clock": m.move_timer})
 	var buttons := {}
-	for key in ["primary", "same", "different", "leave"]:
+	for key in ["same", "different", "leave"]:
 		buttons[key] = _rect(pattern_panel.get(key))
 	var p: PatternPuzzle = mogao_journey.puzzle if mogao_journey else null
 	var normal_center := maze_renderer.get_difficulty_card_rects(get_viewport_rect().size)[1].get_center()
@@ -35,7 +35,8 @@ func _process(delta: float) -> void:
 		"panel": _rect(pattern_panel.panel), "panelOpen": _pattern_open(), "scroll": _rect(pattern_panel.scroll),
 		"prompt": _rect(pattern_prompt), "buttons": buttons,
 		"phase": p.phase if p else "", "latches": p.latches if p else 0,
-		"board": p.board if p else [], "probe": p.probe if p else -1, "target": p.target if p else -1,
+		"board": p.board if p else [], "message": p.message if p else "",
+		"reference": _rect(pattern_panel.board),
 		"gate": mogao_journey.gate_open if mogao_journey else false,
 		"rescued": mogao_journey.rescued if mogao_journey else false,
 		"won": game_won, "over": game_over, "cooldown": attack_cooldown,

@@ -12,7 +12,7 @@ fi
 
 pyftsubset assets/fonts/NotoSansSC-Regular.ttf \
 	--output-file=assets/fonts/NotoSansSC-GameSubset.ttf \
-	--text-file=<(rg --text --no-filename '.' scripts assets/data project.godot) \
+	--text-file=<(rg --text --no-filename '.' scripts assets/data assets/lore/*.json project.godot) \
 	--unicodes='U+0020-007E,U+00A0-00FF,U+2000-206F,U+2190-22FF,U+2500-25FF,U+3000-303F,U+FF00-FFEF' \
 	--layout-features='*' \
 	--glyph-names \

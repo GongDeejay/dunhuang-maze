@@ -137,6 +137,11 @@ def install_intro(directory: Path, html_path: Path) -> None:
     if 'id="intro-title"' in html:
         return
     markup = (source / "intro.html").read_text(encoding="utf-8")
+    lore_source = source.parents[1] / "assets" / "lore"
+    rabbit_note = json.loads((lore_source / "three_hares.json").read_text(encoding="utf-8"))
+    # Small original vector is inline: no image request competes with WASM.
+    rabbit_svg = (lore_source / "three_hares.svg").read_text(encoding="utf-8")
+    markup = markup.replace("__RABBIT_SVG__", rabbit_svg)
     images = {}
     for scene in ("family", "storm", "search"):
         artwork = source / f"{scene}.webp"
@@ -152,6 +157,7 @@ def install_intro(directory: Path, html_path: Path) -> None:
         raise ValueError("Godot loading markup changed; intro integration needs review")
     html = html.replace("\t\t</style>", (source / "intro.css").read_text(encoding="utf-8") + "\n\t\t</style>", 1)
     intro_js = (source / "intro.js").read_text(encoding="utf-8")
+    intro_js = intro_js.replace("__RABBIT_NOTE__", json.dumps(rabbit_note, ensure_ascii=False).replace("<", "\\u003c"))
     html = html.replace('<script src="', '<script>' + intro_js + '</script>\n\t\t<script onerror="window.dunhuangIntro.fail(\'引擎下载失败，请检查网络后重试。\')" src="', 1)
     html = html.replace("statusOverlay.remove();", "window.dunhuangIntro.ready();", 1)
     html = html.replace('"focusCanvas":true', '"focusCanvas":false', 1)

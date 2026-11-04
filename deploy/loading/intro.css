@@ -87,3 +87,26 @@ body.intro-open { touch-action:pan-y; }
   #status[data-reading="lore"] .intro-lore-hint { display:none; }
 }
 @media (prefers-reduced-motion:reduce) { .intro-sand { animation:none !important; transition:none; } }
+
+/* This single illustrated notebook is deliberately distinct from the family film. */
+#status[data-rabbit="true"] { grid-template-columns:minmax(0, 1fr); background:#262923; }
+#status[data-rabbit="true"] .intro-art { display:none; }
+#status[data-rabbit="true"] .intro-panel { max-width:62rem; height:100dvh; display:flex; flex-direction:column; padding-top:1.2rem; padding-bottom:1rem; }
+#status[data-rabbit="true"] .intro-reading { flex:1; min-height:0; overflow-y:auto; }
+#status[data-rabbit="true"] .intro-loading { flex:none; }
+#status[data-rabbit="true"] #intro-lore-view article { display:grid; grid-template-columns:1fr 1fr; column-gap:2rem; padding:1.5rem; border-radius:.3rem; background:#eee0bd; color:#493b2b; border:1px solid #bb9868; }
+#intro-rabbit-figure { grid-column:1; grid-row:1 / 5; margin:0; text-align:center; }
+#intro-rabbit-figure svg { display:block; width:100%; height:auto; max-height:17rem; }
+#intro-rabbit-figure figcaption { font-size:.75rem; line-height:1.7; margin:.3rem 0; color:#6e5740; }
+#intro-rabbit-zoom { min-height:2.75rem; border:1px solid #8d7050; border-radius:.3rem; background:transparent; color:#493b2b; padding:.3rem 1rem; }
+#status[data-rabbit="true"] #intro-lore-kind { color:#775137; font-size:.8rem; margin-top:1rem; }
+#status[data-rabbit="true"] #intro-lore-title { color:#3d493e; }
+#status[data-rabbit="true"] #intro-lore-copy { color:#544633; }
+#intro-rabbit-caption { color:#6f5435; font-size:.85rem; line-height:1.7; border-top:1px dashed #b59d78; padding-top:1rem; }
+@media (max-width:600px) {
+  #status[data-rabbit="true"] #intro-lore-view article { display:flex; flex-direction:column; padding:1rem; }
+  #intro-rabbit-figure svg { width:11rem; max-width:100%; margin:auto; }
+  #status[data-rabbit="true"] #intro-lore-kind { order:-2; margin-top:0; }
+  #status[data-rabbit="true"] #intro-lore-title { order:-1; font-size:1.4rem; }
+  #status[data-rabbit="true"] #intro-lore-copy { margin-top:1rem; }
+}

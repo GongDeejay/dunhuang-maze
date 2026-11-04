@@ -78,8 +78,8 @@ func _draw_mogao_encounter(canvas: CanvasItem, layout: LayoutProfile, ctx: Dicti
 		ctx.player, ctx.monsters, ctx.items, ctx.exit_pos, ctx.game_won, ctx.visited, ctx.is_revealed,
 		ctx.guide_dir, layout.ui_scale, focus)
 	var caption := "门后是哥哥的围巾"
-	if ctx.get("gate_revealing", false): caption = "栈道通了！木门正在打开"
-	elif ctx.get("gate_guiding", false): caption = "近路已开 · 沿蓝色箭头穿门"
+	if ctx.get("gate_revealing", false): caption = "兔纹对上了！木门正在打开"
+	elif ctx.get("gate_guiding", false): caption = "原来三兔共耳 · 沿箭头穿门"
 	var fs := int(clampf(area.size.x / 23.0, 16, 22))
 	canvas.draw_string(ThemeDB.fallback_font, area.position + Vector2(6, fs + 5), caption, HORIZONTAL_ALIGNMENT_CENTER, int(area.size.x - 12), fs, Color("f4d68c"))
 	if not ctx.maze.landmarks[MogaoJourney.GATE].get("open", false):

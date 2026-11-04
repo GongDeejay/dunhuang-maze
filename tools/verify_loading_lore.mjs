@@ -46,6 +46,16 @@ try {
         titles.add(await page.locator('#intro-lore-title').textContent());
         assert.ok((await page.locator('#intro-lore-copy').textContent()).length > 50);
         assert.match(await page.locator('#intro-lore-link').getAttribute('href'), /^https:\/\//);
+        if (i === 1) {
+          assert.equal(await page.locator('#intro-rabbit-figure').isVisible(), true);
+          assert.equal(await page.locator('.intro-art').isVisible(), false);
+          await page.locator('#intro-rabbit-zoom').click();
+          assert.equal(await page.locator('#intro-rabbit-zoom').getAttribute('aria-expanded'), 'true');
+          assert.equal(await page.locator('#intro-rabbit-figure svg').getAttribute('viewBox'), '95 85 135 140');
+          await page.screenshot({ path: resolve(out, `${id}-rabbit-zoom.png`) });
+          await page.locator('#intro-rabbit-zoom').click();
+          assert.equal(await page.locator('#intro-rabbit-figure svg').getAttribute('viewBox'), '0 0 320 320');
+        }
         if (i === 2) assert.match(await page.locator('#intro-lore-kind').textContent(), /传说/);
         await page.locator('#intro-lore-source summary').click();
         assert.equal(await page.locator('#intro-lore-link').isVisible(), true);
