@@ -4,6 +4,7 @@
 #   scp deploy/nginx-main-guangzhou.conf  target:/tmp/maze-gz-main-<sha>.conf
 #   scp deploy/nginx-guangzhou.conf       target:/tmp/maze-gz-site-<sha>.conf
 #   scp deploy/nginx-performance.conf     target:/tmp/maze-gz-perf-<sha>.inc
+#   scp deploy/nginx-redirect-guangzhou.conf target:/tmp/maze-gz-redirect-<sha>.conf
 #   ssh target bash -s -- <sha> < deploy/install-guangzhou.sh
 set -euo pipefail
 
@@ -13,14 +14,17 @@ revision="${1:-}"
 main_src="/tmp/maze-gz-main-${revision}.conf"
 site_src="/tmp/maze-gz-site-${revision}.conf"
 perf_src="/tmp/maze-gz-perf-${revision}.inc"
+redirect_src="/tmp/maze-gz-redirect-${revision}.conf"
 main_conf="/etc/nginx/nginx.conf"
 site_conf="/etc/nginx/conf.d/maze.mplusm.site.conf"
 perf_inc="/etc/nginx/dunhuang-performance.inc"
+redirect_conf="/etc/nginx/conf.d/maze-redirect.conf"
 web_root="/www/wwwroot/maze.mplusm.site"
 
 test -f "$main_src"
 test -f "$site_src"
 test -f "$perf_src"
+test -f "$redirect_src"
 install -d -m 755 /etc/nginx/conf.d "$web_root"
 
 changed=0
@@ -37,6 +41,10 @@ fi
 if ! cmp -s "$site_src" "$site_conf" 2>/dev/null; then
     [[ -f "$site_conf" ]] && cp -p "$site_conf" "${site_conf}.bak-${revision}"
     install -m 644 "$site_src" "$site_conf"
+    changed=1
+fi
+if ! cmp -s "$redirect_src" "$redirect_conf" 2>/dev/null; then
+    install -m 644 "$redirect_src" "$redirect_conf"
     changed=1
 fi
 
