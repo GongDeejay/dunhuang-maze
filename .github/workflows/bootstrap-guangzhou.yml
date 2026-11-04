@@ -82,18 +82,23 @@ jobs:
             | ssh target "tar -C '${{ inputs.target_cert_dir }}' -xf - && chmod 600 '${{ inputs.target_cert_dir }}/privkey.pem' && chmod 644 '${{ inputs.target_cert_dir }}/fullchain.pem'"
           ssh target "openssl x509 -noout -subject -enddate -in '${{ inputs.target_cert_dir }}/fullchain.pem'"
 
-      - name: Sync site content
+      - name: Sync site content (resumable, incremental)
         shell: bash
         run: |
           set -euo pipefail
-          ssh source "tar -C '${{ inputs.source_root }}' --exclude='.well-known' -cf - ." \
-            | ssh target "tar -C '${{ inputs.target_root }}' -xf -"
-          ssh target "du -sh '${{ inputs.target_root }}' && ls '${{ inputs.target_root }}' | wc -l"
+          mkdir -p "$RUNNER_TEMP/stage"
+          # 以 runner 为中间缓存，rsync 增量传输；中断后可重跑，只补差异。
+          rsync -a --delete --exclude '.well-known/' -e "ssh -F $HOME/.ssh/config" \
+            "source:${{ inputs.source_root }}/" "$RUNNER_TEMP/stage/"
+          rsync -a --delete -e "ssh -F $HOME/.ssh/config" \
+            "$RUNNER_TEMP/stage/" "target:${{ inputs.target_root }}/"
+          ssh target "du -sh '${{ inputs.target_root }}' && ls -1 '${{ inputs.target_root }}' | wc -l"
 
       - name: Install nginx site definition
         shell: bash
         run: |
           set -euo pipefail
+          scp deploy/nginx-main-guangzhou.conf "target:/tmp/maze-gz-main-${GITHUB_SHA}.conf"
           scp deploy/nginx-guangzhou.conf "target:/tmp/maze-gz-site-${GITHUB_SHA}.conf"
           scp deploy/nginx-performance.conf "target:/tmp/maze-gz-perf-${GITHUB_SHA}.inc"
           ssh target bash -s -- "$GITHUB_SHA" < deploy/install-guangzhou.sh
