@@ -135,6 +135,7 @@ jobs:
         run: |
           set -euo pipefail
           host="${DEPLOY_USER}@${DEPLOY_HOST}"
+          scp deploy/nginx-main-guangzhou.conf "$host:/tmp/maze-gz-main-${GITHUB_SHA}.conf"
           scp deploy/nginx-guangzhou.conf "$host:/tmp/maze-gz-site-${GITHUB_SHA}.conf"
           scp deploy/nginx-performance.conf "$host:/tmp/maze-gz-perf-${GITHUB_SHA}.inc"
           ssh "$host" bash -s -- "$GITHUB_SHA" < deploy/install-guangzhou.sh
