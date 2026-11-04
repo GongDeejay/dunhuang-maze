@@ -32,6 +32,7 @@ var grid: Array = []
 var terrain: Array = []
 var waypoints: Array = []
 var landmarks: Dictionary = {}
+var charted_route: Dictionary = {} # Known floor only; never reveals monsters or pickups.
 var theme_key := ""
 
 func _init(w: int, h: int):
@@ -54,6 +55,7 @@ func generate(seed_val: int = -1, waypoint_count: int = 3) -> Array:
 func _init_grid():
 	grid.clear()
 	terrain.clear()
+	charted_route.clear()
 	for y in height:
 		var row: Array = []
 		var trow: Array = []

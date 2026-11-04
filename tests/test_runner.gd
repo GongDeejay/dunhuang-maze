@@ -121,6 +121,8 @@ func test_first_journey():
 		assert_eq(short_damage, 4, "short route has exactly four announced hazard cells")
 		assert_true(maze.has_wall(FirstJourney.FAMILY.x, FirstJourney.FAMILY.y, MazeGenerator.E), "shortcut closed before rescue")
 		var before := PathGuide.bfs_path(maze, FirstJourney.FAMILY, FirstJourney.CAMP).size()
+		var grid_before := maze.grid.duplicate(true)
+		assert_true(not journey.study_route(maze), "cannot study a roadbook before finding it")
 		var player := PlayerController.new()
 		player.max_hp = 30
 		player.hp = 10
@@ -133,6 +135,15 @@ func test_first_journey():
 		assert_eq(player.reveal_bonus, 1, "mural increases view this level")
 		journey.enter(FirstJourney.MURAL, maze, player)
 		assert_eq(player.reveal_bonus, 1, "mural reward is one-time")
+		assert_true(journey.study_route(maze), "one stone-gate interaction charts the local route")
+		assert_true(not journey.study_route(maze), "route reward is idempotent")
+		assert_eq(maze.grid, grid_before, "reading roadbook never changes the maze or rescue gate")
+		assert_true(maze.charted_route.has(FirstJourney.MURAL) and maze.charted_route.has(FirstJourney.STONE_GATE), "route connects the notebook to its physical landmark")
+		assert_true(not maze.charted_route.has(FirstJourney.FAMILY) and not maze.charted_route.has(FirstJourney.CAMP), "roadbook does not reveal family or exit")
+		for cell in maze.charted_route:
+			assert_true(reachable.has(cell) and maze.get_terrain(cell.x, cell.y) != MazeGenerator.Terrain.DESERT, "charted local path stays on existing sheltered route")
+		journey.enter(FirstJourney.STONE_GATE, maze, player)
+		assert_true(journey.objective().contains("向北"), "reaching stone gate updates the local direction")
 		journey.rescue(maze, player)
 		assert_true(journey.rescued, "family rescue recorded")
 		assert_true(PathGuide.bfs_path(maze, FirstJourney.FAMILY, FirstJourney.CAMP).size() < before, "rescue opens a genuinely shorter return route")
@@ -165,6 +176,19 @@ func test_first_journey():
 	controller._update_guide_assist()
 	assert_eq(controller.moves_since_progress, 0, "new exploration resets lost counter")
 	assert_true(not controller.guide_assist_active, "new exploration does not trigger auto-navigation")
+	controller.player.pos = FirstJourney.MURAL
+	controller._mark_visited(controller.player.pos)
+	assert_true(controller._notebook_open(), "mural opens the illustrated roadbook, not a second story popup")
+	var notebook_pos: Vector2i = controller.player.pos
+	var notebook_hp: int = controller.player.hp
+	controller._on_mobile_move(MazeGenerator.W)
+	controller._process(3)
+	assert_eq(controller.player.pos, notebook_pos, "reading roadbook freezes mobile movement")
+	assert_eq(controller.player.hp, notebook_hp, "reading roadbook freezes combat")
+	controller.route_notebook.close()
+	assert_true(not controller.first_journey.route_studied, "closing notebook does not silently claim route")
+	controller.first_journey.study_route(controller.maze)
+	assert_true(not controller._is_revealed(FirstJourney.FAMILY), "charted road does not reveal distant actors")
 	var family: ItemEntity = controller._get_item_at(FirstJourney.FAMILY)
 	controller._pick_up_item(family)
 	assert_true(controller.first_journey.rescued and controller.key_tracker.has_all_keys(), "rescue and objective count agree")
@@ -184,6 +208,7 @@ func test_first_journey():
 	assert_eq(family_keys, ["family_2"], "second level seeks older child, not rescued mother")
 	controller._new_game(0)
 	assert_true(not controller.first_journey.rescued and not controller.first_journey.mural_found, "restart resets first-level story rewards")
+	assert_true(not controller.first_journey.route_studied and controller.maze.charted_route.is_empty() and not controller._notebook_open(), "new chapter resets chart and closes notebook")
 	controller.free()
 	SaveManager.clear_save()
 

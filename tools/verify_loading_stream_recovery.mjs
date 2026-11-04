@@ -35,7 +35,9 @@ try {
     try {
       await page.goto(process.env.URL || 'http://127.0.0.1:8074/', { waitUntil: 'domcontentloaded' });
       await page.locator('#intro-retry').waitFor({ state: 'visible', timeout: 30000 });
+      await page.waitForTimeout(700); // Let delayed loader progress callbacks run after the failed stream.
       assert.match(await page.locator('#status-detail').textContent(), /下载中断/);
+      assert.equal(await page.evaluate(() => window.dunhuangIntro.isLoading()), false);
       assert.equal(await page.locator('#intro-enter').isDisabled(), true);
       await page.locator('#intro-show-lore').click();
       await page.locator('#intro-lore-next').click();
@@ -51,6 +53,9 @@ try {
       await page.waitForFunction(() => !document.getElementById('status'));
       assert.deepEqual(errors, [], 'recognized loading transport rejection is handled');
       console.log(`${mobile ? 'phone' : 'desktop'}: partial WASM failure, lore, retry, storage and boot passed`);
+    } catch (error) {
+      await page.screenshot({path:resolve(out,`${mobile ? 'phone' : 'desktop'}-FAIL.png`)}).catch(()=>{});
+      throw error;
     } finally { await ctx.close(); }
   }
   const ctx = await browser.newContext();

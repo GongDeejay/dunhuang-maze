@@ -41,11 +41,23 @@ try {
       const copyBox = await page.locator('#intro-lore-copy').boundingBox();
       assert.ok(copyBox.y + 32 < readingBox.y + readingBox.height, 'actual story text is visible on opening, not only chrome');
       const titles = new Set();
+      const shell = await page.locator('.intro-panel').boundingBox();
       for (let i = 0; i < 6; i++) {
+        assert.equal(await page.locator('#status').getAttribute('data-illustrated'),'true','every lore page keeps the notebook shell');
+        const currentShell = await page.locator('.intro-panel').boundingBox();
+        for (const metric of ['x','y','width','height']) assert.ok(Math.abs(currentShell[metric]-shell[metric])<1,'turning a page must not change the reading layout');
         assert.equal(await page.locator('#intro-lore-page').textContent(), `${i + 1} / 6`);
         titles.add(await page.locator('#intro-lore-title').textContent());
         assert.ok((await page.locator('#intro-lore-copy').textContent()).length > 50);
         assert.match(await page.locator('#intro-lore-link').getAttribute('href'), /^https:\/\//);
+        if ([0,2,3,4,5].includes(i)) {
+          const note = {0:'nine_deer',2:'golden_light',3:'library_cave',4:'pipa',5:'roadbook'}[i];
+          assert.equal(await page.locator('#intro-travel-figure').isVisible(),true);
+          assert.equal(await page.locator(`[data-note="${note}"]`).isVisible(),true);
+          assert.equal(await page.locator('.intro-art').isVisible(),false);
+          assert.match(await page.locator('#intro-travel-caption').textContent(), /虚构|非文物/);
+          await page.screenshot({path:resolve(out,`${id}-${note}.png`)});
+        }
         if (i === 1) {
           assert.equal(await page.locator('#intro-rabbit-figure').isVisible(), true);
           assert.equal(await page.locator('.intro-art').isVisible(), false);

@@ -27,9 +27,10 @@ try {
     { id: 'desktop-safe-cave', width: 1440, height: 900, mobile: false, cave: true },
     { id: 'phone-shortcut', width: 390, height: 844, mobile: true, cave: false },
     { id: 'small-phone-safe', width: 360, height: 640, mobile: true, cave: true },
-    { id: 'small-phone-large-text', width: 360, height: 640, mobile: true, cave: false, font: 20 },
-    { id: 'phone-landscape', width: 844, height: 390, mobile: true, cave: false },
+    { id: 'small-phone-large-text', width: 360, height: 640, mobile: true, cave: true, font: 20 },
+    { id: 'phone-landscape', width: 844, height: 390, mobile: true, cave: true },
   ]) {
+    if (process.env.PROFILE && profile.id !== process.env.PROFILE) continue;
     const context = await browser.newContext({ viewport: { width: profile.width, height: profile.height }, isMobile: profile.mobile, hasTouch: profile.mobile, deviceScaleFactor: profile.mobile ? 3 : 1 });
     const page = await context.newPage();
     if (profile.font) await page.addInitScript(font => {
@@ -52,8 +53,51 @@ try {
     await tap(await point((await state()).normalButton));
     await page.waitForFunction(() => window.firstJourneyProbe.card.open);
     const seen = new Set();
+    async function notebookButton(name) {
+      await page.waitForTimeout(120); // Native Godot containers and modal input guard settle.
+      for (let tries = 0; tries < 8; tries++) {
+        const s = await state(), b = s.notebook[name], clip = name === 'leave' ? s.notebook.panel : s.notebook.scroll;
+        if (b.top >= clip.top && b.bottom <= clip.bottom) { await tap(await point(b)); return; }
+        const p = await point(s.notebook.scroll);
+        await page.mouse.move(p.x,p.y);
+        await page.mouse.wheel(0,b.top < clip.top ? -120 : 120);
+        await page.waitForTimeout(120); // ScrollContainer interpolation.
+      }
+      throw new Error(`${name}: notebook control unreachable`);
+    }
+    async function readNotebook() {
+      const frozen = await state();
+      const panel = frozen.notebook.panel;
+      assert.ok(panel.left >= 0 && panel.right <= frozen.viewport.width && panel.bottom <= frozen.viewport.height, 'roadbook fits viewport');
+      await page.screenshot({path:resolve(out,`${profile.id}-roadbook.png`)});
+      await page.keyboard.press('ArrowDown');
+      await page.waitForTimeout(2600); // Exceeds enemy movement interval; book must freeze combat.
+      const after = await state();
+      for (const key of ['pos','hp','moves','enemies']) assert.deepEqual(after[key],frozen[key],`${key} frozen in roadbook`);
+      await notebookButton('leave');
+      await page.waitForFunction(()=>!window.firstJourneyProbe.notebook.open);
+      assert.equal((await state()).charted,0,'dismiss without tracing grants no route');
+      await page.waitForTimeout(100); // Release guard before independent prompt gesture.
+      await tap(await point((await state()).prompt));
+      await page.waitForFunction(()=>window.firstJourneyProbe.notebook.open);
+      await notebookButton('gate');
+      await page.waitForFunction(()=>!window.firstJourneyProbe.notebook.open&&window.firstJourneyProbe.studied);
+      const traced = await state();
+      assert.ok(traced.charted > 0 && traced.charted < 40,'only the local route is charted');
+      assert.deepEqual(traced.pos,frozen.pos,'tracing tap does not also move player');
+      assert.equal(traced.hp,frozen.hp,'tracing never stacks healing');
+      await page.screenshot({path:resolve(out,`${profile.id}-charted-route.png`)});
+      await page.waitForTimeout(100); // Reopen should show same map without another reward.
+      await tap(await point((await state()).prompt));
+      await page.waitForFunction(()=>window.firstJourneyProbe.notebook.open);
+      assert.equal((await state()).charted,traced.charted);
+      await notebookButton('leave');
+      await page.waitForFunction(()=>!window.firstJourneyProbe.notebook.open);
+      await page.waitForTimeout(100); // Release guard before subsequent movement.
+    }
     async function dismiss() {
       const s = await state();
+      if (s.notebook.open) { await readNotebook(); return; }
       if (!s.card.open) return;
       assert.ok(s.card.left >= 0 && s.card.top >= 0 && s.card.right <= s.viewport.width && s.card.bottom <= s.viewport.height, `${profile.id}: card fits viewport: ${JSON.stringify(s.card)}`);
       if (!seen.has(s.card.title)) {
@@ -80,7 +124,7 @@ try {
       try {
         await page.waitForFunction(p => {
           const s = window.firstJourneyProbe;
-          return s.moves > p.moves || s.cooldown > 0 || s.card.open || s.over;
+          return s.moves > p.moves || s.cooldown > 0 || s.card.open || s.notebook.open || s.over;
         }, previous);
       } catch (error) {
         await page.screenshot({ path: resolve(out, `${profile.id}-input-failure.png`) });
@@ -109,10 +153,12 @@ try {
     if (profile.cave) {
       for (const goal of [[1, 8], [7, 8], [5, 9], [9, 11], [12, 8]]) await go(goal);
       assert.equal((await state()).mural, true);
+      assert.equal((await state()).studied, true);
       assert.equal((await state()).route, '古道');
     } else {
       for (const goal of [[8, 3], [12, 5], [12, 8]]) await go(goal);
       assert.equal((await state()).mural, false, 'optional cave not required');
+      assert.equal((await state()).charted, 0, 'bypass does not require roadbook');
       assert.equal((await state()).route, '风沙近路');
     }
     await go([14, 4]);

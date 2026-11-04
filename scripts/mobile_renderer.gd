@@ -84,6 +84,7 @@ func draw_follow_in_rect(
 
 			var cell: int = maze.grid[gy][gx]
 			maze_renderer._draw_walls(canvas, cell, Vector2(screen_x, screen_y), cell_sz, wall_w, gx, gy, maze_width, maze_height)
+			maze_renderer.draw_charted_route(canvas, maze, Vector2i(gx, gy), Vector2(screen_x, screen_y), cell_sz)
 
 			if gx == exit_pos.x and gy == exit_pos.y and (game_won or is_revealed.call(exit_pos)):
 				var ep := Vector2(screen_x, screen_y)

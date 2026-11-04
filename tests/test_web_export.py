@@ -21,6 +21,8 @@ class WebExportTests(unittest.TestCase):
         html = directory / "index.html"
         html.write_text('<html lang="en"><head><style>\n\t\t</style>\n\t</head>'
                         f'<script src="{name}.js"></script>\nconst GODOT_CONFIG = {json.dumps(config, separators=(",", ":"))};\n')
+        with html.open('a') as fixture:
+            fixture.write("'onProgress': function (current, total) { statusProgress.max = total; }")
         content_address_assets(directory, html)
         optimize_html(html)
         gzip_assets(directory)
@@ -52,6 +54,7 @@ class WebExportTests(unittest.TestCase):
             self.assertIn(f'href="{config["mainPack"]}"', html)
             self.assertIn('crossorigin fetchpriority="low"', html)
             self.assertNotIn("game-aaaa", html)
+            self.assertIn('if (window.dunhuangIntro && !window.dunhuangIntro.isLoading()) return;', html)
             content_address_assets(directory, directory / "index.html")
             self.assertEqual((directory / "index.html").read_text(), html)
 
@@ -106,7 +109,15 @@ class WebExportTests(unittest.TestCase):
             self.assertNotIn('__RABBIT_SVG__', result)
             self.assertIn('id="shared-ears"', result)
             self.assertIn('id="intro-rabbit-zoom"', result)
-            self.assertEqual(len(re.findall(r'<svg\b', result)), 1, 'only the small shared rabbit vector is added')
+            self.assertEqual(len(re.findall(r'<svg\b', result)), 6, 'six original inline diagrams, not extra requests')
+            for note in ('roadbook', 'golden_light', 'nine_deer', 'library_cave', 'pipa'):
+                source_dir = 'deploy/loading/notes' if note in ('library_cave', 'pipa') else 'assets/lore'
+                note_source = Path(__file__).resolve().parents[1] / source_dir
+                data = json.loads((note_source / f'{note}.json').read_text())
+                self.assertIn(data['teaser'], result)
+                self.assertNotIn(f'__{note.upper()}_SVG__', result)
+                self.assertLess((note_source / f'{note}.svg').stat().st_size, 4000)
+            self.assertNotIn('__TRAVEL_NOTES__', result)
             self.assertLess((Path(__file__).resolve().parents[1] / 'assets/lore/three_hares.svg').stat().st_size, 8000)
             self.assertEqual(len(re.findall(r'<script[^>]+src=', result)), 1,
                              'lore must not introduce a remote script or library')

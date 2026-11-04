@@ -44,11 +44,15 @@ var _last_view := Vector2.ZERO
 var _old_scale := 1.0
 var _stopped := false
 var wind_audio: AudioStreamPlayer
+var golden_clue: GoldenClue
 
 func _ready() -> void:
 	world = DesertWorld.new()
 	add_child(world)
 	world.build(map)
+	golden_clue = GoldenClue.new()
+	add_child(golden_clue)
+	golden_clue.build(map)
 	body = CharacterBody3D.new()
 	body.position = checkpoint + Vector3(0, 0.05, 0)
 	add_child(body)
@@ -66,6 +70,7 @@ func _ready() -> void:
 	camera.far = 180
 	body.add_child(camera)
 	camera.current = true
+	world.update_atmosphere(body.position, 1.0)
 	ui_layer = CanvasLayer.new()
 	ui_layer.layer = 110
 	add_child(ui_layer)
@@ -219,8 +224,12 @@ func _physics_process(delta: float) -> void:
 	body.velocity.y = -2
 	var before := body.position
 	body.move_and_slide()
+	world.update_atmosphere(body.position, dt)
+	golden_clue.advance(dt)
+	# The bend is quieter, without adding audio files or changing other chapters' audio.
+	wind_audio.volume_db = lerpf(-14.0, -22.0, ValleyScenery.shelter(body.position))
 	travelled += Vector2(body.position.x - before.x, body.position.z - before.z).length()
-	if input.length() > 0:
+	if body.position.distance_to(before) > 0.01 and input.length() > 0:
 		step_timer += dt
 		if step_timer > 0.5:
 			step_timer = 0
@@ -242,6 +251,7 @@ func _physics_process(delta: float) -> void:
 		_begin_ending()
 		return
 	current_target = target()
+	golden_clue.set_observable(current_target == "light")
 	_refresh_hud()
 
 func _line_clear(pos: Vector3) -> bool:
@@ -255,6 +265,7 @@ func in_reach(pos: Vector3, distance: float = INTERACT_RANGE) -> bool:
 
 func target() -> String:
 	if not rescued and in_reach(ThirdMap.world(ThirdMap.CHILD)): return "child"
+	if relic_found and not rescued and not golden_clue.found and GoldenClue.in_view(camera.global_position, -camera.global_basis.z) and _line_clear(ThirdMap.world(ThirdMap.RELIC)): return "light"
 	if not relic_found and in_reach(ThirdMap.world(ThirdMap.RELIC)): return "relic"
 	if in_reach(ThirdMap.world(ThirdMap.FORK)): return "sign"
 	if enemy_hp > 0 and in_reach(ThirdMap.world(ThirdMap.SCORPION)): return "enemy"
@@ -267,10 +278,15 @@ func interact() -> void:
 		"relic":
 			relic_found = true
 			hp = mini(max_hp, hp + 6)
-			_notify("发现旅行手记：弟弟躲在北面石窟，营地在东南的塔下。获得纪念手记，恢复体力。", 10)
+			_notify(TravelLore.text("golden_light", "prompt") + "\n恢复 6 点体力。", 16)
 			AudioManager.play_pickup()
+		"light":
+			if golden_clue.reveal():
+				_notify(TravelLore.text("golden_light", "reveal"), 12)
+				AudioManager.play_pickup()
 		"child":
 			rescued = true
+			golden_clue.trail.hide() # Return route uses the existing tower landmark.
 			world.open_gate()
 			checkpoint = ThirdMap.world(ThirdMap.CHILD)
 			hp = max_hp
@@ -320,10 +336,14 @@ func _notify(text: String, duration: float = 5.0) -> void:
 
 func _refresh_hud() -> void:
 	hud.title.text = "三危山 · " + map.zone(body.position)
-	hud.objective.text = "与弟弟回到高塔下的营地" if rescued else "寻找弟弟 · 留意足迹与石窟"
+	hud.objective.text = "与弟弟回到高塔下的营地" if rescued else ("沿金色足迹前往北面石窟" if golden_clue.found else "寻找弟弟 · 留意足迹与石窟")
 	hud.status.text = "体力 %d/%d  ·  %s" % [hp, max_hp, "已发现旅行手记" if relic_found else "手记可选探索"]
-	hud.hint.text = message if message_timer > 0 else ("右侧滑动观察 · 靠近后互动" if hud.touch else "WASD 移动 · 鼠标观察 · E 互动 · Esc 暂停")
-	var names := {"child": "牵起弟弟的手", "relic": "查看旅行手记", "sign": "读路牌", "enemy": "反击沙蝎"}
+	hud.hint.text = message if message_timer > 0 else ("手记旁的暖光：退半步到左侧，转头看岩缝。" if relic_found and not golden_clue.found and not rescued and body.position.distance_to(ThirdMap.world(ThirdMap.RELIC)) < 7 else ("右侧滑动观察 · 靠近后互动" if hud.touch else "WASD 移动 · 鼠标观察 · E 互动 · Esc 暂停"))
+	# Let the landscape breathe after teaching controls; keep contextual guidance and touch controls.
+	if mode == "playing" and ValleyScenery.contains(ThirdMap.cell_at(body.position)):
+		hud.hint.visible = message_timer > 0 or (relic_found and not golden_clue.found and not rescued and body.position.distance_to(ThirdMap.world(ThirdMap.RELIC)) < 7)
+	elif mode == "playing": hud.hint.show()
+	var names := {"child": "牵起弟弟的手", "relic": "查看旅行手记", "light": "看看光里的脚印", "sign": "读路牌", "enemy": "反击沙蝎"}
 	hud.interact_button.text = names.get(current_target, "靠近线索")
 	hud.interact_button.disabled = current_target.is_empty()
 	hud.stick_vector = stick
@@ -398,4 +418,5 @@ func _finish_ending() -> void:
 	reset_input()
 	hud.overlay.color = Color(0.065, 0.055, 0.045, 0.96)
 	var found := "你还找到了那本旅行手记。" if relic_found else "石窟里的小秘密，留待下一次旅行。"
+	if golden_clue.found: found = "你换了个角度，看见金光照亮的小脚印，也找到了弟弟。"
 	hud.show_card("敦煌迷途 · 全家团聚", "风沙会抹去脚印，但我们总会找到彼此。\n\n" + found, "返回首页", "重温旅程", true)

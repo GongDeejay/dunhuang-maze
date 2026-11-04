@@ -53,6 +53,7 @@ var third_chapter: ThirdChapter
 var mogao_journey: MogaoJourney
 var pattern_panel: PatternPanel
 var pattern_prompt: Button
+var route_notebook: RouteNotebook
 var modal_release_guard := false
 var modal_closed_frame := -1
 var held_inputs: Dictionary = {}
@@ -109,6 +110,14 @@ func _ready() -> void:
 	add_child(pattern_panel)
 	pattern_panel.dismissed.connect(_on_pattern_closed)
 	pattern_panel.unlocked.connect(_on_pattern_unlocked)
+	route_notebook = RouteNotebook.new()
+	add_child(route_notebook)
+	route_notebook.dismissed.connect(_on_pattern_closed)
+	route_notebook.traced.connect(func():
+		if first_journey and first_journey.study_route(maze):
+			_add_log(TravelLore.text("roadbook", "reveal"))
+			AudioManager.play_pickup()
+			_request_redraw())
 	var prompt_layer := CanvasLayer.new()
 	prompt_layer.layer = 110
 	add_child(prompt_layer)
@@ -208,11 +217,14 @@ func _refresh_layout() -> void:
 		current_layout.log_rect = Rect2()
 	if mobile_controls:
 		mobile_controls.apply_layout(current_layout)
-		mobile_controls.visible = third_chapter == null and not game.is_difficulty_select() and not show_new_journey_confirm and not _pattern_open() and not _gate_revealing()
+		mobile_controls.visible = third_chapter == null and not game.is_difficulty_select() and not show_new_journey_confirm and not _pattern_open() and not _gate_revealing() and not _notebook_open()
 	if pattern_prompt:
 		var resume_reveal := _gate_revealing() and game.is_paused()
 		pattern_prompt.visible = resume_reveal or (mogao_journey != null and game.can_move() and not _modal_open() and mogao_journey.can_inspect(maze, player.pos))
 		var note_label := "回看手记" if mogao_journey and mogao_journey.gate_open else "查看兔纹手记"
+		if first_journey and first_journey.mural_found:
+			pattern_prompt.visible = game.can_move() and not _modal_open()
+			note_label = "回看壁画路书"
 		pattern_prompt.text = "点击继续" if resume_reveal else (note_label if touch else note_label + " [F]")
 		var area := current_layout.maze_rect
 		pattern_prompt.size = Vector2(minf(180, maxf(0, area.size.x - 16)), 48)
@@ -280,6 +292,7 @@ func _new_game(level_idx: int = -1) -> void:
 	first_journey = null
 	mogao_journey = null
 	if pattern_panel: pattern_panel.visible = false
+	if route_notebook: route_notebook.visible = false
 	held_inputs.clear()
 	modal_release_guard = false
 	if level_idx >= 0:
@@ -368,7 +381,10 @@ func _pattern_open() -> bool:
 	return pattern_panel != null and pattern_panel.visible
 
 func _modal_open() -> bool:
-	return _story_open() or _pattern_open() or _gate_revealing()
+	return _story_open() or _pattern_open() or _gate_revealing() or _notebook_open()
+
+func _notebook_open() -> bool:
+	return route_notebook != null and route_notebook.visible
 
 func _gate_revealing() -> bool:
 	return mogao_journey != null and mogao_journey.revealing()
@@ -396,6 +412,11 @@ func _track_held_input(event: InputEvent) -> void:
 	if held_inputs.is_empty(): modal_release_guard = false
 
 func _inspect_pattern() -> void:
+	if first_journey and first_journey.mural_found and game.can_move() and not _modal_open() and not _input_guarded():
+		mobile_controls.maze_touch_active = false
+		route_notebook.open(first_journey.notebook_path(maze), first_journey.route_studied)
+		_refresh_layout()
+		return
 	if _gate_revealing() and game.is_paused():
 		game.toggle_pause()
 		_request_redraw()
@@ -680,7 +701,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if game.is_paused() and event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_P, KEY_ESCAPE, KEY_ENTER]: game.toggle_pause()
 		get_viewport().set_input_as_handled()
 		return
-	if _pattern_open() or _input_guarded():
+	if _pattern_open() or _notebook_open() or _input_guarded():
 		get_viewport().set_input_as_handled()
 		return
 	if _story_open():
@@ -851,7 +872,13 @@ func _try_move(dir: int) -> bool:
 func _mark_visited(pos: Vector2i) -> void:
 	visited[pos] = true
 	if first_journey:
-		_show_story(first_journey.enter(pos, maze, player))
+		var card := first_journey.enter(pos, maze, player)
+		if card.get("kind", "") == "roadbook":
+			_add_log(card.body)
+			mobile_controls.maze_touch_active = false
+			route_notebook.open(first_journey.notebook_path(maze), first_journey.route_studied)
+			_refresh_layout()
+		else: _show_story(card)
 	elif mogao_journey:
 		var had_scarf := mogao_journey.scarf_found
 		_show_story(mogao_journey.enter(pos))

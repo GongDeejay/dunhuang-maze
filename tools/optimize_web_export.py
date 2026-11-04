@@ -122,6 +122,12 @@ def optimize_html(path: Path) -> str:
         1,
     )
     html = html.replace(
+        "'onProgress': function (current, total) {",
+        "'onProgress': function (current, total) {\n"
+        "\t\t\t\tif (window.dunhuangIntro && !window.dunhuangIntro.isLoading()) return;",
+        1,
+    )
+    html = html.replace(
         "statusProgress.max = total;",
         "statusProgress.max = total;\n"
         "\t\t\t\t\tstatusDetail.textContent = current >= total ? '资源就绪，正在进入敦煌…' : `正在加载 ${Math.round(current / total * 100)}%`;",
@@ -142,6 +148,12 @@ def install_intro(directory: Path, html_path: Path) -> None:
     # Small original vector is inline: no image request competes with WASM.
     rabbit_svg = (lore_source / "three_hares.svg").read_text(encoding="utf-8")
     markup = markup.replace("__RABBIT_SVG__", rabbit_svg)
+    travel_notes = {}
+    for note in ("roadbook", "golden_light", "nine_deer", "library_cave", "pipa"):
+        # These two reading-only notes must not inflate the Godot game pack.
+        note_source = source / "notes" if note in ("library_cave", "pipa") else lore_source
+        travel_notes[note] = json.loads((note_source / f"{note}.json").read_text(encoding="utf-8"))
+        markup = markup.replace(f"__{note.upper()}_SVG__", (note_source / f"{note}.svg").read_text(encoding="utf-8"))
     images = {}
     for scene in ("family", "storm", "search"):
         artwork = source / f"{scene}.webp"
@@ -157,6 +169,7 @@ def install_intro(directory: Path, html_path: Path) -> None:
         raise ValueError("Godot loading markup changed; intro integration needs review")
     html = html.replace("\t\t</style>", (source / "intro.css").read_text(encoding="utf-8") + "\n\t\t</style>", 1)
     intro_js = (source / "intro.js").read_text(encoding="utf-8")
+    intro_js = intro_js.replace("__TRAVEL_NOTES__", json.dumps(travel_notes, ensure_ascii=False).replace("<", "\\u003c"))
     intro_js = intro_js.replace("__RABBIT_NOTE__", json.dumps(rabbit_note, ensure_ascii=False).replace("<", "\\u003c"))
     html = html.replace('<script src="', '<script>' + intro_js + '</script>\n\t\t<script onerror="window.dunhuangIntro.fail(\'引擎下载失败，请检查网络后重试。\')" src="', 1)
     html = html.replace("statusOverlay.remove();", "window.dunhuangIntro.ready();", 1)

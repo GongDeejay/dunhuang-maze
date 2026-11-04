@@ -178,7 +178,7 @@ func draw_cells(
 		for x in maze_width:
 			var pos := Vector2i(x, y)
 			var cell_pos := offset + Vector2(x * cs, y * cs)
-			if not is_revealed.call(pos) and not visited.get(pos, false):
+			if not is_revealed.call(pos) and not visited.get(pos, false) and not maze.charted_route.has(pos):
 				canvas.draw_rect(Rect2(cell_pos, Vector2(cs, cs)), Color(0.15, 0.12, 0.10, 0.85))
 				continue
 
@@ -205,6 +205,16 @@ func draw_cells(
 				)
 
 			_draw_walls(canvas, maze.grid[y][x], cell_pos, cs, wt, x, y, maze_width, maze_height)
+			draw_charted_route(canvas, maze, pos, cell_pos, cs)
+
+func draw_charted_route(canvas: CanvasItem, maze: MazeGenerator, pos: Vector2i, origin: Vector2, cs: float) -> void:
+	if not maze.charted_route.has(pos): return
+	var center := origin + Vector2.ONE * cs / 2
+	canvas.draw_circle(center, maxf(2, cs * 0.05), Color("f9ce66"))
+	for d in [maze.N, maze.S, maze.E, maze.W]:
+		var offset := Vector2i(maze.DX[d], maze.DY[d])
+		if maze.can_move(pos.x, pos.y, d) and maze.charted_route.has(pos + offset):
+			canvas.draw_line(center, center + Vector2(offset) * cs / 2, Color("f9ce66"), maxf(2, cs * 0.045), true)
 
 func get_floor_color(maze: MazeGenerator, x: int, y: int) -> Color:
 	var key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(x, y)]
@@ -278,6 +288,14 @@ func draw_exit(
 	)
 
 func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs: float) -> void:
+	if landmark.kind == "deer":
+		canvas.draw_texture_rect(TravelLore.DEER, Rect2(origin + Vector2.ONE * cs * 0.08, Vector2.ONE * cs * 0.84), false)
+		return
+	if landmark.kind == "stone_gate":
+		var ink := Color("f9ce66")
+		for x in [0.24, 0.76]: canvas.draw_line(origin + Vector2(x, 0.25) * cs, origin + Vector2(x, 0.86) * cs, ink, maxf(3, cs * 0.09))
+		canvas.draw_line(origin + Vector2(0.13, 0.25) * cs, origin + Vector2(0.87, 0.25) * cs, ink, maxf(3, cs * 0.09))
+		return
 	if landmark.kind == "pattern_gate":
 		var opened: float = landmark.get("visual_open", 0.0)
 		var wood := Color("ad7947")

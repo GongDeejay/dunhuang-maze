@@ -9,11 +9,14 @@ const FAMILY := Vector2i(14, 4)
 const CAMP := Vector2i(16, 12)
 const SPRING := Vector2i(1, 8)
 const MURAL := Vector2i(7, 8)
+const STONE_GATE := Vector2i(12, 8)
 
 var events_seen: Dictionary = {}
 var rescued := false
 var spring_used := false
 var mural_found := false
+var route_studied := false
+var gate_reached := false
 var route_taken := ""
 var safe_route: Array[Vector2i] = []
 var short_route: Array[Vector2i] = []
@@ -42,6 +45,8 @@ func build(maze: MazeGenerator) -> void:
 		SPRING: {"symbol": "泉", "kind": "spring"},
 		Vector2i(4, 6): {"symbol": "窟", "kind": "cave"},
 		MURAL: {"symbol": "画", "kind": "mural"},
+		STONE_GATE: {"symbol": "门", "kind": "stone_gate"},
+		Vector2i(1, 7): {"symbol": "鹿", "kind": "deer"},
 		CAMP: {"symbol": "营", "kind": "camp"},
 	}
 
@@ -73,6 +78,7 @@ func spawn(parent: Node, on_defeated: Callable) -> Dictionary:
 	return {"monsters": monsters, "items": items}
 
 func enter(pos: Vector2i, maze: MazeGenerator, player: PlayerController) -> Dictionary:
+	if pos == STONE_GATE: gate_reached = true
 	if route_taken.is_empty():
 		if pos == Vector2i(4, 4): route_taken = "古道"
 		elif pos == Vector2i(5, 3): route_taken = "风沙近路"
@@ -89,12 +95,12 @@ func enter(pos: Vector2i, maze: MazeGenerator, player: PlayerController) -> Dict
 		SPRING:
 			spring_used = true
 			player.heal(6)
-			return {"title": "一眼清泉", "body": "喝下最后一捧清水，恢复 6 点体力。\n泉眼暂时干涸了，不能反复取水。歇一口气，再沿古道前进。", "button": "继续寻找妈妈"}
+			return {"title": "鹿形路标旁的清泉", "body": TravelLore.text("nine_deer", "reveal") + "\n恢复 6 点体力，这眼泉水只能取用一次。\n" + TravelLore.text("nine_deer", "fiction"), "button": "继续寻找妈妈"}
 		MURAL:
 			mural_found = true
 			player.heal(8)
 			player.reveal_bonus += 1
-			return {"title": "壁画后的发现", "body": "壁画描绘了古道与驿站。你找到了前人留下的补给，恢复 8 点体力，并记住了地形。\n本关视野 +1。妈妈就在古道尽头，营地在东南方向。", "button": "带着发现出发"}
+			return {"title": "妈妈的壁画路书", "body": "找到路书与补给：恢复 8 点体力，本关视野 +1。", "kind": "roadbook"}
 		CAMP:
 			if not rescued:
 				return {"title": "先找到妈妈", "body": "这是可以落脚的驿站。妈妈还在古道深处等你，找到她后再一起回来。", "button": "回去寻找"}
@@ -110,7 +116,25 @@ func rescue(maze: MazeGenerator, player: PlayerController) -> Dictionary:
 	return {"title": "终于找到妈妈了", "body": "“你没事，太好了！孩子们往莫高窟那边去了。”\n妈妈帮你包扎，恢复 4 点体力，并指出右侧通往营地的旧路。\n捷径已经打开。先一起到营地，再去找孩子们。", "button": "一起回营地"}
 
 func objective() -> String:
-	return "与妈妈前往营地" if rescued else "沿足迹寻找妈妈"
+	if rescued: return "与妈妈前往营地"
+	if route_studied: return "石门到了 · 沿古道向北找妈妈" if gate_reached else "沿路书金线走到石门"
+	return "沿足迹寻找妈妈"
+
+func notebook_path(maze: MazeGenerator) -> Array[Vector2i]:
+	# Stay on the existing southern ancient road; no new corridors or safer combat rules.
+	var path: Array[Vector2i] = [MURAL]
+	for target in [Vector2i(4, 6), Vector2i(1, 9), Vector2i(5, 11), Vector2i(9, 11), STONE_GATE]:
+		var segment := PathGuide.bfs_path(maze, path[-1], target)
+		for cell in segment:
+			if cell != path[-1]: path.append(cell)
+	return path
+
+func study_route(maze: MazeGenerator) -> bool:
+	if not mural_found or route_studied: return false
+	route_studied = true
+	for cell in notebook_path(maze): maze.charted_route[cell] = true
+	maze.landmarks[STONE_GATE]["discovered"] = true
+	return true
 
 func _carve(maze: MazeGenerator, corners: Array, terrain: int) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = [corners[0]]
