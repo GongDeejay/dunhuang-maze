@@ -139,6 +139,7 @@ jobs:
           scp deploy/nginx-main-guangzhou.conf "$host:/tmp/maze-gz-main-${GITHUB_SHA}.conf"
           scp deploy/nginx-guangzhou.conf "$host:/tmp/maze-gz-site-${GITHUB_SHA}.conf"
           scp deploy/nginx-performance.conf "$host:/tmp/maze-gz-perf-${GITHUB_SHA}.inc"
+          scp deploy/nginx-redirect-guangzhou.conf "$host:/tmp/maze-gz-redirect-${GITHUB_SHA}.conf"
           ssh "$host" bash -s -- "$GITHUB_SHA" < deploy/install-guangzhou.sh
 
       - name: Package release artifact
