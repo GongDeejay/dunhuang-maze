@@ -1,0 +1,106 @@
+name: Bootstrap Guangzhou Migration
+
+# 一次性迁移：把 maze 站点内容与证书从雅加达轻量服务器同步到广州轻量服务器，
+# 并下发广州侧的 nginx 站点定义。仅在人工触发时运行，可重复执行（幂等）。
+on:
+  workflow_dispatch:
+    inputs:
+      source_host:
+        description: 源服务器公网 IP（雅加达）
+        required: true
+        default: "43.133.145.77"
+      source_root:
+        description: 源站点目录
+        required: true
+        default: "/www/wwwroot/maze.mplusm.site"
+      source_cert_dir:
+        description: 源证书目录
+        required: true
+        default: "/www/server/panel/vhost/cert/maze.mplusm.site"
+      target_host:
+        description: 目标服务器公网 IP（广州）
+        required: true
+        default: "101.33.209.194"
+      target_root:
+        description: 目标站点目录
+        required: true
+        default: "/www/wwwroot/maze.mplusm.site"
+      target_cert_dir:
+        description: 目标证书目录
+        required: true
+        default: "/etc/nginx/ssl/maze.mplusm.site"
+
+concurrency:
+  group: dunhuang-maze-bootstrap
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH for source and target
+        shell: bash
+        env:
+          SOURCE_KEY: ${{ secrets.TENCENT_CVM_SSH_KEY }}
+          TARGET_KEY: ${{ secrets.LIGHTHOUSE_GZ_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_KEY" || { echo "::error::TENCENT_CVM_SSH_KEY 未配置"; exit 1; }
+          test -n "$TARGET_KEY" || { echo "::error::LIGHTHOUSE_GZ_SSH_KEY 未配置"; exit 1; }
+          install -d -m 700 "$HOME/.ssh"
+          install -m 600 /dev/null "$HOME/.ssh/source_key"
+          printf '%s\n' "$SOURCE_KEY" > "$HOME/.ssh/source_key"
+          install -m 600 /dev/null "$HOME/.ssh/target_key"
+          printf '%s\n' "$TARGET_KEY" > "$HOME/.ssh/target_key"
+          ssh-keyscan -H "${{ inputs.source_host }}" >> "$HOME/.ssh/known_hosts"
+          ssh-keyscan -H "${{ inputs.target_host }}" >> "$HOME/.ssh/known_hosts"
+          {
+            echo "Host source"
+            echo "  HostName ${{ inputs.source_host }}"
+            echo "  User root"
+            echo "  IdentityFile ~/.ssh/source_key"
+            echo "Host target"
+            echo "  HostName ${{ inputs.target_host }}"
+            echo "  User root"
+            echo "  IdentityFile ~/.ssh/target_key"
+          } > "$HOME/.ssh/config"
+
+      - name: Prepare target directories
+        run: ssh target "install -d -m 755 '${{ inputs.target_root }}' '${{ inputs.target_cert_dir }}' /etc/nginx/conf.d"
+
+      - name: Sync certificate material
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 私钥只在两台服务器之间流经 runner 内存，不落盘、不进仓库、不进产物。
+          ssh source "tar -C '${{ inputs.source_cert_dir }}' -cf - fullchain.pem privkey.pem" \
+            | ssh target "tar -C '${{ inputs.target_cert_dir }}' -xf - && chmod 600 '${{ inputs.target_cert_dir }}/privkey.pem' && chmod 644 '${{ inputs.target_cert_dir }}/fullchain.pem'"
+          ssh target "openssl x509 -noout -subject -enddate -in '${{ inputs.target_cert_dir }}/fullchain.pem'"
+
+      - name: Sync site content
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh source "tar -C '${{ inputs.source_root }}' --exclude='.well-known' -cf - ." \
+            | ssh target "tar -C '${{ inputs.target_root }}' -xf -"
+          ssh target "du -sh '${{ inputs.target_root }}' && ls '${{ inputs.target_root }}' | wc -l"
+
+      - name: Install nginx site definition
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp deploy/nginx-guangzhou.conf "target:/tmp/maze-gz-site-${GITHUB_SHA}.conf"
+          scp deploy/nginx-performance.conf "target:/tmp/maze-gz-perf-${GITHUB_SHA}.inc"
+          ssh target bash -s -- "$GITHUB_SHA" < deploy/install-guangzhou.sh
+
+      - name: Verify local HTTPS on 8443
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh target "curl -fsSI --max-time 15 --resolve maze.mplusm.site:8443:127.0.0.1 https://maze.mplusm.site:8443/MANIFEST.json | head -5"
+          ssh target "curl -fsSI --max-time 15 --resolve maze.mplusm.site:8443:127.0.0.1 https://maze.mplusm.site:8443/index.html | grep -i 'cross-origin-opener-policy'"
