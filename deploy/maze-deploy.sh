@@ -76,32 +76,61 @@ trap cleanup EXIT
 
 # ---------------------------------------------------------------- 1. 下载
 tarball="$WORK/dist-$VERSION.tar.gz"
-candidates=("$URL")
+candidates=()
 case "$URL" in
   https://github.com/*|https://objects.githubusercontent.com/*|https://release-assets.githubusercontent.com/*)
+    # GitHub 直连在境内实测仅 28KB/s；国内镜像可达数百 KB/s 至数 MB/s，故镜像优先、直连兜底。
     for mirror in $MIRRORS; do
       candidates+=("$mirror/$URL")
     done
+    candidates+=("$URL")
+    ;;
+  *)
+    candidates+=("$URL")
     ;;
 esac
 
+verify_download() {
+  local file="$1"
+  local actual
+  actual="$(sha256sum "$file" | awk '{print $1}')"
+  [[ "$actual" == "$SHA256" ]]
+}
+
 verified=0
+# 第一轮：带测速门槛，慢于 128KB/s 持续 25 秒即放弃并换下一个源
 for candidate in "${candidates[@]}"; do
-  log "download: $candidate"
+  log "download (fast path): $candidate"
   rm -f "$tarball"
-  if curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 3600 \
-       --speed-limit 1024 --speed-time 60 --continue-at - -o "$tarball" "$candidate"; then
-    actual="$(sha256sum "$tarball" | awk '{print $1}')"
-    if [[ "$actual" == "$SHA256" ]]; then
-      log "checksum ok ($actual)"
+  if curl -fL --retry 2 --retry-delay 2 --connect-timeout 15 --max-time 1800 \
+       --speed-limit 131072 --speed-time 25 --continue-at - -o "$tarball" "$candidate"; then
+    if verify_download "$tarball"; then
+      log "checksum ok"
       verified=1
       break
     fi
-    log "checksum mismatch from this source (got $actual) — trying next"
+    log "checksum mismatch — trying next source"
   else
-    log "download failed from this source"
+    log "source too slow or failed — trying next"
   fi
 done
+
+# 第二轮：不设门槛，作为最后兜底（慢但能完成）
+if [[ "$verified" -ne 1 ]]; then
+  for candidate in "${candidates[@]}"; do
+    log "download (fallback): $candidate"
+    rm -f "$tarball"
+    if curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 3600 \
+         --continue-at - -o "$tarball" "$candidate"; then
+      if verify_download "$tarball"; then
+        log "checksum ok"
+        verified=1
+        break
+      fi
+      log "checksum mismatch — trying next source"
+    fi
+  done
+fi
 [[ "$verified" -eq 1 ]] || die "no artifact source produced a matching checksum"
 
 # ---------------------------------------------------------------- 2. 解包与自检
