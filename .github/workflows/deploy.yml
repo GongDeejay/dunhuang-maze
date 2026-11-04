@@ -26,6 +26,12 @@ permissions:
 
 env:
   GODOT_VERSION: "4.7"
+  # 生产目标：腾讯云广州轻量应用服务器（80/443 由 nps 家庭隧道占用，站点在 8443）。
+  DEPLOY_HOST: ${{ vars.DEPLOY_HOST || '101.33.209.194' }}
+  DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
+  DEPLOY_ROOT: /www/wwwroot/maze.mplusm.site
+  SITE_NAME: maze.mplusm.site
+  SITE_PORT: "8443"
 
 jobs:
   build:
@@ -103,73 +109,76 @@ jobs:
         id: deploy_config
         shell: bash
         env:
-          DEPLOY_KEY: ${{ secrets.TENCENT_CVM_SSH_KEY }}
+          DEPLOY_KEY: ${{ secrets.LIGHTHOUSE_GZ_SSH_KEY }}
         run: |
           if [[ -n "$DEPLOY_KEY" ]]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Build succeeded, but TENCENT_CVM_SSH_KEY is not configured; deployment skipped."
+            echo "::warning::Build succeeded, but LIGHTHOUSE_GZ_SSH_KEY is not configured; deployment skipped."
           fi
 
       - name: Configure SSH
         if: steps.deploy_config.outputs.enabled == 'true'
         shell: bash
         env:
-          DEPLOY_KEY: ${{ secrets.TENCENT_CVM_SSH_KEY }}
+          DEPLOY_KEY: ${{ secrets.LIGHTHOUSE_GZ_SSH_KEY }}
         run: |
           install -d -m 700 "$HOME/.ssh"
           install -m 600 /dev/null "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
-          ssh-keyscan -H 43.133.145.77 >> "$HOME/.ssh/known_hosts"
+          ssh-keyscan -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts"
 
-      - name: Install reviewed payload compression policy
+      - name: Install nginx site definition and compression policy
         if: steps.deploy_config.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          host="${{ vars.TENCENT_DEPLOY_USER || 'root' }}@43.133.145.77"
-          scp deploy/nginx-performance.conf "$host:/tmp/dunhuang-performance-${GITHUB_SHA}.inc"
-          ssh "$host" bash -s -- "$GITHUB_SHA" < deploy/install-performance.sh
+          host="${DEPLOY_USER}@${DEPLOY_HOST}"
+          scp deploy/nginx-guangzhou.conf "$host:/tmp/maze-gz-site-${GITHUB_SHA}.conf"
+          scp deploy/nginx-performance.conf "$host:/tmp/maze-gz-perf-${GITHUB_SHA}.inc"
+          ssh "$host" bash -s -- "$GITHUB_SHA" < deploy/install-guangzhou.sh
 
       - name: Deploy versioned assets before publishing entry page
         if: steps.deploy_config.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          target="${{ vars.TENCENT_DEPLOY_USER || 'root' }}@43.133.145.77:/www/wwwroot/maze.mplusm.site/"
+          target="${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_ROOT}/"
           rsync -az --checksum --delay-updates \
             --exclude index.html --exclude .well-known/ \
             dist/ "$target"
           rsync -az dist/index.html "$target"
 
-      - name: Verify production
+      - name: Verify production (DNS-independent, pinned to deploy host)
         if: steps.deploy_config.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 5 --retry-delay 3 https://maze.mplusm.site/index.html -o /dev/null
-          curl -fsS https://maze.mplusm.site/MANIFEST.json -o /tmp/production-manifest.json
+          base="https://${SITE_NAME}:${SITE_PORT}"
+          pin=(--resolve "${SITE_NAME}:${SITE_PORT}:${DEPLOY_HOST}")
+          curl -fsSL --retry 5 --retry-delay 3 "${pin[@]}" "$base/index.html" -o /dev/null
+          curl -fsS "${pin[@]}" "$base/MANIFEST.json" -o /tmp/production-manifest.json
           python3 -c 'import json,os; assert json.load(open("/tmp/production-manifest.json"))["git_revision"] == os.environ["GITHUB_SHA"]'
-          curl -fsSI https://maze.mplusm.site/index.html | grep -qi 'cross-origin-opener-policy: same-origin'
-          curl -fsSI https://maze.mplusm.site/index.html | grep -qi 'cache-control: no-cache'
+          curl -fsSI "${pin[@]}" "$base/index.html" | grep -qi 'cross-origin-opener-policy: same-origin'
+          curl -fsSI "${pin[@]}" "$base/index.html" | grep -qi 'cache-control: no-cache'
           runtime="$(find dist -name 'engine-*.wasm' -exec basename {} \;)"
-          headers="$(curl -fsSI -H 'Accept-Encoding: gzip' "https://maze.mplusm.site/$runtime")"
+          headers="$(curl -fsSI "${pin[@]}" -H 'Accept-Encoding: gzip' "$base/$runtime")"
           echo "$headers" | grep -qi 'content-encoding: gzip'
           echo "$headers" | grep -qi 'immutable'
           echo "$headers" | grep -qi 'content-type: application/wasm'
           compressed_size="$(stat -c %s "dist/$runtime.gz")"
           echo "$headers" | tr -d '\r' | grep -qi "content-length: $compressed_size"
-          br_headers="$(curl -fsSI -H 'Accept-Encoding: br,gzip' "https://maze.mplusm.site/$runtime")"
+          br_headers="$(curl -fsSI "${pin[@]}" -H 'Accept-Encoding: br,gzip' "$base/$runtime")"
           echo "$br_headers" | grep -qi 'content-encoding: br'
           echo "$br_headers" | grep -qi 'content-type: application/wasm'
           echo "$br_headers" | grep -qi 'vary:.*Accept-Encoding'
           br_size="$(stat -c %s "dist/$runtime.br")"
           echo "$br_headers" | tr -d '\r' | grep -qi "content-length: $br_size"
-          curl -fsS -H 'Accept-Encoding: br' "https://maze.mplusm.site/$runtime" -o /tmp/production-engine.br
+          curl -fsS "${pin[@]}" -H 'Accept-Encoding: br' "$base/$runtime" -o /tmp/production-engine.br
           brotli -d -c /tmp/production-engine.br | cmp - "dist/$runtime"
           for image in dist/intro-*.webp; do
-            image_headers="$(curl -fsSI "https://maze.mplusm.site/$(basename "$image")")"
+            image_headers="$(curl -fsSI "${pin[@]}" "$base/$(basename "$image")")"
             echo "$image_headers" | grep -qi 'content-type: image/webp'
             echo "$image_headers" | grep -qi 'cache-control:.*immutable'
           done
