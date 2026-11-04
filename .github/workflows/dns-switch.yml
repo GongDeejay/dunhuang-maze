@@ -1,0 +1,166 @@
+name: DNS Switch (DNSPod)
+
+# 通过腾讯云 DNSPod API 修改 maze.mplusm.site 的 A 记录。
+# 使用仓库 Secret `TENCENT_CLOUD`（腾讯云 API 密钥），全程可审计、可重复执行。
+# 默认 dry_run=true 只读不改，确认无误后再以 dry_run=false 执行。
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 主域名
+        required: true
+        default: "mplusm.site"
+      subdomain:
+        description: 子域名（主机记录）
+        required: true
+        default: "maze"
+      target_ip:
+        description: 目标 A 记录值
+        required: true
+        default: "101.33.209.194"
+      dry_run:
+        description: 仅演练不修改（true/false）
+        required: true
+        default: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  switch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect credential shape (no secret value printed)
+        env:
+          RAW: ${{ secrets.TENCENT_CLOUD }}
+        run: |
+          python3 - <<'PY'
+          import os
+          raw = os.environ.get("RAW", "")
+          print("length:", len(raw))
+          print("lines:", raw.count("\n") + 1 if raw else 0)
+          print("has_colon:", ":" in raw)
+          print("looks_like_json:", raw.strip().startswith("{"))
+          print("has_secretid_word:", "SecretId" in raw or "secretid" in raw.lower())
+          PY
+
+      - name: Describe current records
+        env:
+          RAW: ${{ secrets.TENCENT_CLOUD }}
+          DOMAIN: ${{ inputs.domain }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, hmac, json, os, sys, time, urllib.request
+
+          raw = os.environ["RAW"].strip()
+          if raw.startswith("{"):
+              cfg = json.loads(raw)
+              sid = cfg.get("SecretId") or cfg.get("secretId")
+              skey = cfg.get("SecretKey") or cfg.get("secretKey")
+          elif "\n" in raw:
+              parts = [p.strip() for p in raw.splitlines() if p.strip()]
+              sid, skey = parts[0], parts[1]
+          elif ":" in raw:
+              sid, skey = raw.split(":", 1)
+          else:
+              sys.exit("无法识别的密钥格式")
+          sid, skey = sid.strip(), skey.strip()
+          print("SecretId 长度:", len(sid), "SecretKey 长度:", len(skey))
+
+          host, service, version, action = "dnspod.tencentcloudapi.com", "dnspod", "2021-03-23", "DescribeRecordList"
+          payload = json.dumps({"Domain": os.environ["DOMAIN"]}).encode()
+          ts = str(int(time.time()))
+          date = time.strftime("%Y-%m-%d", time.gmtime(int(ts)))
+          ct, signed = "application/json; charset=utf-8", "content-type;host;x-tc-action"
+          canonical_headers = f"content-type:{ct}\nhost:{host}\nx-tc-action:{action.lower()}\n"
+          canonical_request = "\n".join(["POST", "/", "", canonical_headers, signed, hashlib.sha256(payload).hexdigest()])
+          scope = f"{date}/{service}/tc3_request"
+          to_sign = "\n".join(["TC3-HMAC-SHA256", ts, scope, hashlib.sha256(canonical_request.encode()).hexdigest()])
+          def sign(k, m): return hmac.new(k, m.encode(), hashlib.sha256).digest()
+          k = sign(sign(sign(("TC3" + skey).encode(), date), service), "tc3_request")
+          sig = hmac.new(k, to_sign.encode(), hashlib.sha256).hexdigest()
+          auth = f"TC3-HMAC-SHA256 Credential={sid}/{scope}, SignedHeaders={signed}, Signature={sig}"
+          req = urllib.request.Request(f"https://{host}/", data=payload, method="POST", headers={
+              "Authorization": auth, "Content-Type": ct, "Host": host,
+              "X-TC-Action": action, "X-TC-Version": version, "X-TC-Timestamp": ts, "X-TC-Region": ""})
+          body = json.loads(urllib.request.urlopen(req, timeout=30).read())
+          if "Error" in body.get("Response", {}):
+              sys.exit(f"API 错误: {body['Response']['Error']}")
+          recs = body["Response"].get("RecordList", [])
+          for r in recs:
+              print(f"  {r['Name']:<24} {r['Type']:<6} {r['Value']:<40} line={r.get('Line')} id={r['RecordId']}")
+          print("记录总数:", len(recs))
+          PY
+
+      - name: Modify A record
+        if: ${{ inputs.dry_run == 'false' }}
+        env:
+          RAW: ${{ secrets.TENCENT_CLOUD }}
+          DOMAIN: ${{ inputs.domain }}
+          SUB: ${{ inputs.subdomain }}
+          TARGET: ${{ inputs.target_ip }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, hmac, json, os, sys, time, urllib.request
+
+          raw = os.environ["RAW"].strip()
+          if raw.startswith("{"):
+              cfg = json.loads(raw)
+              sid = cfg.get("SecretId") or cfg.get("secretId")
+              skey = cfg.get("SecretKey") or cfg.get("secretKey")
+          elif "\n" in raw:
+              parts = [p.strip() for p in raw.splitlines() if p.strip()]
+              sid, skey = parts[0], parts[1]
+          elif ":" in raw:
+              sid, skey = raw.split(":", 1)
+          else:
+              sys.exit("无法识别的密钥格式")
+
+          def call(action, params):
+              host, service, version = "dnspod.tencentcloudapi.com", "dnspod", "2021-03-23"
+              payload = json.dumps(params).encode()
+              ts = str(int(time.time())); date = time.strftime("%Y-%m-%d", time.gmtime(int(ts)))
+              ct = "application/json; charset=utf-8"; signed = "content-type;host;x-tc-action"
+              ch = f"content-type:{ct}\nhost:{host}\nx-tc-action:{action.lower()}\n"
+              cr = "\n".join(["POST", "/", "", ch, signed, hashlib.sha256(payload).hexdigest()])
+              scope = f"{date}/{service}/tc3_request"
+              tsg = "\n".join(["TC3-HMAC-SHA256", ts, scope, hashlib.sha256(cr.encode()).hexdigest()])
+              def sg(k, m): return hmac.new(k, m.encode(), hashlib.sha256).digest()
+              k = sg(sg(sg(("TC3" + skey).encode(), date), service), "tc3_request")
+              sig = hmac.new(k, tsg.encode(), hashlib.sha256).hexdigest()
+              req = urllib.request.Request(f"https://{host}/", data=payload, method="POST", headers={
+                  "Authorization": f"TC3-HMAC-SHA256 Credential={sid}/{scope}, SignedHeaders={signed}, Signature={sig}",
+                  "Content-Type": ct, "Host": host, "X-TC-Action": action,
+                  "X-TC-Version": version, "X-TC-Timestamp": ts, "X-TC-Region": ""})
+              body = json.loads(urllib.request.urlopen(req, timeout=30).read())
+              if "Error" in body.get("Response", {}):
+                  sys.exit(f"{action} 失败: {body['Response']['Error']}")
+              return body["Response"]
+
+          domain, sub, target = os.environ["DOMAIN"], os.environ["SUB"], os.environ["TARGET"]
+          recs = call("DescribeRecordList", {"Domain": domain}).get("RecordList", [])
+          matches = [r for r in recs if r["Name"] == sub and r["Type"] == "A"]
+          if not matches:
+              resp = call("CreateRecord", {"Domain": domain, "SubDomain": sub, "RecordType": "A",
+                                           "RecordLine": "默认", "Value": target})
+              print("已创建记录:", resp.get("RecordId"))
+          else:
+              for r in matches:
+                  if r["Value"] == target:
+                      print(f"记录 {r['RecordId']} 已指向 {target}，无需修改"); continue
+                  resp = call("ModifyRecord", {"Domain": domain, "RecordId": r["RecordId"],
+                                               "SubDomain": sub, "RecordType": "A",
+                                               "RecordLine": r.get("Line", "默认"), "Value": target})
+                  print(f"已修改记录 {r['RecordId']}: {r['Value']} -> {target} (request={resp.get('RequestId')})")
+          PY
+
+      - name: Resolve check
+        run: |
+          sleep 15
+          for i in 1 2 3 4 5 6; do
+            ips=$(dig +short A "${{ inputs.subdomain }}.${{ inputs.domain }}" @8.8.8.8 @1.1.1.1 | sort -u | tr '\n' ' ')
+            echo "attempt $i: $ips"
+            if echo "$ips" | grep -q "${{ inputs.target_ip }}"; then echo "解析已指向目标 IP"; exit 0; fi
+            sleep 20
+          done
+          echo "::warning::解析尚未全部生效（DNS 缓存 TTL），请稍后复查"
