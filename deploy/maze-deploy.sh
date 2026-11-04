@@ -50,7 +50,8 @@ done
 
 mkdir -p "$STATE_DIR" "$SNAPSHOTS"
 exec 9>"$STATE_DIR/.lock"
-flock -n 9 || die "another maze-deploy is already running"
+# 等锁而不是立刻失败：上一次中断可能留下正在收尾的进程。
+flock -w "${MAZE_LOCK_WAIT:-300}" 9 || die "another maze-deploy is still running (waited ${MAZE_LOCK_WAIT:-300}s)"
 
 WORK="$STATE_DIR/work"
 rm -rf "$WORK"
@@ -98,12 +99,14 @@ verify_download() {
 }
 
 verified=0
+# 注意：curl 显式关闭 fd 9（9>&-），避免子进程继承部署锁；
+# 否则脚本被中断时锁会被孤儿 curl 一直占住，下一次部署会被拒。
 # 第一轮：带测速门槛，慢于 128KB/s 持续 25 秒即放弃并换下一个源
 for candidate in "${candidates[@]}"; do
   log "download (fast path): $candidate"
   rm -f "$tarball"
   if curl -fL --retry 2 --retry-delay 2 --connect-timeout 15 --max-time 1800 \
-       --speed-limit 131072 --speed-time 25 --continue-at - -o "$tarball" "$candidate"; then
+       --speed-limit 131072 --speed-time 25 --continue-at - -o "$tarball" "$candidate" 9>&-; then
     if verify_download "$tarball"; then
       log "checksum ok"
       verified=1
@@ -121,7 +124,7 @@ if [[ "$verified" -ne 1 ]]; then
     log "download (fallback): $candidate"
     rm -f "$tarball"
     if curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 3600 \
-         --continue-at - -o "$tarball" "$candidate"; then
+         --continue-at - -o "$tarball" "$candidate" 9>&-; then
       if verify_download "$tarball"; then
         log "checksum ok"
         verified=1
