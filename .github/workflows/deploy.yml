@@ -22,7 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  # 需要写入权限：把构建产物发布为 Release 制品，供服务器主动拉取。
+  contents: write
 
 env:
   GODOT_VERSION: "4.7"
@@ -140,16 +141,56 @@ jobs:
           scp deploy/nginx-performance.conf "$host:/tmp/maze-gz-perf-${GITHUB_SHA}.inc"
           ssh "$host" bash -s -- "$GITHUB_SHA" < deploy/install-guangzhou.sh
 
-      - name: Deploy versioned assets before publishing entry page
+      - name: Package release artifact
+        if: steps.deploy_config.outputs.enabled == 'true'
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rev="${GITHUB_SHA:0:12}"
+          asset="dist-${rev}.tar.gz"
+          tar -C dist -czf "$asset" .
+          sha="$(sha256sum "$asset" | awk '{print $1}')"
+          echo "rev=$rev"      >> "$GITHUB_OUTPUT"
+          echo "asset=$asset"  >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha"   >> "$GITHUB_OUTPUT"
+          du -h "$asset"
+
+      - name: Publish artifact to release channel
+        if: steps.deploy_config.outputs.enabled == 'true'
+        id: publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="deploy-${{ steps.package.outputs.rev }}"
+          asset="${{ steps.package.outputs.asset }}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" \
+            --title "Deploy ${{ steps.package.outputs.rev }}" \
+            --notes "Automated production artifact for ${GITHUB_SHA}"
+          gh release upload "$tag" "$asset" --clobber
+          echo "url=https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${asset}" >> "$GITHUB_OUTPUT"
+          # 只保留最近 5 个部署制品，避免仓库无限膨胀
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("deploy-"))] | sort_by(.createdAt) | reverse | .[5:] | .[].tagName' \
+            | while read -r stale; do
+                if [ -n "${stale:-}" ]; then gh release delete "$stale" --yes --cleanup-tag || true; fi
+              done
+
+      - name: Pull-deploy on server (artifact never crosses the runner network)
         if: steps.deploy_config.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          target="${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_ROOT}/"
-          rsync -az --checksum --delay-updates \
-            --exclude index.html --exclude .well-known/ \
-            dist/ "$target"
-          rsync -az dist/index.html "$target"
+          host="${DEPLOY_USER}@${DEPLOY_HOST}"
+          # 只下发部署器（几 KB），构建产物由服务器自己拉取并校验。
+          scp deploy/maze-deploy.sh "$host:/usr/local/bin/maze-deploy"
+          ssh "$host" "chmod 0755 /usr/local/bin/maze-deploy"
+          ssh "$host" "/usr/local/bin/maze-deploy \
+            --version '${{ steps.package.outputs.rev }}' \
+            --sha256 '${{ steps.package.outputs.sha256 }}' \
+            --url '${{ steps.publish.outputs.url }}'"
 
       - name: Verify production (DNS-independent, pinned to deploy host)
         if: steps.deploy_config.outputs.enabled == 'true'
