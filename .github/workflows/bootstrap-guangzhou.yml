@@ -14,9 +14,9 @@ on:
         required: true
         default: "/www/wwwroot/maze.mplusm.site"
       source_cert_dir:
-        description: 源证书目录
+        description: 源证书目录（Let's Encrypt 实时目录，符号链接会被解引用）
         required: true
-        default: "/www/server/panel/vhost/cert/maze.mplusm.site"
+        default: "/etc/letsencrypt/live/maze.mplusm.site"
       target_host:
         description: 目标服务器公网 IP（广州）
         required: true
@@ -29,6 +29,10 @@ on:
         description: 目标证书目录
         required: true
         default: "/etc/nginx/ssl/maze.mplusm.site"
+      sync_content:
+        description: 是否同步站点内容（仅修证书时设为 false）
+        required: true
+        default: "true"
 
 concurrency:
   group: dunhuang-maze-bootstrap
@@ -78,11 +82,13 @@ jobs:
         run: |
           set -euo pipefail
           # 私钥只在两台服务器之间流经 runner 内存，不落盘、不进仓库、不进产物。
-          ssh source "tar -C '${{ inputs.source_cert_dir }}' -cf - fullchain.pem privkey.pem" \
+          # -h 解引用 /etc/letsencrypt/live 下的符号链接，确保拿到的是实时证书本体。
+          ssh source "tar -chf - -C '${{ inputs.source_cert_dir }}' fullchain.pem privkey.pem" \
             | ssh target "tar -C '${{ inputs.target_cert_dir }}' -xf - && chmod 600 '${{ inputs.target_cert_dir }}/privkey.pem' && chmod 644 '${{ inputs.target_cert_dir }}/fullchain.pem'"
-          ssh target "openssl x509 -noout -subject -enddate -in '${{ inputs.target_cert_dir }}/fullchain.pem'"
+          ssh target "grep -c 'BEGIN CERTIFICATE' '${{ inputs.target_cert_dir }}/fullchain.pem'; openssl x509 -noout -subject -issuer -enddate -in '${{ inputs.target_cert_dir }}/fullchain.pem'"
 
       - name: Sync site content (resumable, incremental)
+        if: ${{ inputs.sync_content == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
