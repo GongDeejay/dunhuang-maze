@@ -7,6 +7,9 @@ var scorpion_sprite: Node3D
 var camp_marker: Label3D
 var materials: Dictionary = {}
 var rock_transforms: Array[Transform3D] = []
+var scenery: ValleyScenery
+var atmosphere: Environment
+var slice_blend := 0.0
 
 func material(color: Color) -> StandardMaterial3D:
 	if materials.has(color): return materials[color]
@@ -17,6 +20,8 @@ func material(color: Color) -> StandardMaterial3D:
 	return mat
 
 func build(map: ThirdMap) -> void:
+	scenery = ValleyScenery.new()
+	add_child(scenery)
 	var environment := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
@@ -36,6 +41,7 @@ func build(map: ThirdMap) -> void:
 	env.fog_light_color = Color("dcad83")
 	env.fog_density = 0.007
 	environment.environment = env
+	atmosphere = env
 	add_child(environment)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-28, -38, 0)
@@ -77,22 +83,34 @@ func build(map: ThirdMap) -> void:
 			wall.get_child(0).hide()
 			# Broad faceted sandstone, with a low boundary around the open arrival area.
 			var basis := Basis.IDENTITY.scaled(size * Vector3(0.7, 0.5, 0.7))
-			rock_transforms.append(Transform3D(basis, center))
+			if ValleyScenery.dresses_wall(cell, direction): scenery.wall(cell, direction, map)
+			else: rock_transforms.append(Transform3D(basis, center))
 		if cell.y < 5 or cell.x < 3:
-			_box(ThirdMap.world(cell) + Vector3(0, -0.02, 0), Vector3(3.95, 0.07, 3.95), Color("bda987"), false)
+			var width := 4.02 if ValleyScenery.contains(cell) else 3.95
+			_box(ThirdMap.world(cell) + Vector3(0, -0.02, 0), Vector3(width, 0.07, width), Color("bda987"), false)
 	# Cave roof and portal: a dark enclosure followed by an open skyline.
 	_box(Vector3(52, 4.8, 8), Vector3(13, 0.6, 15), Color("776e70"), false)
 	_arch(ThirdMap.world(Vector2i(12, 3)), Color("8e7870"))
-	_arch(ThirdMap.world(Vector2i(3, 10)), Color("b78759"))
+	# An open threshold instead of an overhead box across the entrance vista.
+	_box(Vector3(6.4, 0.45, 40), Vector3(0.7, 0.9, 0.8), Color("a68a69"), false)
+	_box(Vector3(17.6, 0.3, 40), Vector3(0.9, 0.6, 0.8), Color("a68a69"), false)
 	gate = _box(ThirdMap.world(ThirdMap.GATE) + Vector3(0, 1.65, 0), Vector3(4, 3.3, 0.6), Color("aa7f54"), true) as StaticBody3D
 	# Tower is visible above local walls and consistently identifies the camp.
 	var tower := ThirdMap.world(ThirdMap.CAMP) + Vector3(0, 0, 4)
 	_box(tower + Vector3(0, 5, 0), Vector3(3, 10, 3), Color("bc8052"), false)
 	_box(tower + Vector3(0, 10.2, 0), Vector3(4, 0.6, 4), Color("f4d69b"), false)
 	_label("营地", tower + Vector3(0, 11.7, 0), Color("fff0c0"))
-	_label("← 避风古道     风沙近路 →", ThirdMap.world(ThirdMap.FORK) + Vector3(0, 2.2, -1.6), Color("fff0ca"))
+	# Two readable wooden boards replace the oversized floating fork caption.
+	for i in 2:
+		var pos := ThirdMap.world(ThirdMap.FORK) + Vector3(0, 2.0 - i * 0.42, -1.6)
+		_box(pos, Vector3(1.65, 0.35, 0.12), Color("765c43"), false)
+		var sign := _label("← 避风古道" if i == 0 else "风沙近路 →", pos + Vector3(0, 0, 0.075), Color("fff0ca"))
+		sign.pixel_size = 0.0025
+		sign.outline_size = 3
+		sign.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	_box(ThirdMap.world(ThirdMap.FORK) + Vector3(0, 1, -1.65), Vector3(0.18, 2, 0.18), Color("79593d"), false)
-	_label("壁画 · 留下的旅行手记", ThirdMap.world(ThirdMap.RELIC) + Vector3(0, 2, 0), Color("f0dbaa"))
+	var note_label := _label("旅行手记", ThirdMap.world(ThirdMap.RELIC) + Vector3(0, 1.5, -0.6), Color("f0dbaa"))
+	note_label.pixel_size = 0.002
 	_box(ThirdMap.world(ThirdMap.RELIC) + Vector3(0, 0.55, 0), Vector3(1.4, 1.1, 0.8), Color("716657"), false)
 	_label("弟弟", ThirdMap.world(ThirdMap.CHILD) + Vector3(0, 2.5, 0), Color("fff2bd"))
 	child_sprite = _character("mcking", ThirdMap.world(ThirdMap.CHILD), 1.65)
@@ -127,7 +145,19 @@ func build(map: ThirdMap) -> void:
 	for i in rock_transforms.size(): rock_batch.set_instance_transform(i, rock_transforms[i])
 	rocks.multimesh = rock_batch
 	add_child(rocks)
+	scenery.details(map)
+	scenery.finish()
 	_batch_static_boxes()
+
+func update_atmosphere(pos: Vector3, dt: float) -> void:
+	# Camera-local blend returns to the original lighting outside this visual slice.
+	var weight := (1.0 - smoothstep(24.0, 30.0, pos.x)) * smoothstep(12.0, 17.0, pos.z) * (1.0 - smoothstep(58.0, 64.0, pos.z))
+	slice_blend = move_toward(slice_blend, weight, dt * 2.0)
+	var shade := ValleyScenery.shelter(pos)
+	atmosphere.ambient_light_energy = lerpf(0.65, lerpf(0.42, 0.30, shade), slice_blend)
+	atmosphere.ambient_light_color = Color("a6b4cd").lerp(Color("8999ac"), slice_blend * shade)
+	atmosphere.fog_density = lerpf(0.007, 0.0038, slice_blend)
+	atmosphere.fog_light_color = Color("dcad83").lerp(Color("ceb49a"), slice_blend)
 
 func _batch_static_boxes() -> void:
 	# Render static rock/floor pieces in a handful of draws, not one draw per wall.

@@ -12,6 +12,15 @@ static func run(suite: Node) -> void:
 	suite.assert_true(map.floor_cells.size() < 160, "compact authored map budget")
 	suite.assert_true(map.is_windy(ThirdMap.world(Vector2i(7, 8))), "short path exposes wind")
 	suite.assert_true(not map.is_windy(ThirdMap.world(Vector2i(1, 5))), "long path sheltered")
+	var trail := map.clue_path()
+	suite.assert_eq(trail[0], ThirdMap.RELIC, "gold trail starts at the optional hand-drawn clue")
+	suite.assert_eq(trail[-1], ThirdMap.CHILD, "gold trail reaches the child's cave")
+	for i in trail.size():
+		suite.assert_true(map.can_enter(trail[i], false) and not map.is_windy(ThirdMap.world(trail[i])), "gold footprints stay on existing sheltered walkable floor")
+		if i > 0: suite.assert_eq(trail[i].distance_to(trail[i - 1]), 1.0, "gold trail cannot cross walls diagonally")
+	suite.assert_true(GoldenClue.in_view(Vector3(22.8, 1.6, 22.5), Vector3.FORWARD), "broad left viewpoint accepts natural facing")
+	suite.assert_true(not GoldenClue.in_view(Vector3(22.8, 1.6, 22.5), Vector3.BACK), "looking away does not reveal clue")
+	suite.assert_true(not GoldenClue.in_view(Vector3(24, 1.6, 22.5), Vector3.FORWARD), "must change viewpoint, not just collect old item")
 	var main = load("res://scripts/main.gd").new()
 	suite.add_child(main)
 	main._new_game(1)
@@ -21,6 +30,32 @@ static func run(suite: Node) -> void:
 	await suite.get_tree().physics_frame
 	var chapter: ThirdChapter = main.third_chapter
 	suite.assert_true(chapter != null and chapter.camera.current, "third chapter owns real 3D camera")
+	var scenery := chapter.world.scenery
+	suite.assert_true(scenery.wall_count > 20 and scenery.triangle_count < 6000, "valley uses bounded low-poly sandstone geometry")
+	suite.assert_true(scenery.get_child_count() <= 20, "sandstone is batched into spatial chunks")
+	suite.assert_eq(scenery.find_children("*", "CollisionObject3D", true, false).size(), 0, "visual polish adds no new colliders")
+	# Reconstruct the original RNG stream: cosmetic geometry must not perturb collision heights.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7303
+	for i in 28:
+		rng.randf_range(14, 24)
+		rng.randf_range(6, 13)
+		rng.randf_range(12, 22)
+	var colliders := chapter.world.find_children("*", "StaticBody3D", true, false)
+	var boundary := 0
+	for cell: Vector2i in map.floor_cells:
+		for direction in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+			if map.floor_cells.has(cell + direction): continue
+			var height := rng.randf_range(0.8, 1.5) if cell.y >= 11 else rng.randf_range(3.2, 5.0)
+			var pos := ThirdMap.world(cell) + Vector3(direction.x, 0, direction.y) * 2.0 + Vector3.UP * height * 0.5
+			boundary += 1
+			suite.assert_true(colliders[boundary].position.is_equal_approx(pos), "original boundary collider position and height preserved")
+	suite.assert_eq(colliders.size(), boundary + 2, "only original ground, boundary and rescue-gate collisions exist")
+	chapter.world.update_atmosphere(Vector3(8, 0, 24), 1)
+	suite.assert_true(chapter.world.atmosphere.ambient_light_energy < 0.35, "sheltered bend has a cooler low-light beat")
+	chapter.world.update_atmosphere(ThirdMap.world(ThirdMap.CAMP), 1)
+	suite.assert_true(is_equal_approx(chapter.world.atmosphere.ambient_light_energy, 0.65), "outside slice restores original lighting")
+	chapter.world.update_atmosphere(chapter.body.position, 1)
 	suite.assert_eq(main.monsters.size(), 0, "no legacy invisible 2D monsters")
 	suite.assert_true(not main.mobile_controls.visible, "old touch overlay disabled")
 	suite.assert_eq(SaveManager.load_progress().get("level_index"), 2, "third entry checkpoint saved")
@@ -29,6 +64,10 @@ static func run(suite: Node) -> void:
 	chapter._physics_process(1)
 	suite.assert_eq(chapter.body.position, initial, "welcome freezes motion")
 	chapter._on_action("primary")
+	chapter.message_timer = 0
+	chapter._refresh_hud()
+	suite.assert_true(not chapter.hud.hint.visible and chapter.hud.interact_button.visible, "idle tutorial text clears without hiding controls")
+	chapter.message_timer = 8
 	chapter.move_touch = 0
 	chapter.look_touch = 1
 	chapter.stick = Vector2.UP
@@ -55,6 +94,28 @@ static func run(suite: Node) -> void:
 	suite.assert_true(chapter.pitch <= 0.8, "upper view clamp")
 	chapter.interact()
 	suite.assert_true(not chapter.rescued, "cannot rescue remotely")
+	chapter.pitch = 0
+	chapter.camera.rotation.x = 0
+	chapter.body.position = Vector3(22.8, 0.1, 21.3)
+	await suite.get_tree().physics_frame
+	suite.assert_true(chapter.target() != "light", "gold discovery is not available before reading nearby note")
+	chapter.relic_found = true
+	var before_light_hp := chapter.hp
+	suite.assert_eq(chapter.target(), "light", "viewpoint plus visible clue offers existing interaction")
+	chapter.interact()
+	suite.assert_true(chapter.golden_clue.found and chapter.golden_clue.trail.visible, "gold discovery visibly reveals physical footprint trail")
+	suite.assert_eq(chapter.hp, before_light_hp, "gold clue never stacks another healing reward")
+	suite.assert_true(not chapter.golden_clue.reveal(), "gold reveal is idempotent")
+	suite.assert_true(chapter.golden_clue.trail.multimesh.visible_instance_count < chapter.golden_clue.trail.multimesh.instance_count, "footprints appear progressively rather than flashing the whole route")
+	chapter._on_action("pause")
+	var progress := chapter.golden_clue.reveal_progress
+	chapter._physics_process(1.0)
+	suite.assert_eq(chapter.golden_clue.reveal_progress, progress, "pause freezes clue animation")
+	chapter._on_action("primary")
+	chapter.golden_clue.advance(1.0)
+	suite.assert_eq(chapter.golden_clue.trail.multimesh.visible_instance_count, chapter.golden_clue.trail.multimesh.instance_count, "all footprints appear within a second")
+	suite.assert_true(not chapter.golden_clue.reveal() and chapter.golden_clue.reveal_progress == 1.0, "repeat interaction never restarts reveal")
+	suite.assert_true(not chapter.rescued and chapter.world.gate.collision_layer != 0, "gold clue cannot bypass family rescue gate")
 	# Real physics frames make ray queries reflect the new position.
 	chapter.pitch = 0
 	chapter.camera.rotation.x = 0
@@ -63,6 +124,9 @@ static func run(suite: Node) -> void:
 	suite.assert_eq(chapter.target(), "child", "nearby visible child interactable")
 	chapter.interact()
 	suite.assert_true(chapter.rescued, "rescue flag set")
+	suite.assert_true(not chapter.golden_clue.trail.visible, "rescue switches guidance to existing return tower")
+	chapter.golden_clue.advance(1.0)
+	suite.assert_true(not chapter.golden_clue.trail.visible, "animation cannot re-show obsolete outbound guidance")
 	suite.assert_eq(chapter.world.gate.collision_layer, 0, "shortcut collision removed")
 	chapter._on_action("primary")
 	chapter._hurt(999)

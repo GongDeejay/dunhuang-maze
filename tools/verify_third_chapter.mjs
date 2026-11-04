@@ -13,6 +13,7 @@ const profiles = [
   {id:'desktop-safe', width:1440, height:900, mobile:false, full:true, relic:true},
   {id:'desktop-look', width:1280, height:720, mobile:false},
   {id:'phone-short', width:390, height:844, mobile:true, full:true},
+  {id:'phone-gold', width:390, height:844, mobile:true, full:true, relic:true},
   {id:'small-large-text', width:360, height:640, mobile:true, font:20},
   {id:'landscape', width:844, height:390, mobile:true},
 ];
@@ -43,6 +44,8 @@ try{
    if(await page.locator('#intro-skip').isVisible())await page.locator('#intro-skip').click();
    await page.waitForFunction(()=>window.thirdChapterProbe&&!document.getElementById('status'),null,{timeout:120000});
    let s=await state();assert.equal(s.mode,'welcome');
+   assert.ok(s.sceneryTriangles>0&&s.sceneryTriangles<6000&&s.sceneryChunks<=20,'visual slice stays within geometry/draw budgets');
+   console.log(`${profile.id}: sandstone ${s.sceneryTriangles} triangles / ${s.sceneryChunks} spatial batches`);
    assert.ok(s.primary.left>=0&&s.primary.bottom<=s.height,'continue visible at native text scale');
    await screenshot('welcome');
    await tap('primary');await page.waitForFunction(()=>window.thirdChapterProbe.mode==='playing');
@@ -115,9 +118,26 @@ try{
    if(profile.full){
     await go([3,8]);await tap('interact');await screenshot('fork');
     if(profile.relic){
+     await go([2,6]);await screenshot('sheltered-bend');
+     assert.ok((await state()).ambient<0.35,'sheltered bend visibly lowers ambient light');
      await go([2,5]);await go([5,5]);await axis('z',21);await axis('x',24);
      await page.waitForFunction(()=>window.thirdChapterProbe.target==='relic');await tap('interact');
      await page.waitForFunction(()=>window.thirdChapterProbe.relic);await screenshot('relic');
+     assert.equal((await state()).gold,false,'reading note alone does not solve viewpoint discovery');
+     await axis('x',22.8);
+     await page.waitForFunction(()=>window.thirdChapterProbe.target==='light');
+     await screenshot('gold-viewpoint');
+     const beforeGold=await state();
+     assert.equal(beforeGold.lightVisible,true,'active light clue is inside the portrait/desktop camera frustum');
+     await tap('interact');
+     await page.waitForFunction(()=>window.thirdChapterProbe.gold&&window.thirdChapterProbe.trail);
+     assert.equal((await state()).hp,beforeGold.hp,'light clue adds no healing');
+     assert.equal((await state()).rescued,false,'light clue does not unlock rescue gate');
+     await page.waitForFunction(()=>window.thirdChapterProbe.revealProgress===1);
+     const afterGold=await state();
+     assert.equal(afterGold.trailCount,afterGold.trailTotal,'progressive reveal finishes');
+     assert.ok(Math.hypot(afterGold.x-beforeGold.x,afterGold.z-beforeGold.z)<0.1&&Math.abs(afterGold.yaw-beforeGold.yaw)<0.001,'discovery never takes over movement or camera');
+     await screenshot('gold-trail');
      await go([2,3]);await go([9,3]);
     }else{
      await go([8,8]);await go([9,8]);await axis('z',27);
@@ -130,6 +150,8 @@ try{
     await go([13,3]);await axis('z',11);
     await page.waitForFunction(()=>window.thirdChapterProbe.target==='child');await screenshot('child');
     await tap('interact');await page.waitForFunction(()=>window.thirdChapterProbe.rescued);
+    assert.equal((await state()).trail,false,'return guidance does not point back along outward clue');
+    if(!profile.relic)assert.equal((await state()).gold,false,'gold clue is optional');
     await screenshot('rescue');await tap('primary');
     await page.waitForFunction(()=>window.thirdChapterProbe.mode==='playing');
     await go([13,11]);

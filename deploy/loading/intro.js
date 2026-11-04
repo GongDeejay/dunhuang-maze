@@ -85,15 +85,18 @@
   ];
   // Shared with the in-game reference plate; generated from assets/lore at export.
   const rabbitNote = __RABBIT_NOTE__;
-  // Inline text and one small original vector: no additional image requests.
+  const travelNotes = __TRAVEL_NOTES__;
+  const noteRow = note => [note.kind, note.title, note.teaser, note.source_title, note.source_url];
+  // Inline text and small original vectors: no additional image requests.
   const lore = [
-    ['壁画故事 · 第257窟', '救过的人，为什么反来捉它？', '九色鹿把落水人救上岸，对方却为了赏赐带人来捕鹿。这段壁画故事把救援、告密和对质画在同一条长卷里，情节从两端走向中间。读这幅画，可不能只从左看到右。', '数字敦煌 · 莫高窟第257窟', 'https://www.e-dunhuang.com/cave/10.0001/0001.0001.0257'],
+    noteRow(travelNotes.nine_deer),
     [rabbitNote.kind, rabbitNote.title, rabbitNote.teaser, rabbitNote.source_title, rabbitNote.source_url],
-    ['建窟传说 · 三危山', '一道金光，留下了一个人', '古代《莫高窟记》讲过这样的故事：僧人乐僔来到敦煌，望见山间金光，仿佛有千佛显现，于是留下开窟。这则带着神异色彩的传说，把莫高窟的开端与三危山连在了一起。', '敦煌保护研究基金会 · 莫高窟记记载', 'https://www.dhafund.cn/cms/jjhdt/222.html'],
-    ['文物发现 · 藏经洞', '一面墙后，藏着怎样的世界？', '1900年，一间藏在洞窟甬道侧壁后的密室被发现。里面不只有经卷，还有文书和绘画。如今人们称它为藏经洞：一间小小的洞室，竟为后人打开了认识古代社会的一扇窗。', '敦煌研究院 · 藏经洞的发现', 'https://www.dha.ac.cn/info/1159/2519.htm'],
-    ['壁画趣闻 · 第112窟', '琵琶为什么跑到了背后？', '第112窟里，一位乐舞伎把琵琶举到背后，身体却仍在起舞。“反弹琵琶”把音乐与舞蹈凝在一个姿态里。石壁没有声音，却能让人想象出一场热闹的音乐会。', '敦煌研究院 · 盛唐古乐，惊艳千年', 'https://www.dha.ac.cn/info/1159/2723.htm'],
-    ['壁画巧思 · 第61窟', '把一段旅程，画满一面墙', '敦煌的石窟里，竟画着远方的五台山。第61窟《五台山图》不仅有山路和寺院，还画了赶路、推磨、开店的人。神异景象与日常生活相遇，像一张可以慢慢读的古代旅行地图。', '敦煌研究院 · 莫高窟第61窟', 'https://www.dha.ac.cn/info/1425/3588.htm'],
+    noteRow(travelNotes.golden_light),
+    noteRow(travelNotes.library_cave),
+    noteRow(travelNotes.pipa),
+    noteRow(travelNotes.roadbook),
   ];
+  const notePages = { 0: 'nine_deer', 2: 'golden_light', 3: 'library_cave', 4: 'pipa', 5: 'roadbook' };
   let seen = false;
   try { seen = localStorage.getItem(key) === 'seen'; } catch (_) { /* Private storage may be unavailable. */ }
   let chapter = 0;
@@ -112,6 +115,13 @@
   function renderLore() {
     const rabbit = readingLore && loreIndex === 1;
     overlay.dataset.rabbit = String(rabbit);
+    const noteId = readingLore ? notePages[loreIndex] : null;
+    overlay.dataset.illustrated = String(rabbit || Boolean(noteId));
+    $('intro-travel-figure').hidden = !noteId;
+    for (const illustration of $('intro-travel-figure').querySelectorAll('[data-note]')) {
+      illustration.hidden = illustration.dataset.note !== noteId;
+    }
+    $('intro-travel-caption').textContent = noteId ? travelNotes[noteId].fiction : '';
     $('intro-rabbit-figure').hidden = !rabbit;
     $('intro-rabbit-caption').hidden = !rabbit;
     $('intro-rabbit-zoom').setAttribute('aria-expanded', 'false');
@@ -220,6 +230,7 @@
   // Keep tutorial keys out of the running canvas until the player chooses to enter.
   overlay.addEventListener('keydown', event => event.stopPropagation());
   window.dunhuangIntro = {
+    isLoading() { return !ready && !failed && overlay.isConnected; },
     ready() {
       if (failed) return;
       ready = true;
@@ -265,6 +276,9 @@
     loreIndex = 1;
     showReading(true);
   }
+  const requestedNote = new URLSearchParams(location.search).get('lore');
+  const requestedPage = Object.keys(notePages).find(page => notePages[page] === requestedNote);
+  if (requestedPage !== undefined) { loreIndex = Number(requestedPage); showReading(true); }
   function firstArtworkReady() {
     if (artwork.getAttribute('src') === illustrations[0][0] && artwork.naturalWidth > 0) {
       imageCache.set(illustrations[0][0], { image: artwork, state: 'ready', promise: Promise.resolve(true) });

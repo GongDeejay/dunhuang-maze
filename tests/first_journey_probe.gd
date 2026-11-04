@@ -27,7 +27,15 @@ func _process(delta: float) -> void:
 		"normalButton": {"x": difficulty_center.x, "y": difficulty_center.y},
 		"objective": first_journey.objective() if first_journey else "",
 		"mural": first_journey.mural_found if first_journey else false,
+		"notebook": {"open": _notebook_open(), "gate": _rect(route_notebook.sketch.gate_button), "leave": _rect(route_notebook.leave), "scroll": _rect(route_notebook.scroll), "panel": _rect(route_notebook.panel)},
+		"charted": maze.charted_route.size() if maze else 0,
+		"studied": first_journey.route_studied if first_journey else false,
+		"prompt": _rect(pattern_prompt),
 		"rescued": first_journey.rescued if first_journey else false,
 		"route": first_journey.route_taken if first_journey else "",
 	}
 	JavaScriptBridge.eval("window.firstJourneyProbe = " + JSON.stringify(state) + ";")
+
+func _rect(control: Control) -> Dictionary:
+	var rect := control.get_global_rect()
+	return {"x": rect.get_center().x, "y": rect.get_center().y, "left": rect.position.x, "right": rect.end.x, "top": rect.position.y, "bottom": rect.end.y}

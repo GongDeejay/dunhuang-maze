@@ -50,3 +50,13 @@ func zone(pos: Vector3) -> String:
 	if pos.z > 40: return "落日沙谷" if pos.x < 35 else "营地灯火"
 	if pos.z < 19: return "风蚀石窟"
 	return "山口余光"
+
+func clue_path() -> Array[Vector2i]:
+	var points: Array[Vector2i] = [RELIC]
+	for corner in [Vector2i(2, 5), Vector2i(2, 3), Vector2i(9, 3), Vector2i(13, 3), CHILD]:
+		var cell := points[-1]
+		while cell != corner:
+			cell += Vector2i(signi(corner.x - cell.x), 0) if cell.x != corner.x else Vector2i(0, signi(corner.y - cell.y))
+			assert(can_enter(cell, false))
+			points.append(cell)
+	return points
