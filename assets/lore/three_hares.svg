@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 320 320">
+  <!-- Original geometric interpretation, not a reproduction of a historic mural. -->
+  <circle cx="160" cy="160" r="153" fill="#eee0bd" stroke="#9b6848" stroke-width="3"/>
+  <circle cx="160" cy="160" r="141" fill="none" stroke="#b28d5f" stroke-width="1" stroke-dasharray="3 7"/>
+  <circle cx="160" cy="160" r="125" fill="#294f50" stroke="#bc945e" stroke-width="4"/>
+  <g fill="#d7b273" stroke="#f3d9a6" stroke-width="1.5">
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(60 160 160)"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(120 160 160)"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(180 160 160)"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(240 160 160)"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(300 160 160)"/>
+  </g>
+  <g fill="#f4e6c3" stroke="#643f2f" stroke-width="2.4" stroke-linejoin="round">
+    <g id="hare">
+      <path d="M155 112 C144 103 139 85 118 79 C97 74 77 88 80 107 C82 124 106 127 123 116 L141 130Z"/>
+      <path d="M85 101 Q64 91 70 80 Q81 84 89 94"/>
+      <path d="M103 113 Q93 135 114 136 L133 123 M116 89 Q132 84 144 95 L156 100" fill="none"/>
+      <path d="M145 105 Q150 88 163 96 Q175 102 174 118 L163 128 Q145 128 145 105Z"/>
+      <circle cx="156" cy="105" r="2.6" fill="#643f2f" stroke="none"/>
+      <path d="M171 117 L176 120 L170 122" fill="#643f2f"/>
+    </g>
+    <use href="#hare" transform="rotate(120 160 160)"/>
+    <use href="#hare" transform="rotate(240 160 160)"/>
+  </g>
+  <!-- Each lens is ONE ear shared by the two heads at its endpoints. Three total. -->
+  <g id="shared-ears" fill="#f4e6c3" stroke="#643f2f" stroke-width="2.4">
+    <path d="M160 117 Q201 132 197 181 Q160 162 160 117Z"/>
+    <path d="M160 117 Q201 132 197 181 Q160 162 160 117Z" transform="rotate(120 160 160)"/>
+    <path d="M160 117 Q201 132 197 181 Q160 162 160 117Z" transform="rotate(240 160 160)"/>
+  </g>
+  <g fill="none" stroke="#ba754f" stroke-width="2.5" stroke-linecap="round">
+    <path d="M169 133 Q186 150 191 168"/>
+    <path d="M169 133 Q186 150 191 168" transform="rotate(120 160 160)"/>
+    <path d="M169 133 Q186 150 191 168" transform="rotate(240 160 160)"/>
+  </g>
+</svg>

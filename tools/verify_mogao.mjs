@@ -99,6 +99,15 @@ try {
     }
     try {
       await page.goto(process.env.URL || 'http://127.0.0.1:8067/', { waitUntil: 'domcontentloaded' });
+      if (profile.id === 'desktop-gate') {
+        await page.locator('#intro-show-lore').click();
+        await page.locator('#intro-lore-next').click();
+        assert.equal(await page.locator('#intro-rabbit-figure').isVisible(), true);
+        assert.equal(await page.locator('.intro-art').isVisible(), false, 'notebook is not another family-film card');
+        await page.locator('#intro-rabbit-zoom').click();
+        assert.equal(await page.locator('#intro-rabbit-zoom').getAttribute('aria-expanded'), 'true');
+        await page.screenshot({ path: resolve(out, 'desktop-rabbit-loading.png') });
+      }
       if (await page.locator('#intro-skip').isVisible()) await page.locator('#intro-skip').click();
       await page.waitForFunction(() => window.mogaoProbe && !document.getElementById('status'), undefined, { timeout: 120000 });
       await tap((await state()).normal);
@@ -129,41 +138,37 @@ try {
         await page.waitForTimeout(3200); // Exceeds the longest enemy interval; modal must freeze the entire encounter.
         s = await state();
         for (const key of ['pos', 'hp', 'moves', 'inventory', 'buff', 'cooldown', 'enemies']) assert.deepEqual(s[key], frozen[key], `${key} frozen during inspection`);
-        assert.equal(s.phase, 'observe', 'no tutorial or automatic observation countdown');
-        assert.equal(s.board.length, 2, 'only two motifs to remember');
-        assert.deepEqual(Object.keys(s.buttons).sort(), ['different', 'leave', 'primary', 'same']);
+        assert.equal(s.phase, 'inspect', 'no cover, countdown or memory test');
+        assert.equal(s.board.length, 2, 'two plates to match against the visible reference');
+        assert.deepEqual(Object.keys(s.buttons).sort(), ['different', 'leave', 'same']);
         await page.screenshot({ path: resolve(out, `${profile.id}-board.png`) });
         if (profile.id === 'desktop-gate') {
           await page.setViewportSize({ width: 1200, height: 800 });
-          await page.waitForFunction(() => window.mogaoProbe.phase === 'suspended');
-          assert.equal((await state()).latches, 0, 'resize interrupts, never answers a hidden board');
-          await click('primary');
-          await page.waitForFunction(() => window.mogaoProbe.phase === 'observe');
+          await page.waitForFunction(() => window.mogaoProbe.viewport.width === 1200);
+          assert.equal((await state()).phase, 'inspect', 'resize never hides or answers the reference');
+          assert.equal((await state()).latches, 0);
           await page.setViewportSize({ width: profile.width, height: profile.height });
           await page.waitForFunction(p => window.mogaoProbe.viewport.width === p.width && window.mogaoProbe.viewport.height === p.height, profile);
-          await page.waitForFunction(() => window.mogaoProbe.phase === 'suspended');
-          await click('primary');
+          assert.equal((await state()).phase, 'inspect');
         }
         await click('leave');
         await page.waitForFunction(() => !window.mogaoProbe.panelOpen);
         assert.equal((await state()).gate, false, 'leaving never opens the unsolved gate');
         await page.waitForTimeout(80); // Release guard before a new physical gesture.
         await tap((await state()).prompt);
-        await page.waitForFunction(() => window.mogaoProbe.panelOpen && window.mogaoProbe.phase === 'observe');
+        await page.waitForFunction(() => window.mogaoProbe.panelOpen && window.mogaoProbe.phase === 'inspect');
         const retryHp = (await state()).hp;
-        // One wrong answer returns directly to observation; one correct answer opens the real door.
+        // One wrong choice preserves both plates; one correct choice opens the real door.
         for (let round = 0; round < 2; round++) {
-          await page.waitForFunction(() => window.mogaoProbe.phase === 'observe');
-          await click('primary');
-          await page.waitForFunction(() => window.mogaoProbe.phase === 'probe');
+          await page.waitForFunction(() => window.mogaoProbe.phase === 'inspect');
           await page.screenshot({ path: resolve(out, `${profile.id}-comparison.png`) });
           s = await state();
-          let changed = s.board[s.target] !== s.probe;
-          if (round === 0) changed = !changed;
-          await click(changed ? 'different' : 'same');
+          const index = s.board.indexOf(round === 0 ? 1 : 0);
+          await click(index === 0 ? 'same' : 'different');
           if (round === 0) {
-            await page.waitForFunction(() => window.mogaoProbe.phase === 'observe');
+            await page.waitForFunction(() => window.mogaoProbe.message.includes('不着急'));
             assert.equal((await state()).latches, 0);
+            assert.deepEqual((await state()).board, s.board, 'wrong choice does not move the answer');
             assert.equal((await state()).hp, retryHp, 'mistake never deals damage');
           } else {
             await page.waitForFunction(() => !window.mogaoProbe.panelOpen && window.mogaoProbe.revealing);
@@ -188,6 +193,15 @@ try {
         const afterPath = path((await state()).grid, (await state()).pos, [14, 4]).length;
         assert.ok(beforePath - afterPath >= 12, 'opened gate gives a real shorter route');
         await page.waitForTimeout(80); // Wait only for the deliberate input release guard.
+        await tap((await state()).prompt);
+        await page.waitForFunction(() => window.mogaoProbe.panelOpen && window.mogaoProbe.phase === 'done');
+        assert.match((await state()).message, /共用/);
+        assert.equal((await state()).buttons.same.visible, false, 'revealed notebook does not ask again');
+        await page.screenshot({ path: resolve(out, `${profile.id}-notebook-reveal.png`) });
+        await click('leave');
+        await page.waitForFunction(() => !window.mogaoProbe.panelOpen);
+        assert.equal((await state()).revealing, false, 'rereading cannot replay or relock gate');
+        await page.waitForTimeout(80); // Deliberate input release guard after closing notebook.
         await go([5, 2]);
         assert.equal((await state()).crossedGate, true);
         assert.equal((await state()).gateGuiding, false, 'temporary guide ends after crossing the door');

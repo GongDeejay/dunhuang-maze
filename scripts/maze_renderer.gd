@@ -291,7 +291,7 @@ func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs
 			for y in [0.3, 0.68]:
 				canvas.draw_line(origin + Vector2(x, y) * cs, origin + Vector2(x + width, y) * cs, Color("644530"), maxf(1, cs * 0.04))
 		if opened < 0.6:
-			_draw_pattern_seal(canvas, origin + Vector2(0.5, 0.48) * cs, cs * 0.12, Color("9cdbd9"))
+			_draw_pattern_seal(canvas, origin + Vector2(0.5, 0.48) * cs, cs * 0.28, Color.WHITE)
 		else:
 			canvas.draw_line(origin + Vector2(0.27, 0.54) * cs, origin + Vector2(0.74, 0.54) * cs, Color("f4d68c"), maxf(2, cs * 0.045), true)
 			canvas.draw_polyline(PackedVector2Array([origin + Vector2(0.59, 0.41) * cs, origin + Vector2(0.75, 0.54) * cs, origin + Vector2(0.59, 0.67) * cs]), Color("f4d68c"), maxf(2, cs * 0.045), true)
@@ -304,7 +304,7 @@ func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs
 	if landmark.kind == "pattern":
 		canvas.draw_rect(Rect2(origin + Vector2(0.13, 0.36) * cs, Vector2(0.74, 0.46) * cs), Color("9e713e"))
 		canvas.draw_rect(Rect2(origin + Vector2(0.13, 0.29) * cs, Vector2(0.74, 0.13) * cs), Color("dab779"))
-		_draw_pattern_seal(canvas, origin + Vector2(0.5, 0.56) * cs, cs * 0.13, Color("9cdbd9"))
+		_draw_pattern_seal(canvas, origin + Vector2(0.5, 0.52) * cs, cs * 0.26, Color.WHITE)
 		return
 	var color := Color("d8b76b")
 	if landmark.kind == "spring": color = Color("79c5c4")
@@ -317,8 +317,8 @@ func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs
 	canvas.draw_string(ThemeDB.fallback_font, origin + Vector2(0, cs * 0.68), landmark.symbol,
 		HORIZONTAL_ALIGNMENT_CENTER, int(cs), int(cs * 0.43), color)
 
-func _draw_pattern_seal(canvas: CanvasItem, center: Vector2, radius: float, color: Color) -> void:
-	canvas.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -radius), center + Vector2(radius, 0), center + Vector2(0, radius), center + Vector2(-radius, 0)]), color)
+func _draw_pattern_seal(canvas: CanvasItem, center: Vector2, radius: float, _color: Color) -> void:
+	RabbitLore.draw_plate(canvas, Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2))
 
 func draw_items(
 	canvas: CanvasItem,

@@ -100,6 +100,14 @@ class WebExportTests(unittest.TestCase):
                 self.assertIn(story, result)
             self.assertIn('id="intro-show-lore"', result)
             self.assertIn('id="intro-lore-view"', result)
+            entry = json.loads((Path(__file__).resolve().parents[1] / 'assets/lore/three_hares.json').read_text())
+            self.assertIn(entry['teaser'], result)
+            self.assertNotIn('__RABBIT_NOTE__', result)
+            self.assertNotIn('__RABBIT_SVG__', result)
+            self.assertIn('id="shared-ears"', result)
+            self.assertIn('id="intro-rabbit-zoom"', result)
+            self.assertEqual(len(re.findall(r'<svg\b', result)), 1, 'only the small shared rabbit vector is added')
+            self.assertLess((Path(__file__).resolve().parents[1] / 'assets/lore/three_hares.svg').stat().st_size, 8000)
             self.assertEqual(len(re.findall(r'<script[^>]+src=', result)), 1,
                              'lore must not introduce a remote script or library')
             self.assertLess(len(gzip.compress(result.encode())), 16000,

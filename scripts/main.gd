@@ -212,7 +212,8 @@ func _refresh_layout() -> void:
 	if pattern_prompt:
 		var resume_reveal := _gate_revealing() and game.is_paused()
 		pattern_prompt.visible = resume_reveal or (mogao_journey != null and game.can_move() and not _modal_open() and mogao_journey.can_inspect(maze, player.pos))
-		pattern_prompt.text = "点击继续" if resume_reveal else ("查看纹样" if touch else "查看纹样 [F]")
+		var note_label := "回看手记" if mogao_journey and mogao_journey.gate_open else "查看兔纹手记"
+		pattern_prompt.text = "点击继续" if resume_reveal else (note_label if touch else note_label + " [F]")
 		var area := current_layout.maze_rect
 		pattern_prompt.size = Vector2(minf(180, maxf(0, area.size.x - 16)), 48)
 		pattern_prompt.position = Vector2(area.get_center().x - pattern_prompt.size.x / 2, area.end.y - 78)

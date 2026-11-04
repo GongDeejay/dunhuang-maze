@@ -83,11 +83,12 @@
     ['莫高窟 · 岩壁里的千年故事', '莫高窟以壁画和彩塑著称，留下丝绸之路上文化交流的印记。旅途中的图案与故事，提醒我们仔细观察、记住线索。'],
     ['三危山 · 风中的归路', '三危山遥对莫高窟。游戏将山谷与远处的营地化为最后一段归路：找到弟弟，让一家四口再次团聚。'],
   ];
-  // Original short retellings, checked against the linked institutional sources.
-  // Inline text only: reading never competes with the engine for another download.
+  // Shared with the in-game reference plate; generated from assets/lore at export.
+  const rabbitNote = __RABBIT_NOTE__;
+  // Inline text and one small original vector: no additional image requests.
   const lore = [
     ['壁画故事 · 第257窟', '救过的人，为什么反来捉它？', '九色鹿把落水人救上岸，对方却为了赏赐带人来捕鹿。这段壁画故事把救援、告密和对质画在同一条长卷里，情节从两端走向中间。读这幅画，可不能只从左看到右。', '数字敦煌 · 莫高窟第257窟', 'https://www.e-dunhuang.com/cave/10.0001/0001.0001.0257'],
-    ['纹样奇趣 · 三兔共耳', '三只兔子，怎么只有三只耳朵？', '每只看起来都有两只耳朵，整幅图却只画了三只。“三兔共耳”让相邻兔子的耳朵巧妙共用，三只兔子追成一个圈。第407窟的窟顶就藏着这样的视觉小机关。', '敦煌研究院 · 三兔共耳图案', 'https://www.dha.ac.cn/info/1513/6191.htm'],
+    [rabbitNote.kind, rabbitNote.title, rabbitNote.teaser, rabbitNote.source_title, rabbitNote.source_url],
     ['建窟传说 · 三危山', '一道金光，留下了一个人', '古代《莫高窟记》讲过这样的故事：僧人乐僔来到敦煌，望见山间金光，仿佛有千佛显现，于是留下开窟。这则带着神异色彩的传说，把莫高窟的开端与三危山连在了一起。', '敦煌保护研究基金会 · 莫高窟记记载', 'https://www.dhafund.cn/cms/jjhdt/222.html'],
     ['文物发现 · 藏经洞', '一面墙后，藏着怎样的世界？', '1900年，一间藏在洞窟甬道侧壁后的密室被发现。里面不只有经卷，还有文书和绘画。如今人们称它为藏经洞：一间小小的洞室，竟为后人打开了认识古代社会的一扇窗。', '敦煌研究院 · 藏经洞的发现', 'https://www.dha.ac.cn/info/1159/2519.htm'],
     ['壁画趣闻 · 第112窟', '琵琶为什么跑到了背后？', '第112窟里，一位乐舞伎把琵琶举到背后，身体却仍在起舞。“反弹琵琶”把音乐与舞蹈凝在一个姿态里。石壁没有声音，却能让人想象出一场热闹的音乐会。', '敦煌研究院 · 盛唐古乐，惊艳千年', 'https://www.dha.ac.cn/info/1159/2723.htm'],
@@ -109,6 +110,13 @@
 
   function stop() { clearInterval(timer); }
   function renderLore() {
+    const rabbit = readingLore && loreIndex === 1;
+    overlay.dataset.rabbit = String(rabbit);
+    $('intro-rabbit-figure').hidden = !rabbit;
+    $('intro-rabbit-caption').hidden = !rabbit;
+    $('intro-rabbit-zoom').setAttribute('aria-expanded', 'false');
+    $('intro-rabbit-zoom').textContent = '放大看看';
+    $('intro-rabbit-figure').querySelector('svg').setAttribute('viewBox', '0 0 320 320');
     const [kind, title, copy, source, href] = lore[loreIndex];
     $('intro-lore-kind').textContent = kind;
     $('intro-lore-title').textContent = title;
@@ -184,6 +192,12 @@
   $('intro-show-lore').addEventListener('click', () => showReading(true));
   $('intro-lore-prev').addEventListener('click', () => { loreIndex = Math.max(0, loreIndex - 1); renderLore(); });
   $('intro-lore-next').addEventListener('click', () => { loreIndex = (loreIndex + 1) % lore.length; renderLore(); });
+  $('intro-rabbit-zoom').addEventListener('click', () => {
+    const expanded = $('intro-rabbit-zoom').getAttribute('aria-expanded') !== 'true';
+    $('intro-rabbit-zoom').setAttribute('aria-expanded', String(expanded));
+    $('intro-rabbit-zoom').textContent = expanded ? '看看整幅图' : '放大看看';
+    $('intro-rabbit-figure').querySelector('svg').setAttribute('viewBox', expanded ? '95 85 135 140' : '0 0 320 320');
+  });
   $('intro-skip').addEventListener('click', () => {
     if (readingLore) {
       showReading(false);
@@ -246,6 +260,11 @@
   overlay.dataset.returning = String(seen);
   if (seen) $('intro-skip').textContent = '重看序章';
   render(); renderLore(); schedule();
+  // A reading deep link only; it never chooses a level or unlocks gameplay.
+  if (new URLSearchParams(location.search).get('lore') === rabbitNote.id) {
+    loreIndex = 1;
+    showReading(true);
+  }
   function firstArtworkReady() {
     if (artwork.getAttribute('src') === illustrations[0][0] && artwork.naturalWidth > 0) {
       imageCache.set(illustrations[0][0], { image: artwork, state: 'ready', promise: Promise.resolve(true) });

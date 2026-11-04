@@ -75,7 +75,7 @@ func _carve(maze: MazeGenerator, corners: Array) -> Array:
 	return cells
 
 func can_inspect(maze: MazeGenerator, pos: Vector2i) -> bool:
-	if gate_open or pos.distance_to(TABLE) > 1.0: return false
+	if pos.distance_to(TABLE) > 1.0: return false
 	if pos == TABLE: return true
 	for d in [maze.N, maze.S, maze.E, maze.W]:
 		if pos + Vector2i(maze.DX[d], maze.DY[d]) == TABLE:
@@ -133,7 +133,7 @@ func rescue() -> Dictionary:
 
 func objective() -> String:
 	if revealing(): return "木门打开了 · 栈道通了！"
-	if guiding_to_gate(): return "沿蓝色箭头穿过木门"
+	if guiding_to_gate(): return "三兔共用三耳 · 沿蓝色箭头穿门"
 	return "与哥哥前往会合点" if rescued else "沿栈道寻找哥哥"
 
 func terrain_name(key: String) -> String:
