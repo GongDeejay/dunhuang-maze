@@ -45,6 +45,7 @@ try{
    await page.waitForFunction(()=>window.thirdChapterProbe&&!document.getElementById('status'),null,{timeout:120000});
    let s=await state();assert.equal(s.mode,'welcome');
    assert.ok(s.sceneryTriangles>0&&s.sceneryTriangles<6000&&s.sceneryChunks<=20,'visual slice stays within geometry/draw budgets');
+   assert.ok(s.homeTriangles<300&&!s.returnMarkers,'homeward dressing stays lightweight and inactive before rescue');
    console.log(`${profile.id}: sandstone ${s.sceneryTriangles} triangles / ${s.sceneryChunks} spatial batches`);
    assert.ok(s.primary.left>=0&&s.primary.bottom<=s.height,'continue visible at native text scale');
    await screenshot('welcome');
@@ -94,6 +95,22 @@ try{
     const q=await state(),steps=route(q.floor,[Math.round(q.x/4),Math.round(q.z/4)],goal,q.rescued);
     for(const [x,z]of steps){await axis('x',x*4);await axis('z',z*4);}
    }
+   async function face(goal){
+    let cursor={x:profile.width*.72,y:profile.height*.45};
+    if(!profile.mobile){await page.mouse.click(cursor.x,cursor.y);await page.waitForFunction(()=>!!document.pointerLockElement);}
+    // Small portrait viewports need up to 15 bounded drags for a half turn.
+    for(let tries=0;tries<24;tries++){
+     const q=await state(),error=goal-q.yaw;if(Math.abs(error)<0.015)break;
+     const dx=Math.max(-q.width*.20,Math.min(q.width*.20,-error/.003));
+     if(profile.mobile){
+      const a=await point({x:q.width*.72,y:q.height*.45}),b=await point({x:q.width*.72+dx,y:q.height*.45});
+      await touches('touchStart',[{...a,id:1}]);await touches('touchMove',[{...b,id:1}]);await touches('touchEnd',[]);
+     }else{const c=await page.locator('#canvas').boundingBox();cursor.x+=dx*c.width/q.width;await page.mouse.move(cursor.x,cursor.y);}
+     await page.waitForFunction(yaw=>Math.abs(window.thirdChapterProbe.yaw-yaw)>.001,q.yaw);
+    }
+    assert.ok(Math.abs((await state()).yaw-goal)<.02,'real look input faces the scenic landmark');
+    if(!profile.mobile){await page.keyboard.press('p');await page.waitForFunction(()=>window.thirdChapterProbe.mode==='paused');await tap('primary');await page.waitForFunction(()=>window.thirdChapterProbe.mode==='playing');}
+   }
    // Continuous forward movement is real, and a boundary stops the player.
    await go([3,11]);await screenshot('valley');
    if(profile.mobile){
@@ -116,7 +133,9 @@ try{
     await touches('touchEnd',[]);await screenshot('rotated');
    }
    if(profile.full){
-    await go([3,8]);await tap('interact');await screenshot('fork');
+    await go([3,8]);await axis('z',33);
+    await page.waitForFunction(()=>window.thirdChapterProbe.target==='sign');
+    await tap('interact');await page.waitForFunction(()=>window.thirdChapterProbe.hintText.includes('两条路'));await screenshot('fork');
     if(profile.relic){
      await go([2,6]);await screenshot('sheltered-bend');
      assert.ok((await state()).ambient<0.35,'sheltered bend visibly lowers ambient light');
@@ -147,14 +166,22 @@ try{
      await tap('interact');await page.waitForFunction(()=>window.thirdChapterProbe.enemyHp<=0);
      await go([9,3]);
     }
+    await go([10,3]);await face(-Math.PI/2);await screenshot('cave-approach');await face(0);
     await go([13,3]);await axis('z',11);
+    await page.waitForFunction(()=>window.thirdChapterProbe.greeting);
+    assert.ok((await state()).ambient<0.5,'cave arrival has a sheltered lighting beat');
     await page.waitForFunction(()=>window.thirdChapterProbe.target==='child');await screenshot('child');
     await tap('interact');await page.waitForFunction(()=>window.thirdChapterProbe.rescued);
     assert.equal((await state()).trail,false,'return guidance does not point back along outward clue');
+    assert.equal((await state()).returnMarkers,true,'rescue reveals the return ribbons');
+    assert.equal((await state()).childMarker,false,'empty cave no longer advertises the rescued child');
+    if(profile.relic)assert.ok((await state()).cardText.includes('小脚印'),'gold discovery pays off in reunion dialogue');
     if(!profile.relic)assert.equal((await state()).gold,false,'gold clue is optional');
     await screenshot('rescue');await tap('primary');
     await page.waitForFunction(()=>window.thirdChapterProbe.mode==='playing');
-    await go([13,11]);
+    await go([13,7]);await face(Math.PI);await screenshot('return-ribbons');
+    assert.equal((await state()).beaconVisible,true,'tower beacon stays in the return view');await face(0);
+    await go([13,11]);await face(Math.atan2(-4,-8));await screenshot('camp-approach');await face(0);
     // Arrival triggers the ending before the exact camp centre.
     await axis('x',56);await hold(0,1);
     await page.waitForFunction(()=>window.thirdChapterProbe.mode==='ending1',{},{timeout:8000});await release(0,1);

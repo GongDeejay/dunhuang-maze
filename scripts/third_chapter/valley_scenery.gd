@@ -11,7 +11,7 @@ static func contains(cell: Vector2i) -> bool:
 
 static func dresses_wall(cell: Vector2i, direction: Vector2i) -> bool:
 	# The north ridge is the backdrop seen from the clue; its walkable floor is untouched.
-	return contains(cell) or (cell.x <= 6 and cell.y == 2 and direction == Vector2i.UP)
+	return contains(cell) or (cell.x <= 6 and cell.y == 2 and direction == Vector2i.UP) or (cell.x >= 7 and cell.y <= 4) or cell.x >= 12
 
 static func shelter(pos: Vector3) -> float:
 	# A sheltered left-hand bend, then a sunlit pocket around the travel note.
@@ -66,6 +66,7 @@ func wall(cell: Vector2i, direction: Vector2i, map: ThirdMap) -> void:
 	var depths: Array[float] = [0.0, 0.04, 0.24, 0.07, 0.36, 0.65]
 	var shaded := shelter(ThirdMap.world(cell))
 	var base := Color("bd875f").lerp(Color("8e8580"), shaded * 0.72)
+	if cell.x >= 11 and cell.y <= 4: base = Color("77757b")
 	var colors := [base.darkened(0.16), base, base.lightened(0.13), base.darkened(0.07), base.lightened(0.07)]
 	for band in 5:
 		for i in 3:

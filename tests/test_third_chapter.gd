@@ -34,6 +34,12 @@ static func run(suite: Node) -> void:
 	suite.assert_true(scenery.wall_count > 20 and scenery.triangle_count < 6000, "valley uses bounded low-poly sandstone geometry")
 	suite.assert_true(scenery.get_child_count() <= 20, "sandstone is batched into spatial chunks")
 	suite.assert_eq(scenery.find_children("*", "CollisionObject3D", true, false).size(), 0, "visual polish adds no new colliders")
+	var homeward := chapter.world.homeward
+	suite.assert_eq(homeward.find_children("*", "CollisionObject3D", true, false).size(), 0, "cave and camp dressing adds no collision")
+	suite.assert_true(homeward.triangle_count < 300, "homeward scenic meshes have a small geometry budget")
+	suite.assert_true(not homeward.return_markers.visible, "return ribbons stay hidden before rescue")
+	for pos in homeward.marker_positions:
+		suite.assert_true(map.can_enter(ThirdMap.cell_at(pos), true), "return ribbons stay on the original return route")
 	# Reconstruct the original RNG stream: cosmetic geometry must not perturb collision heights.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7303
@@ -55,6 +61,8 @@ static func run(suite: Node) -> void:
 	suite.assert_true(chapter.world.atmosphere.ambient_light_energy < 0.35, "sheltered bend has a cooler low-light beat")
 	chapter.world.update_atmosphere(ThirdMap.world(ThirdMap.CAMP), 1)
 	suite.assert_true(is_equal_approx(chapter.world.atmosphere.ambient_light_energy, 0.65), "outside slice restores original lighting")
+	chapter.world.update_atmosphere(ThirdMap.world(ThirdMap.CHILD), 1)
+	suite.assert_true(is_equal_approx(chapter.world.atmosphere.ambient_light_energy, 0.36), "cave is sheltered but never black")
 	chapter.world.update_atmosphere(chapter.body.position, 1)
 	suite.assert_eq(main.monsters.size(), 0, "no legacy invisible 2D monsters")
 	suite.assert_true(not main.mobile_controls.visible, "old touch overlay disabled")
@@ -116,11 +124,17 @@ static func run(suite: Node) -> void:
 	suite.assert_eq(chapter.golden_clue.trail.multimesh.visible_instance_count, chapter.golden_clue.trail.multimesh.instance_count, "all footprints appear within a second")
 	suite.assert_true(not chapter.golden_clue.reveal() and chapter.golden_clue.reveal_progress == 1.0, "repeat interaction never restarts reveal")
 	suite.assert_true(not chapter.rescued and chapter.world.gate.collision_layer != 0, "gold clue cannot bypass family rescue gate")
+	suite.assert_true(not homeward.return_markers.visible, "optional gold clue cannot reveal return guidance early")
 	# Real physics frames make ray queries reflect the new position.
 	chapter.pitch = 0
 	chapter.camera.rotation.x = 0
 	chapter.body.position = ThirdMap.world(ThirdMap.CHILD) + Vector3(0, 0.1, 2.5)
 	await suite.get_tree().physics_frame
+	chapter._physics_process(0.016)
+	suite.assert_true(chapter.cave_greeting and chapter.message.contains("声音"), "approaching the child gives one nonblocking greeting")
+	chapter.message_timer = 0
+	chapter._physics_process(0.016)
+	suite.assert_eq(chapter.message_timer, 0.0, "staying beside cave never repeats greeting")
 	suite.assert_eq(chapter.target(), "child", "nearby visible child interactable")
 	chapter.interact()
 	suite.assert_true(chapter.rescued, "rescue flag set")
@@ -128,12 +142,15 @@ static func run(suite: Node) -> void:
 	chapter.golden_clue.advance(1.0)
 	suite.assert_true(not chapter.golden_clue.trail.visible, "animation cannot re-show obsolete outbound guidance")
 	suite.assert_eq(chapter.world.gate.collision_layer, 0, "shortcut collision removed")
+	suite.assert_true(homeward.return_markers.visible and not chapter.world.child_marker.visible, "rescue swaps cave marker for return ribbons")
+	suite.assert_true(chapter.hud.copy.text.contains("小脚印"), "optional discovery receives a short narrative payoff")
 	chapter._on_action("primary")
 	chapter._hurt(999)
 	suite.assert_eq(chapter.mode, "recover", "failure offers local recovery")
 	chapter._on_action("primary")
 	suite.assert_eq(chapter.hp, chapter.max_hp, "checkpoint restores health")
 	suite.assert_true(chapter.rescued, "recovery preserves rescue progress")
+	suite.assert_true(homeward.return_markers.visible, "recovery preserves return guidance")
 	chapter.body.position = ThirdMap.world(ThirdMap.CAMP)
 	chapter._physics_process(0.016)
 	suite.assert_eq(chapter.mode, "ending1", "camp starts ending")
