@@ -3,11 +3,13 @@ extends Node3D
 ## Small meshes, shared materials, one sun. No external models or textures.
 var gate: StaticBody3D
 var child_sprite: Sprite3D
+var child_marker: Label3D
 var scorpion_sprite: Node3D
 var camp_marker: Label3D
 var materials: Dictionary = {}
 var rock_transforms: Array[Transform3D] = []
 var scenery: ValleyScenery
+var homeward: HomewardScenery
 var atmosphere: Environment
 var slice_blend := 0.0
 
@@ -86,11 +88,13 @@ func build(map: ThirdMap) -> void:
 			if ValleyScenery.dresses_wall(cell, direction): scenery.wall(cell, direction, map)
 			else: rock_transforms.append(Transform3D(basis, center))
 		if cell.y < 5 or cell.x < 3:
-			var width := 4.02 if ValleyScenery.contains(cell) else 3.95
+			var width := 4.02 if ValleyScenery.contains(cell) or (cell.x >= 7 and cell.y <= 4) else 3.95
 			_box(ThirdMap.world(cell) + Vector3(0, -0.02, 0), Vector3(width, 0.07, width), Color("bda987"), false)
-	# Cave roof and portal: a dark enclosure followed by an open skyline.
+	# Keep the original roof footprint; the render-only portal follows the actual western approach.
 	_box(Vector3(52, 4.8, 8), Vector3(13, 0.6, 15), Color("776e70"), false)
-	_arch(ThirdMap.world(Vector2i(12, 3)), Color("8e7870"))
+	homeward = HomewardScenery.new()
+	add_child(homeward)
+	homeward.build()
 	# An open threshold instead of an overhead box across the entrance vista.
 	_box(Vector3(6.4, 0.45, 40), Vector3(0.7, 0.9, 0.8), Color("a68a69"), false)
 	_box(Vector3(17.6, 0.3, 40), Vector3(0.9, 0.6, 0.8), Color("a68a69"), false)
@@ -112,7 +116,8 @@ func build(map: ThirdMap) -> void:
 	var note_label := _label("旅行手记", ThirdMap.world(ThirdMap.RELIC) + Vector3(0, 1.5, -0.6), Color("f0dbaa"))
 	note_label.pixel_size = 0.002
 	_box(ThirdMap.world(ThirdMap.RELIC) + Vector3(0, 0.55, 0), Vector3(1.4, 1.1, 0.8), Color("716657"), false)
-	_label("弟弟", ThirdMap.world(ThirdMap.CHILD) + Vector3(0, 2.5, 0), Color("fff2bd"))
+	child_marker = _label("弟弟", ThirdMap.world(ThirdMap.CHILD) + Vector3(0, 2.2, 0), Color("fff2bd"))
+	child_marker.pixel_size = 0.0025
 	child_sprite = _character("mcking", ThirdMap.world(ThirdMap.CHILD), 1.65)
 	_character("le", ThirdMap.world(ThirdMap.CAMP) + Vector3(-2, 0, 0), 1.9)
 	_character("mac", ThirdMap.world(ThirdMap.CAMP) + Vector3(2, 0, 0), 1.85)
@@ -158,6 +163,9 @@ func update_atmosphere(pos: Vector3, dt: float) -> void:
 	atmosphere.ambient_light_color = Color("a6b4cd").lerp(Color("8999ac"), slice_blend * shade)
 	atmosphere.fog_density = lerpf(0.007, 0.0038, slice_blend)
 	atmosphere.fog_light_color = Color("dcad83").lerp(Color("ceb49a"), slice_blend)
+	var cave := HomewardScenery.cave_weight(pos)
+	atmosphere.ambient_light_energy = lerpf(atmosphere.ambient_light_energy, 0.36, cave)
+	atmosphere.ambient_light_color = atmosphere.ambient_light_color.lerp(Color("9daabc"), cave)
 
 func _batch_static_boxes() -> void:
 	# Render static rock/floor pieces in a handful of draws, not one draw per wall.
@@ -235,4 +243,6 @@ func open_gate() -> void:
 	gate.visible = false
 	gate.collision_layer = 0
 	child_sprite.visible = false
+	child_marker.hide()
+	homeward.reveal_return()
 	_character("mcking", ThirdMap.world(ThirdMap.CAMP), 1.65)

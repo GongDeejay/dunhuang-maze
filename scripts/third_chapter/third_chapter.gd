@@ -45,6 +45,7 @@ var _old_scale := 1.0
 var _stopped := false
 var wind_audio: AudioStreamPlayer
 var golden_clue: GoldenClue
+var cave_greeting := false
 
 func _ready() -> void:
 	world = DesertWorld.new()
@@ -227,7 +228,9 @@ func _physics_process(delta: float) -> void:
 	world.update_atmosphere(body.position, dt)
 	golden_clue.advance(dt)
 	# The bend is quieter, without adding audio files or changing other chapters' audio.
-	wind_audio.volume_db = lerpf(-14.0, -22.0, ValleyScenery.shelter(body.position))
+	var shelter := maxf(ValleyScenery.shelter(body.position), HomewardScenery.cave_weight(body.position))
+	if rescued: shelter = maxf(shelter, smoothstep(36.0, 50.0, body.position.z))
+	wind_audio.volume_db = lerpf(-14.0, -22.0, shelter)
 	travelled += Vector2(body.position.x - before.x, body.position.z - before.z).length()
 	if body.position.distance_to(before) > 0.01 and input.length() > 0:
 		step_timer += dt
@@ -245,6 +248,9 @@ func _physics_process(delta: float) -> void:
 		_hurt(1)
 		_notify("风沙很大，穿过前面的山口就能避风。")
 	if mode != "playing": return
+	if not rescued and not cave_greeting and body.position.distance_to(ThirdMap.world(ThirdMap.CHILD)) < 9 and _line_clear(ThirdMap.world(ThirdMap.CHILD)):
+		cave_greeting = true
+		_notify("石窟里传来弟弟的声音：“爸爸……是你吗？”", 5)
 	_update_enemy(dt)
 	if mode != "playing": return
 	if rescued and body.position.distance_to(ThirdMap.world(ThirdMap.CAMP)) < 4:
@@ -292,7 +298,9 @@ func interact() -> void:
 			hp = max_hp
 			mode = "rescue"
 			reset_input()
-			hud.show_card("终于找到弟弟了", "弟弟：“爸爸，我听见你了。”\n\n爸爸：“走，我们回家。”\n\n返程旧路已经打开。沿着高塔的方向回营地，妈妈和哥哥在那里等你们。", "一起回营地")
+			var reunion := "弟弟：“爸爸，我听见你了。”\n爸爸：“走，我们回家。”"
+			if golden_clue.found: reunion = "弟弟：“我画了小脚印，怕你找不到。”\n爸爸：“看见了。走，我们回家。”"
+			hud.show_card("终于找到弟弟了", reunion + "\n\n旧门已经打开。沿暖色布条回到高塔下，妈妈和哥哥在灯下等你们。", "一起回营地")
 		"enemy":
 			if attack_timer > 0: return
 			attack_timer = 0.5

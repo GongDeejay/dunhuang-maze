@@ -132,3 +132,17 @@ curl -fsSI https://maze.mplusm.site:8443/index.html | grep -iE 'cross-origin-ope
 curl -fsSI -H 'Accept-Encoding: br' https://maze.mplusm.site:8443/engine-*.wasm | grep -iE 'content-encoding|content-type'
 curl -fsS  https://maze.mplusm.site:8443/MANIFEST.json | python3 -m json.tool | head
 ```
+
+### 2026-11-06：默认入口单独验收
+
+已同步远端 `503e195` 的最新部署器、重定向配置及工作流，未覆盖它们。最新 `nginx-redirect-guangzhou.conf` 约定外部 80 → 8180、443 → 8443，由服务器侧的 NAT 规则负责；该转发不是游戏发布本身可以证明成功的部分。
+
+本机直连复测：HTTP 80 正确跳转到 `https://maze.mplusm.site:8443/`；显式 8443 返回 200 且隔离头正确；普通 HTTPS 443 仍被重置。尚未确认是 NAT、端口服务还是上游网络导致，不能把 8443 成功视为普通 HTTPS 已修好。
+
+```sh
+python3 tools/check_public_entry.py
+```
+
+此工具分别检查三种入口，不读取凭据、不修改服务器；任意入口不通过就返回非零状态。发布回归应保留三项结果，而非只报告可用端口。
+
+进一步诊断需所有者通过**已有、已验证的服务器登录渠道**运行 `bash deploy/check-entry-routing.sh` 并反馈输出。该脚本仅检查相关监听端口、NAT 恢复服务状态、相关入站转发规则和本机站点响应；不重启服务、不改规则、不读取私钥。当前本机缺少已验证的服务器主机密钥，未绕过 SSH 验证，也未改动 nps。得到诊断证据后再决定修复方式。
