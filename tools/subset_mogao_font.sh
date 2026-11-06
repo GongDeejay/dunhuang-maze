@@ -5,6 +5,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 pyftsubset assets/fonts/NotoSansSC-Regular.ttf \
   --output-file=assets/fonts/MogaoSubset.ttf \
-  --text-file=scripts/mogao_chapter/cave_chapter.gd \
+  --text="$(cat scripts/mogao_chapter/cave_chapter.gd scripts/mogao_chapter/cave_network.gd)" \
   --unicodes='U+0020-007E,U+2190-22FF,U+3000-303F' \
   --layout-features='*' --notdef-glyph --notdef-outline --recommended-glyphs

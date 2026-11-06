@@ -4,6 +4,8 @@ extends RefCounted
 const STEP_SECONDS := .18
 const TURN_SECONDS := .7
 const ORDER := [0, 1, 3, 4, 2] # Stable room ids also serve as version-compatible checkpoints.
+const ROOMS := [0, 1, 2, 3, 4, 5]
+var connected := false
 const RELAY_PLATES := [Vector2i(3, 5), Vector2i(5, 2)]
 const RELAY_GATES := [Vector2i(5, 4), Vector2i(3, 1)]
 var latch := false
@@ -55,7 +57,7 @@ func add_bridge(pivot: Vector2i, poses: Array, angle: float, crank_cells: Array)
 	for cell in crank_cells: cranks.append({"cell": cell, "bridge": index})
 
 func load_room(index: int) -> void:
-	room = index if index in ORDER else 0
+	room = index if index in ROOMS else 0
 	latch = false
 	scarf = room > 0; rescued = false
 	land.clear(); bridges.clear(); cranks.clear(); visits.clear()
@@ -80,6 +82,11 @@ func load_room(index: int) -> void:
 		fill(Rect2i(1, 5, 5, 3)); fill(Rect2i(1, 0, 5, 2))
 		player = Vector2i(3, 7); goal = Vector2i(3, 0)
 		add_bridge(Vector2i(3, 3), [[Vector2i.LEFT, Vector2i.RIGHT], [Vector2i.UP, Vector2i.DOWN]], PI / 2, [Vector2i(5, 5), Vector2i(5, 1)])
+	elif room == 5:
+		extent = Vector2(7, 7)
+		fill(Rect2i(1, 1, 5, 5))
+		for cell in [Vector2i(0, 3), Vector2i(6, 3), Vector2i(3, 6), Vector2i(3, 0)]: land[cell] = true
+		player = Vector2i(3, 5); goal = Vector2i(-9, -9)
 	else:
 		extent = Vector2(7, 8)
 		fill(Rect2i(1, 5, 5, 3)); fill(Rect2i(1, 0, 5, 2))
@@ -191,7 +198,7 @@ func turn(index: int = -1) -> bool:
 	return true
 
 func step(direction: Vector2i) -> bool:
-	if paused or reached or not busy.is_empty() or distance(direction, Vector2i.ZERO) != 1: return false
+	if paused or (reached and not connected) or not busy.is_empty() or distance(direction, Vector2i.ZERO) != 1: return false
 	if not walkable(player + direction): return false
 	# Evaluate the destination's weight, so stepping off a plate cannot slip through
 	# a closing door. No crushing, trapping, or frame-dependent bypasses.

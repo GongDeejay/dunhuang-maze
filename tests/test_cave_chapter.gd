@@ -171,6 +171,7 @@ static func run(t: Node) -> void:
 	controller._new_game(1)
 	t.assert_eq(controller.cave_chapter.model.room, 4, "new room entrance checkpoint resumes without repeating solved caves")
 	controller.cave_chapter.model.reached = true
+	controller.cave_chapter.model.player = controller.cave_chapter.model.goal
 	controller.cave_chapter.interact()
 	t.assert_eq(SaveManager.load_progress().cave_room, 2, "moving into deer cave saves stable room id, not sequence number")
 	controller._new_game(2)

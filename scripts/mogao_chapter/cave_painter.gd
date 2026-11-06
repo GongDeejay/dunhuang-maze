@@ -69,7 +69,19 @@ func paint(c: Control) -> void:
 	if m.room == 3:
 		relay(c); crate(c)
 	if m.room == 4: light_bridge(c)
-	portal(c, c.point(m.exit_cell), m.room != 2 or m.rescued)
+	if m is CaveNetwork:
+		if m.room == 5: hub(c)
+		for d in m.doors():
+			portal(c, c.point(d.cell), d.open)
+			var p: Vector2 = c.point(d.cell) - Vector2(0, u * .94)
+			if d.cell.y == int(m.extent.y) - 1: p = c.point(d.cell) + Vector2(0, u * .48)
+			var label: String = d.label
+			var font_size := 14 if u < 50 else 17
+			var width: float = c.FONT.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+			c.draw_rect(Rect2(p - Vector2(width / 2 + 3, font_size), Vector2(width + 6, font_size + 4)), Color("202a29"))
+			c.draw_string(c.FONT, p - Vector2(width / 2, 0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color("f5dba8") if d.open else Color("b7aa91"))
+		if m.room == 2: portal(c, c.point(m.exit_cell), m.rescued)
+	else: portal(c, c.point(m.exit_cell), m.room != 2 or m.rescued)
 	if m.room == 2 and not m.rescued: actor(c, c.point(m.goal), c.BROTHER, .85)
 	var player: Vector2 = c.point(m.visual_player())
 	if m.room == 2 and m.rescued: actor(c, player + Vector2(-u * .35, -u * .12), c.BROTHER, .7)
@@ -77,6 +89,23 @@ func paint(c: Control) -> void:
 	if m.scarf and not m.rescued:
 		c.draw_line(player + Vector2(u * .05, -u * .32), player + Vector2(u * .16, -u * .08), Color("72d5dc"), maxf(3, u * .07), true)
 	if m.room in [2, 4] and m.lamp_held: lantern(c, player + Vector2(u * .3, -u * .22), u * .14, .7)
+
+func hub(c: Control) -> void:
+	var u: float = c.unit
+	var center: Vector2 = c.point(Vector2(3, 2))
+	for offset in [Vector2(-1, 1), Vector2(1, 1), Vector2(0, -1)]:
+		c.draw_line(center + Vector2(offset.x, offset.y * .72) * u * .7, center, Color("d2b06a"), 3, true)
+	c.draw_circle(center, u * .16, Color("f2d58a") if c.model.secret else Color("90794e"))
+	c.draw_texture_rect(c.RABBITS, Rect2(c.point(Vector2(3, 1)) - Vector2(u * .44, u * .62), Vector2.ONE * u * .88), false)
+	c.draw_texture_rect(c.RABBITS, Rect2(c.point(Vector2(.9, 2.8)) - Vector2.ONE * u * .25, Vector2.ONE * u * .5), false, Color("e0cd9c"))
+	lantern(c, c.point(Vector2(5, 2.8)), u * .13, .45)
+	if c.model.secret:
+		var p: Vector2 = c.point(Vector2(4, 1))
+		c.draw_rect(Rect2(p - Vector2(u * .3, u * .48), Vector2(u * .6, u * .6)), Color("f0dbab"))
+		for i in 4:
+			var x: float = p.x + (i - 1.5) * u * .13
+			c.draw_circle(Vector2(x, p.y - u * .3), u * .045, Color("647c78"))
+			c.draw_line(Vector2(x, p.y - u * .24), Vector2(x, p.y - u * .1), Color("647c78"), 2, true)
 
 func tile(c: Control, cell: Vector2, lit: bool) -> void:
 	var u: float = c.unit
@@ -117,6 +146,7 @@ func portal(c: Control, p: Vector2, open: bool) -> void:
 	style.border_color = Color("d1b78b"); style.set_border_width_all(3)
 	c.draw_style_box(style, rect)
 	if open: c.draw_line(p + Vector2(0, -u * .5), p + Vector2(0, -u * .14), Color("fff0c2"), 4, true)
+	else: c.draw_line(p + Vector2(-u * .31, -u * .35), p + Vector2(u * .31, -u * .35), Color("b58b55"), maxf(4, u * .1), true)
 
 func bridge(c: Control, index: int) -> void:
 	var b: Dictionary = c.model.bridges[index]
