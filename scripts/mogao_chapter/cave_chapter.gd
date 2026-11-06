@@ -3,14 +3,15 @@ extends Control
 ## Self-contained second chapter: route-making, pressure, then light and observation.
 signal menu_requested
 signal completed
+signal checkpoint_changed(room_id: int)
 const FONT = preload("res://assets/fonts/MogaoSubset.ttf")
 const DAD = preload("res://assets/high_quality/player/dj.svg")
 const BROTHER = preload("res://assets/high_quality/player/mac.svg")
 const RABBITS = preload("res://assets/lore/three_hares.svg")
 const DEER = preload("res://assets/lore/nine_deer.svg")
 const Painter = preload("res://scripts/mogao_chapter/cave_painter.gd")
-const ROOM_NAMES := ["入窟 · 转桥", "侧窟 · 压盘", "深窟 · 灯影"]
-var model := CaveModel.new()
+const ROOM_NAMES := ["入窟 · 转桥", "侧窟 · 共耳", "深窟 · 鹿影", "回廊 · 借路", "灯窟 · 接桥", "中央窟"]
+var model := CaveNetwork.new()
 var heading: Label
 var objective: Label
 var hint: Label
@@ -41,6 +42,7 @@ var light_visual := 0.0
 var painter := Painter.new()
 
 func _ready() -> void:
+	rescued_presented = model.rescued
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("var s=document.createElement('style');s.id='mogao-cave-viewport';s.textContent='#canvas{position:fixed;inset:0;width:100%!important;height:100%!important}';document.head.appendChild(s);")
 	theme = Theme.new(); theme.default_font = FONT; theme.default_font_size = 18
@@ -50,7 +52,7 @@ func _ready() -> void:
 	hint = make_label("", 16, Color("e1c49a"))
 	action_button = make_button("转动栈桥", interact)
 	undo_button = make_button("撤销", undo)
-	note_button = make_button("线索", show_note)
+	note_button = make_button("窟图", show_note)
 	pause_button = make_button("暂停", pause_game)
 	for spec in [["↑", Vector2i.UP], ["←", Vector2i.LEFT], ["↓", Vector2i.DOWN], ["→", Vector2i.RIGHT]]:
 		var d: Vector2i = spec[1]
@@ -117,7 +119,7 @@ func layout() -> void:
 	size = get_viewport_rect().size
 	touch = DisplayServer.is_touchscreen_available() or size.x < 900
 	var short := size.y < 500
-	heading.text = "莫高窟 · %d/3" % (model.room + 1) if size.x < 400 else "莫高窟 · " + ROOM_NAMES[model.room]
+	heading.text = "莫高窟 · " + CaveNetwork.NAMES[model.room] if size.x < 400 else "莫高窟 · " + ROOM_NAMES[model.room]
 	heading.position = Vector2(16, 12); heading.size = Vector2(size.x - 114, 35)
 	heading.add_theme_font_size_override("font_size", 22 if size.x < 400 else 25)
 	objective.position = Vector2(16, 66); objective.size = Vector2(size.x - 32, 44)
@@ -137,7 +139,8 @@ func layout() -> void:
 		action_button.position = Vector2(size.x - 206, 108); action_button.size = Vector2(190, 50)
 		undo_button.position = Vector2(size.x - 206, 170); undo_button.size = Vector2(92, 48)
 		note_button.position = Vector2(size.x - 108, 170); note_button.size = Vector2(92, 48)
-	hint.position = Vector2(16, size.y - 50); hint.size = Vector2(area.size.x if short else size.x - 32, 46)
+	# Two lines at the enlarged system text scale still leave a bottom margin.
+	hint.position = Vector2(16, size.y - 56); hint.size = Vector2(area.size.x if short else size.x - 32, 52)
 	for i in cranks.size():
 		cranks[i].position = point(model.cranks[i].cell) - Vector2(24, 28)
 		cranks[i].size = Vector2(48, 48); cranks[i].visual_scale = clampf(unit / 70, .6, 1)
@@ -148,24 +151,32 @@ func layout() -> void:
 
 func settle_text() -> void:
 	for node in [heading, objective, hint]: node.size.y = 0
+	# Container visibility/text updates can queue a sort using the old card size.
+	# Refit after that sort so short landscape screens keep the action reachable.
+	if overlay.visible:
+		panel.size = Vector2(minf(530, size.x - 16), minf(500, size.y - 16))
 
 func point(cell: Vector2) -> Vector2:
 	return origin + Vector2(cell.x * unit, cell.y * unit * .72)
 
 func refresh() -> void:
 	var locked := stopped or mode != "playing" or not model.busy.is_empty()
-	for arrow in arrows: arrow.disabled = locked or model.reached
+	for arrow in arrows: arrow.disabled = locked
 	for i in cranks.size():
 		cranks[i].disabled = locked or not model.can_turn(i)
 		cranks[i].angle = model.angle(model.cranks[i].bridge); cranks[i].queue_redraw()
-	undo_button.disabled = locked or model.history.is_empty()
+	undo_button.disabled = locked or model.history.is_empty() or model.reached or model.rescued
 	note_button.disabled = locked
 	action_button.text = "转动栈桥" if model.room == 0 else ("观察压盘" if model.room == 1 else ("放上灯座" if model.lamp_held else "提起灯笼"))
 	action_button.disabled = locked or (not model.can_turn() if model.room == 0 else (model.lamp_action().is_empty() if model.room == 2 else false))
+	if model.room == 3: action_button.text = "观察门闩"
+	if model.room == 4:
+		action_button.text = ("放上灯座" if model.lamp_held else "提起灯笼") if not model.lamp_action().is_empty() else "转动栈桥"
+		action_button.disabled = locked or (model.lamp_action().is_empty() and not model.can_turn())
 	if model.reached:
-		action_button.text = ["走入侧窟", "走向深窟", "前往三危山"][model.room]
-		action_button.disabled = locked
-	objective.text = ["蓝围巾在对岸 · 转桥接近它", "三兔共耳 · 找到两扇门共用的机关", "九色鹿回望河面 · 对岸还没有光"][model.room]
+		action_button.text = "机关已解"
+		action_button.disabled = true
+	objective.text = ["蓝围巾在对岸 · 转桥接近它", "三兔共耳 · 找到两扇门共用的机关", "九色鹿回望河面 · 对岸还没有光", "一个木箱 · 先借路，再送到对岸", "先留下光 · 再把桥接向对岸", "左边推箱借路 · 右边提灯接桥"][model.room]
 	hint.text = "点方向键走到岸边，再转动栈桥" if touch else "方向键 / WASD 移动 · 空格互动 · Z 撤销"
 	if model.room == 0 and model.can_turn(): hint.text = "点转柄，看看桥会通向哪里"
 	if model.room == 0 and model.bridges[0].pose == 1: hint.text = "桥接通了，亲自走过去"
@@ -185,8 +196,30 @@ func refresh() -> void:
 			objective.text = "鹿把人送到了岸边 · 沿足迹寻找哥哥"
 			hint.text = "壁画里的光点，接上了脚下的路"
 		if model.rescued: objective.text = "找到哥哥了 · 一起走向右侧亮着的窟口"
+	if model.room == 3:
+		hint.text = "先压住近处的盘，穿过右侧的门"
+		if model.latch: hint.text = "门闩扣住了！把木箱运过这扇门"
+		if model.gate_open(1): hint.text = "箱子到了远处压盘 · 窟口也打开了"
+	if model.room == 4:
+		hint.text = "把灯留在左岸灯座，看看桥下的石刻"
+		if model.lit(): hint.text = "光照出了南北路标 · 去右岸转柄接桥"
+		if model.lit() and model.bridges[0].pose == 1: hint.text = "灯留在岸边，沿亮起的桥走过去"
 	if model.reached:
-		hint.text = ["是哥哥的围巾！脚印伸向下一窟", "木箱留下，你可以穿门前进了", "哥哥去找妈妈会合，你继续寻找弟弟"][model.room]
+		hint.text = "机关保持开启，可自由折返"
+	if model.room == 5:
+		action_button.text = "查看窟图"; action_button.disabled = locked
+		hint.text = "左右都可走，洞口按互动"
+		if not model.arrival.is_empty(): hint.text = model.arrival
+		if model.at_secret():
+			action_button.text = "查看小画" if model.secret else "触碰节点"
+			hint.text = "三条铜线，共用一个节点……"
+	var door := model.current_door()
+	if not door.is_empty():
+		action_button.text = ("进入" if door.open else "未通") + door.label
+		action_button.disabled = locked or not door.open
+		if not door.open: hint.text = "门闩在回廊另一侧" if model.room == 5 else "此路未通，先走另一边"
+	if model.room == 2 and model.rescued and model.player == model.exit_cell:
+		action_button.text = "前往三危山"; action_button.disabled = locked
 	if not model.busy.is_empty():
 		if model.busy == "turn": hint.text = "栈桥正在转动……"
 		elif model.busy == "lamp": hint.text = "灯光正在安定下来……"
@@ -201,30 +234,40 @@ func turn(index: int = -1) -> void:
 
 func interact() -> void:
 	if stopped or mode != "playing" or not model.busy.is_empty(): return
-	if model.reached:
-		if model.room == 2:
-			show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。", "前往三危山", "再看看洞窟")
-		elif model.next_room():
-			rescued_presented = false; gate_visual = [0.0, 0.0]; light_visual = 0
-			rebuild_cranks(); layout(); refresh(); AudioManager.play_level_start()
+	if model.room == 2 and model.rescued and model.player == model.exit_cell:
+		show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。", "前往三危山", "再看看洞窟")
+	elif model.travel():
+		rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
+		rebuild_cranks(); layout(); refresh(); AudioManager.play_level_start()
+		checkpoint_changed.emit(model.room)
+	elif model.at_secret() and model.reveal_secret():
+		checkpoint_changed.emit(model.room)
+		show_card("note", "藏在共用节点后的小画", "石龛轻轻打开，里面夹着一张哥哥的小画：三只兔子围成圈，旁边却画着四个牵手的小人。\n\n“少一个都不算合影。爸爸，等我们找齐，再拍一张。”\n\n你把小画夹进旅行手记。这里没有钥匙，也不影响前进。\n\n机关与小画均为游戏虚构。", "收好小画")
+	elif model.room == 5: show_note()
 	elif model.room == 0: turn()
-	elif model.room == 1: show_note()
+	elif model.room in [1, 3]: show_note()
+	elif model.room == 4 and model.lamp_action().is_empty(): turn()
 	elif model.use_lamp(): refresh()
 
 func undo() -> void:
 	if mode != "playing" or stopped: return
 	if model.undo():
-		rescued_presented = model.rescued; refresh()
+		rescued_presented = model.rescued; refresh(); checkpoint_changed.emit(model.room)
 
 func show_note() -> void:
 	if mode != "playing" or stopped: return
+	if model.room == 5:
+		show_card("note", "六窟相连 · 旅行窟图", model.map_note(), "回到洞窟")
+		return
 	var titles := ["哥哥的蓝围巾", "三兔共耳 · 共用的机关", "九色鹿 · 为渡河照亮对岸"]
 	var bodies := ["围巾留在对岸，哥哥应该刚刚走过这里。\n\n靠近转柄，把栈桥接起来，再亲自走过去。", "三只兔子只有三只耳朵，相邻的兔子共用一耳。\n\n看看地上的铜线：两侧压盘各管一扇门，中间压盘被两扇门共用。让木箱代替你压住它，就能腾出身来过门。\n\n朝箱子走即可推动；推错可撤销。纹样取意于莫高窟第407窟。", "九色鹿救起了河中的落水者。后来，这个人却为赏赐背弃承诺，鹿最终向国王讲明真相。\n\n这一次，你可以给它照亮对岸：提起灯，走到右侧河岸灯座旁放下。鹿会把人送到安全的地方，足迹也会从壁画延伸到路上。\n\n左侧山林灯座能照清故事，不是陷阱。灯不会熄灭。壁画取意于第257窟。"]
-	show_card("note", titles[model.room], bodies[model.room] + "\n\n本关为壁画幻境；机关与引路情节为游戏虚构。", "回到洞窟")
+	titles.append_array(["回廊 · 借来的路", "灯窟 · 灯与桥"])
+	bodies.append_array(["一个木箱，可以帮你两次。\n\n先把它推到近处压盘，从右侧门穿过去。门闩会自动扣住，门不再落下。\n\n回头把箱子经右门运到上方压盘，打开窟口。推错可以撤销，不必重新走前面的洞窟。", "桥下的石刻藏在暗处。\n\n先提灯，放到左侧唯一的灯座上，让南北路标显现。再到右侧转柄，把桥转向对岸。\n\n灯必须留在岸边照路；桥上不能提灯或转桥。"])
+	show_card("note", titles[model.room], model.map_note() + "\n\n本窟线索\n" + bodies[model.room] + "\n\n本关为壁画幻境；机关与引路情节为游戏虚构。", "回到洞窟")
 
 func pause_game() -> void:
 	if mode != "playing" or stopped: return
-	show_card("pause", "在洞窟歇一会儿", "动作已暂停。\n返回首页会保留第二关入口检查点；再次进入时从入窟开始。", "继续", "重置这一窟", "返回首页")
+	show_card("pause", "在洞窟歇一会儿", "动作已暂停。\n位置与机关会在动作结束后保存；已解机关和捷径不会重置。", "继续", "重置这一窟" if not model.reached and not model.rescued and model.room != 5 else "", "返回首页")
 
 func show_card(next_mode: String, title: String, body: String, first: String, second: String = "", third: String = "") -> void:
 	mode = next_mode; model.paused = true
@@ -242,8 +285,9 @@ func modal_primary() -> void:
 		"finish":
 			stopped = true; completed.emit()
 		"reset":
-			model.load_room(model.room); rescued_presented = false; gate_visual = [0.0, 0.0]; light_visual = 0
+			model.reset_current(); rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
 			rebuild_cranks(); close_card(); layout()
+			checkpoint_changed.emit(model.room)
 		"menu": stopped = true; menu_requested.emit()
 		_: close_card()
 
@@ -252,7 +296,7 @@ func modal_secondary() -> void:
 	else: close_card()
 
 func modal_tertiary() -> void:
-	if mode == "pause": show_card("menu", "返回首页？", "下次从莫高窟入口重新进入；当前窟内的动作不会单独存档。", "返回首页", "留在这里")
+	if mode == "pause": show_card("menu", "返回首页？", "下次从最近完成的动作继续；已解机关、捷径和小画都会保留。", "返回首页", "留在这里")
 
 func shutdown() -> void:
 	stopped = true; model.paused = true; hide(); set_process(false); set_process_unhandled_key_input(false)
@@ -298,7 +342,9 @@ func _process(delta: float) -> void:
 			AudioManager.play_pickup()
 			show_card("rescue", "终于找到哥哥了", "哥哥：“爸爸，我把灯留在路边，怕你找不到。”\n\n爸爸：“看见了。我们一起出去。”\n\n沿上方平台，走向右侧透光的窟口。", "一起走向窟口")
 		refresh()
-	if was_lit != model.lit(): refresh()
+		if model.busy.is_empty(): checkpoint_changed.emit(model.room)
+	if was_lit != model.lit():
+		refresh(); checkpoint_changed.emit(model.room)
 	if previous_deer != model.deer_time: queue_redraw()
 	if not model.paused:
 		var old_light := light_visual
@@ -311,6 +357,10 @@ func _process(delta: float) -> void:
 	if not model.busy.is_empty():
 		for i in cranks.size(): cranks[i].angle = model.angle(model.cranks[i].bridge); cranks[i].queue_redraw()
 		queue_redraw()
+	if overlay.visible:
+		var available := get_viewport_rect().size
+		var target := Vector2(minf(530, available.x - 16), minf(500, available.y - 16))
+		if panel.size != target: panel.size = target
 
 func _draw() -> void:
 	if heading: painter.paint(self)

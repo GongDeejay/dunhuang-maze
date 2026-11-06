@@ -465,13 +465,18 @@ func _start_cave_chapter() -> void:
 	inventory.clear(); key_tracker.setup(1)
 	game.reset_round(); game.start_game()
 	cave_chapter = MogaoChapter.new()
+	var saved := SaveManager.load_progress()
+	if int(saved.get("level_index", -1)) == 1:
+		var network = saved.get("cave_network", {})
+		cave_chapter.model.resume_network(int(saved.get("cave_room", 0)), network if network is Dictionary else {})
+	cave_chapter.checkpoint_changed.connect(func(room_id: int): SaveManager.save_progress(1, selected_difficulty, player.level, player.xp, room_id, cave_chapter.model.save_network()))
 	cave_chapter.menu_requested.connect(func():
 		_close_cave_chapter()
 		game.return_to_menu()
 		_request_redraw())
 	cave_chapter.completed.connect(func(): _new_game(2))
 	add_child(cave_chapter)
-	SaveManager.save_progress(1, selected_difficulty, player.level, player.xp)
+	SaveManager.save_progress(1, selected_difficulty, player.level, player.xp, cave_chapter.model.room, cave_chapter.model.save_network())
 	_refresh_layout(); queue_redraw()
 
 func _start_third_chapter() -> void:

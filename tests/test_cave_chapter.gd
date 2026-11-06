@@ -4,24 +4,49 @@ static func walk(t: Node, m: CaveModel, directions: Array) -> void:
 		t.assert_true(m.step(d), "authored solution step accepted")
 		m.advance(1)
 
-static func pressure_graph(t: Node) -> void:
+static func route(t: Node, m: CaveModel, text: String) -> void:
+	for letter in text:
+		walk(t, m, [{"U": Vector2i.UP, "D": Vector2i.DOWN, "L": Vector2i.LEFT, "R": Vector2i.RIGHT}[letter]])
+
+static func expanded_rooms(t: Node, m: CaveModel) -> void:
+	t.assert_eq(m.room, 3, "shared ears leads into relay cave")
+	route(t, m, "LLUURDRURRUU")
+	t.assert_true(m.latch and m.gate_open(0), "crossing the first relay door latches it permanently")
+	m.undo()
+	t.assert_true(not m.latch, "undo atomically restores the door latch")
+	route(t, m, "UUDDDLLLURRDRUUULLUUU")
+	t.assert_true(m.reached and m.box == CaveModel.RELAY_PLATES[1], "same crate transported through latched door to upper plate")
+	t.assert_true(m.next_room() and m.room == 4, "relay leads to light bridge")
+	m.use_lamp(); m.advance(1)
+	route(t, m, "LLU"); m.use_lamp(); m.advance(1)
+	t.assert_true(m.lit() and not m.walkable(Vector2i(3, 2)), "light alone cannot align the bridge")
+	route(t, m, "RRRR"); m.turn(); m.advance(1)
+	t.assert_true(m.undo() and m.bridges[0].pose == 0 and m.lit(), "undo rotation keeps placed light")
+	m.turn(); m.advance(1)
+	route(t, m, "LLUU")
+	t.assert_true(not m.can_turn() and m.lamp_action().is_empty(), "cannot remove supporting lamp or turn from bridge")
+	route(t, m, "UUUU")
+	t.assert_true(m.reached and m.next_room() and m.room == 2, "combination cave leads to original deer finale")
+
+static func pressure_graph(t: Node, room_id: int = 1) -> void:
 	# Explore every reachable player/crate arrangement using the actual movement rules.
-	var initial := CaveModel.new(); initial.load_room(1)
-	var queue := [[initial.player, initial.box]]
+	var initial := CaveModel.new(); initial.load_room(room_id)
+	var queue := [[initial.player, initial.box, false]]
 	var seen := {str(queue[0]): true}
 	var cursor := 0; var solved := false; var bypass := false
 	while cursor < queue.size():
 		var state: Array = queue[cursor]; cursor += 1
 		for direction in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
-			var m := CaveModel.new(); m.load_room(1)
+			var m := CaveModel.new(); m.load_room(room_id)
 			m.player = state[0]; m.destination = state[0]; m.box = state[1]
+			m.latch = state[2]
 			if not m.step(direction): continue
 			m.advance(1)
 			if m.reached:
 				solved = true
-				if m.box != CaveModel.PLATE: bypass = true
+				if m.box != (CaveModel.PLATE if room_id == 1 else CaveModel.RELAY_PLATES[1]): bypass = true
 				continue
-			var next := [m.player, m.box]; var key := str(next)
+			var next := [m.player, m.box, m.latch]; var key := str(next)
 			if not seen.has(key):
 				seen[key] = true; queue.append(next)
 	t.assert_true(solved, "exhaustive pressure graph contains a winning route")
@@ -30,6 +55,12 @@ static func pressure_graph(t: Node) -> void:
 static func run(t: Node) -> void:
 	print("\n[TEST] Mogao three distinct cave mechanisms")
 	pressure_graph(t)
+	pressure_graph(t, 3)
+	var dark := CaveModel.new(); dark.load_room(4)
+	route(t, dark, "RRU"); dark.turn(); dark.advance(1)
+	t.assert_true(not dark.walkable(Vector2i(3, 4)), "aligned bridge still requires the lamp to reveal its safe path")
+	dark.load_room(3); dark.latch = true; dark.load_room(3)
+	t.assert_true(not dark.latch, "reset clears latched gate")
 	var m := CaveModel.new()
 	t.assert_true(not m.turn() and m.history.is_empty(), "unavailable crank and can_turn checks do not create undo entries")
 	walk(t, m, [Vector2i.UP])
@@ -73,6 +104,7 @@ static func run(t: Node) -> void:
 	t.assert_true(m.gate_open(), "crate holds gate without player weight")
 	walk(t, m, [Vector2i.LEFT, Vector2i.UP, Vector2i.UP, Vector2i.RIGHT, Vector2i.UP, Vector2i.UP])
 	t.assert_true(m.reached and m.next_room(), "can physically pass the pressure gate")
+	expanded_rooms(t, m)
 	t.assert_eq(m.room, 2, "lamp room follows pressure puzzle")
 	t.assert_true(not m.lit() and not m.walkable(Vector2i(5, 4)), "dark path cannot be brute-forced before lighting")
 	t.assert_true(m.use_lamp(), "lamp can be picked up from entrance")
@@ -135,4 +167,13 @@ static func run(t: Node) -> void:
 	t.assert_eq(controller.cave_chapter.model.room, 0, "resuming chapter uses documented entrance checkpoint")
 	controller._new_game(0)
 	t.assert_true(controller.cave_chapter == null and controller.first_journey != null, "first chapter isolated after leaving cave")
+	SaveManager.save_progress(1, "normal", 1, 0, 4)
+	controller._new_game(1)
+	t.assert_eq(controller.cave_chapter.model.room, 4, "new room entrance checkpoint resumes without repeating solved caves")
+	controller.cave_chapter.model.reached = true
+	controller.cave_chapter.model.player = controller.cave_chapter.model.goal
+	controller.cave_chapter.interact()
+	t.assert_eq(SaveManager.load_progress().cave_room, 2, "moving into deer cave saves stable room id, not sequence number")
+	controller._new_game(2)
+	t.assert_true(not SaveManager.load_progress().has("cave_room"), "third chapter removes cave-only checkpoint")
 	controller.free(); SaveManager.clear_save()

@@ -18,6 +18,8 @@ func get_continue_hint(levels_data: Array) -> String:
 	var level_name := "关卡 %d" % (level_idx + 1)
 	if level_idx < levels_data.size():
 		level_name = levels_data[level_idx].get("name", level_name)
+	if level_idx == 1 and int(save.get("cave_room", -1)) in CaveModel.ROOMS:
+		return "关卡检查点: %s · 莫高窟 · Lv.%d（继续探索）" % [diff_name, int(save.get("player_level", 1))]
 	return "关卡检查点: %s · %s · Lv.%d（从本关重新开始）" % [
 		diff_name, level_name, int(save.get("player_level", 1)),
 	]

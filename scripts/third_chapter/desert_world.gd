@@ -53,9 +53,7 @@ func build(map: ThirdMap) -> void:
 	add_child(sun)
 	var ground := _box(Vector3(32, -0.3, 32), Vector3(180, 0.5, 180), Color("ce9d64"), true)
 	var sand := ShaderMaterial.new()
-	var shader := Shader.new()
-	shader.code = "shader_type spatial; varying vec3 p; void vertex(){ p=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz; } void fragment(){ float r=sin(p.x*5.0+sin(p.z*0.6)*2.0); ALBEDO=vec3(0.76,0.55,0.32)*(1.0+r*0.045); ROUGHNESS=1.0; }"
-	sand.shader = shader
+	sand.shader = preload("res://scripts/third_chapter/sand.gdshader")
 	ground.get_child(0).material_override = sand
 	# Large, low-poly dunes frame the small playable space.
 	var rng := RandomNumberGenerator.new()

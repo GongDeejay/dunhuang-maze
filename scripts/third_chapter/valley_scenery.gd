@@ -4,7 +4,7 @@ extends Node3D
 var chunks: Dictionary = {}
 var triangle_count := 0
 var wall_count := 0
-var material: StandardMaterial3D
+var material: ShaderMaterial
 
 static func contains(cell: Vector2i) -> bool:
 	return cell.x <= 6 and cell.y >= 4
@@ -20,10 +20,8 @@ static func shelter(pos: Vector3) -> float:
 	return west * bend
 
 func _ready() -> void:
-	material = StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.roughness = 1.0
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material = ShaderMaterial.new()
+	material.shader = preload("res://scripts/third_chapter/sandstone.gdshader")
 
 func _builder(pos: Vector3) -> SurfaceTool:
 	var key := Vector2i(floori(pos.x / 16), floori(pos.z / 16))
@@ -57,9 +55,10 @@ func wall(cell: Vector2i, direction: Vector2i, map: ThirdMap) -> void:
 	rng.seed = cell.x * 733 + cell.y * 31 + direction.x * 17 + direction.y * 7
 	var top := 1.5 if cell.y >= 11 else 4.9
 	var xs: Array[float] = [-2.0, -0.8, 0.65, 2.0]
+	if contains(cell): xs = [-2.0, -1.35, -.7, 0.0, .65, 1.3, 2.0]
 	var peaks: Array[float] = []
 	# Shared world-space heights join neighbouring panels instead of leaving sawtooth cracks.
-	for i in 4:
+	for i in xs.size():
 		var p := origin + tangent * xs[i]
 		peaks.append(top * (0.94 + 0.10 * sin(p.x * 0.31) + 0.06 * sin(p.z * 0.44)))
 	var bands: Array[float] = [0.0, 0.12, 0.40, 0.46, 0.79, 1.0]
@@ -69,18 +68,24 @@ func wall(cell: Vector2i, direction: Vector2i, map: ThirdMap) -> void:
 	if cell.x >= 11 and cell.y <= 4: base = Color("77757b")
 	var colors := [base.darkened(0.16), base, base.lightened(0.13), base.darkened(0.07), base.lightened(0.07)]
 	for band in 5:
-		for i in 3:
+		for i in xs.size() - 1:
 			var a := origin + tangent * xs[i] + Vector3.UP * peaks[i] * bands[band] + outward * depths[band]
 			var b := origin + tangent * xs[i + 1] + Vector3.UP * peaks[i + 1] * bands[band] + outward * depths[band]
 			var c := origin + tangent * xs[i + 1] + Vector3.UP * peaks[i + 1] * bands[band + 1] + outward * depths[band + 1]
 			var d := origin + tangent * xs[i] + Vector3.UP * peaks[i] * bands[band + 1] + outward * depths[band + 1]
+			# Broad weathered facets, with continuous world-space offsets at adjoining panels.
+			if contains(cell):
+				a += outward * (.06 + .06 * sin(a.x * 1.1 + a.z * .8)) * sin(bands[band] * PI)
+				b += outward * (.06 + .06 * sin(b.x * 1.1 + b.z * .8)) * sin(bands[band] * PI)
+				c += outward * (.06 + .06 * sin(c.x * 1.1 + c.z * .8)) * sin(bands[band + 1] * PI)
+				d += outward * (.06 + .06 * sin(d.x * 1.1 + d.z * .8)) * sin(bands[band + 1] * PI)
 			_quad(tool, a, b, c, d, colors[band].darkened(rng.randf_range(0, 0.06)))
 	# Top ledge and end caps prevent paper-thin silhouettes when walking around a bend.
-	for i in 3:
+	for i in xs.size() - 1:
 		var a := origin + tangent * xs[i] + Vector3.UP * peaks[i] + outward * 0.65
 		var b := origin + tangent * xs[i + 1] + Vector3.UP * peaks[i + 1] + outward * 0.65
 		_quad(tool, b, a, a + outward * 1.2, b + outward * 1.2, base.lightened(0.18))
-	for i: int in [0, 3]:
+	for i: int in [0, xs.size() - 1]:
 		var neighbour := cell + Vector2i(-direction.y, direction.x) * (-1 if i == 0 else 1)
 		if map.floor_cells.has(neighbour) and not map.floor_cells.has(neighbour + direction) and dresses_wall(neighbour, direction):
 			continue # No overlapping internal end caps between continuous wall panels.

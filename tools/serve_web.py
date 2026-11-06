@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import http.server
-import socketserver
 from pathlib import Path
 
 
@@ -35,7 +34,8 @@ def main() -> None:
     import os
 
     os.chdir(web_dir)
-    with socketserver.TCPServer((args.host, args.port), GodotWebHandler) as httpd:
+    # Browsers pre-open idle sockets; one such socket must not block all assets.
+    with http.server.ThreadingHTTPServer((args.host, args.port), GodotWebHandler) as httpd:
         url = f"http://{args.host}:{args.port}/index.html"
         print(f"Serving {web_dir}")
         print(f"Open: {url}")

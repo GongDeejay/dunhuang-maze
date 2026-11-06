@@ -76,7 +76,25 @@ try{
    const paused=await state();await page.keyboard.down('w');
    await page.waitForTimeout(1700); // Deliberately exceeds the scorpion windup interval.
    await page.keyboard.up('w');s=await state();assert.equal(s.elapsed,paused.elapsed);assert.equal(s.z,paused.z);
-   await screenshot('pause');await tap('primary');
+   await screenshot('pause');
+   if(profile.id==='desktop-safe'||profile.id==='phone-gold'){
+    await tap('quality');await page.waitForFunction(()=>window.thirdChapterProbe.qualityIndex===2);
+    await tap('quality');
+    await page.waitForFunction(()=>window.thirdChapterProbe.qualityIndex===0&&window.thirdChapterProbe.msaa===0);
+    const low=(await state()).scale3d;
+    await tap('quality');await page.waitForFunction(()=>window.thirdChapterProbe.qualityIndex===1);
+    await tap('quality');
+    await page.waitForFunction(()=>window.thirdChapterProbe.qualityIndex===2&&window.thirdChapterProbe.msaa===1);
+    assert.ok((await state()).scale3d>=low);assert.equal((await state()).mode,'paused');await screenshot('quality-high');
+    // Reload the same browser storage, rather than injecting a saved preference.
+    await page.waitForTimeout(1800);
+    await page.reload({waitUntil:'domcontentloaded'});
+    await page.waitForFunction(()=>window.thirdChapterProbe&&!document.getElementById('status'),null,{timeout:120000});
+    assert.equal((await state()).qualityIndex,2,'quality preference survives browser reload');
+    await tap('primary');await page.waitForFunction(()=>window.thirdChapterProbe.mode==='playing');
+    await tap('pause');await page.waitForFunction(()=>window.thirdChapterProbe.mode==='paused');
+   }
+   await tap('primary');
    await page.waitForFunction(()=>window.thirdChapterProbe.mode==='playing');
    async function hold(dx,dz){
     if(profile.mobile){const q=await state(),p=await point({x:q.stick.x+dx*48,y:q.stick.y+dz*48});await touches('touchStart',[{...p,id:0}]);}

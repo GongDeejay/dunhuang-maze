@@ -22,6 +22,8 @@ static func run(suite: Node) -> void:
 	suite.assert_true(not GoldenClue.in_view(Vector3(22.8, 1.6, 22.5), Vector3.BACK), "looking away does not reveal clue")
 	suite.assert_true(not GoldenClue.in_view(Vector3(24, 1.6, 22.5), Vector3.FORWARD), "must change viewpoint, not just collect old item")
 	var main = load("res://scripts/main.gd").new()
+	var original_scale: float = suite.get_viewport().scaling_3d_scale
+	var original_msaa: int = suite.get_viewport().msaa_3d
 	suite.add_child(main)
 	main._new_game(1)
 	main.game_won = true
@@ -31,6 +33,14 @@ static func run(suite: Node) -> void:
 	var chapter: ThirdChapter = main.third_chapter
 	suite.assert_true(chapter != null and chapter.camera.current, "third chapter owns real 3D camera")
 	var scenery := chapter.world.scenery
+	suite.assert_true(scenery.material is ShaderMaterial, "art standard uses a shared procedural material without image downloads")
+	var selected := chapter.hud.quality_index
+	chapter.hud.set_quality(0); chapter._last_view = Vector2.ZERO; chapter._update_render_size()
+	suite.assert_eq(suite.get_viewport().msaa_3d, Viewport.MSAA_DISABLED, "low quality disables MSAA")
+	var low_scale: float = suite.get_viewport().scaling_3d_scale
+	chapter.hud.set_quality(2); chapter._last_view = Vector2.ZERO; chapter._update_render_size()
+	suite.assert_true(suite.get_viewport().scaling_3d_scale >= low_scale and suite.get_viewport().msaa_3d == Viewport.MSAA_2X, "high quality raises pixel budget and enables edge smoothing")
+	chapter.hud.set_quality(selected); chapter._last_view = Vector2.ZERO; chapter._update_render_size()
 	suite.assert_true(scenery.wall_count > 20 and scenery.triangle_count < 6000, "valley uses bounded low-poly sandstone geometry")
 	suite.assert_true(scenery.get_child_count() <= 20, "sandstone is batched into spatial chunks")
 	suite.assert_eq(scenery.find_children("*", "CollisionObject3D", true, false).size(), 0, "visual polish adds no new colliders")
@@ -167,6 +177,7 @@ static func run(suite: Node) -> void:
 	suite.assert_eq(chapter.mode, "complete", "cancel replay keeps ending")
 	chapter._on_action("primary")
 	suite.assert_true(main.third_chapter == null and main.game.is_difficulty_select(), "menu disposes 3D chapter")
+	suite.assert_true(is_equal_approx(suite.get_viewport().scaling_3d_scale, original_scale) and suite.get_viewport().msaa_3d == original_msaa, "leaving third chapter restores resolution and MSAA for other chapters")
 	main._new_game(0)
 	suite.assert_true(main.first_journey != null, "first chapter still starts after 3D")
 	suite.assert_true(main._story_open(), "first chapter UI restored")
