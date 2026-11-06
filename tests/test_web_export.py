@@ -11,9 +11,33 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from optimize_web_export import content_address_assets, optimize_html, gzip_assets, brotli_assets, install_intro
+from verify_pack_budget import verify_pack_budget, MAX_PACK_BYTES
 
 
 class WebExportTests(unittest.TestCase):
+    def test_pack_budget_exact_byte_boundaries(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            for size in [1, 1048576, 1048577, MAX_PACK_BYTES - 1]:
+                with self.subTest(size=size):
+                    (directory / "game.pck").write_bytes(b"x" * size)
+                    self.assertEqual(verify_pack_budget(directory), size)
+            for size in [0, MAX_PACK_BYTES, MAX_PACK_BYTES + 1]:
+                with self.subTest(size=size):
+                    (directory / "game.pck").write_bytes(b"x" * size)
+                    with self.assertRaises(ValueError):
+                        verify_pack_budget(directory)
+
+    def test_pack_budget_rejects_missing_or_duplicate_packs(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            with self.assertRaises(ValueError):
+                verify_pack_budget(directory)
+            (directory / "game.pck").write_bytes(b"game")
+            (directory / "old.pck").write_bytes(b"old")
+            with self.assertRaises(ValueError):
+                verify_pack_budget(directory)
+
     def build(self, directory, name, pack=b"game", wasm=b"wasm", worklet=b"audio"):
         config = {"executable": name, "fileSizes": {name + ".wasm": len(wasm), name + ".pck": len(pack)}}
         for suffix, data in [(".wasm", wasm), (".pck", pack), (".js", b"loader"), (".audio.worklet.js", worklet)]:

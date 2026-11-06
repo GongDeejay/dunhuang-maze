@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f dist/index.html
-          test "$(find dist -name '*.pck' -size -2M | wc -l)" -eq 1
+          python3 tools/verify_pack_budget.py dist
           test "$(find dist -name '*.wasm.gz' | wc -l)" -eq 1
           test "$(find dist -name '*.wasm.br' | wc -l)" -eq 1
           du -h dist/* | sort -h
