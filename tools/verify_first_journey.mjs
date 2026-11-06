@@ -173,6 +173,7 @@ try {
     assert.equal((await state()).card.title, '与妈妈平安会合');
     await dismiss(); // The same large continue button works with touch, not just R.
     await page.waitForFunction(() => window.firstJourneyProbe.level === 1);
+    assert.equal((await state()).cave, true, 'first chapter enters the new Mogao caves');
     assert.deepEqual(errors, [], `${profile.id}: runtime errors`);
     console.log(`${profile.id}: route, story pause, optional reward, rescue, shortcut, completion and next level passed`);
     await context.close();
