@@ -28,6 +28,7 @@ func _process(delta: float) -> void:
 			"lightVisible": t.camera.is_position_in_frustum(GoldenClue.RELIEF_POSITION),
 			"elapsed": t.elapsed, "enemyTimer": t.enemy_timer, "moveTouch": t.move_touch, "lookTouch": t.look_touch,
 			"scale3d": get_viewport().scaling_3d_scale, "fps": Engine.get_frames_per_second(),
+			"quality": _point(t.hud.quality), "qualityIndex": t.hud.quality_index, "msaa": get_viewport().msaa_3d,
 			"width": t.hud.size.x, "height": t.hud.size.y, "heading": t.hud.heading.text,
 			"stick": {"x": t.hud.stick_center.x, "y": t.hud.stick_center.y, "radius": t.hud.stick_radius},
 			"hint": _point(t.hud.hint),

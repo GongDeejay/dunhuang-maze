@@ -42,6 +42,7 @@ var current_target := ""
 var damage_flash := 0.0
 var _last_view := Vector2.ZERO
 var _old_scale := 1.0
+var _old_msaa := Viewport.MSAA_DISABLED
 var _stopped := false
 var wind_audio: AudioStreamPlayer
 var golden_clue: GoldenClue
@@ -80,6 +81,9 @@ func _ready() -> void:
 	hud.action.connect(_on_action)
 	_make_wind()
 	_old_scale = get_viewport().scaling_3d_scale
+	_old_msaa = get_viewport().msaa_3d
+	var display := ConfigFile.new()
+	if display.load("user://third_display.cfg") == OK: hud.set_quality(int(display.get_value("display", "quality", 1)))
 	_update_render_size()
 	message = "沿脚印前进；右侧滑动观察" if hud.touch else "沿脚印前进；点击场景后移动鼠标观察"
 	hud.show_card("第三章 · 风中的归路", "弟弟还在三危山。妈妈和哥哥会在远处的塔下等你们。\n\n电脑：WASD 行走，拖动鼠标或点击场景后移动鼠标观察，E 互动。\n手机：左侧摇杆行走，右侧滑动观察。\n\n不需要跳跃。暂停中可以调整观察灵敏度。", "走进沙谷")
@@ -88,7 +92,9 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _stopped: return
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	if is_instance_valid(get_viewport()): get_viewport().scaling_3d_scale = _old_scale
+	if is_instance_valid(get_viewport()):
+		get_viewport().scaling_3d_scale = _old_scale
+		get_viewport().msaa_3d = _old_msaa
 
 func shutdown() -> void:
 	_stopped = true
@@ -98,6 +104,7 @@ func shutdown() -> void:
 	ui_layer.hide()
 	camera.current = false
 	get_viewport().scaling_3d_scale = _old_scale
+	get_viewport().msaa_3d = _old_msaa
 
 func reset_input() -> void:
 	held.clear()
@@ -148,8 +155,9 @@ func _update_render_size() -> void:
 	hud.layout()
 	# Cap 3D pixel cost on high-DPI phones; CanvasLayer text remains native resolution.
 	var pixels := get_viewport().get_texture().get_size()
-	var target := 960.0 if hud.touch else 1440.0
+	var target: float = [960.0, 1280.0, 1600.0][hud.quality_index] if hud.touch else [1440.0, 1920.0, 2560.0][hud.quality_index]
 	get_viewport().scaling_3d_scale = clampf(target / maxf(pixels.x, pixels.y), 0.25, 1.0)
+	get_viewport().msaa_3d = Viewport.MSAA_DISABLED if hud.quality_index == 0 else Viewport.MSAA_2X
 	reset_input()
 	if wind_audio and mode == "playing": wind_audio.stream_paused = false
 
@@ -360,6 +368,13 @@ func _refresh_hud() -> void:
 
 func _on_action(action: String) -> void:
 	match action:
+		"quality":
+			hud.set_quality((hud.quality_index + 1) % 3)
+			var display := ConfigFile.new()
+			display.set_value("display", "quality", hud.quality_index)
+			display.save("user://third_display.cfg")
+			_last_view = Vector2.ZERO
+			_update_render_size()
 		"interact": interact()
 		"pause":
 			if mode != "playing": return

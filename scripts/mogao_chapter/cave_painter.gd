@@ -39,8 +39,8 @@ func paint(c: Control) -> void:
 	var pit := Rect2(c.point(Vector2(.5, 1.5)), Vector2((m.extent.x - 2) * u, (m.extent.y - 4) * u * .72))
 	c.draw_rect(pit, Color("202b29"))
 	for cell in m.land: tile(c, cell, false)
-	if m.room == 1:
-		for gate in CaveModel.GATES: tile(c, gate, false)
+	if m.room in [1, 3]:
+		for gate in m.gates(): tile(c, gate, false)
 	if m.room == 2:
 		# A faint silhouette explains the missing light without making the whole screen dark.
 		for cell in CaveModel.LIGHT_PATH:
@@ -66,14 +66,17 @@ func paint(c: Control) -> void:
 		c.draw_colored_polygon(PackedVector2Array([p + Vector2(-u * .08, -u * .32), p + Vector2(u * .22, -u * .25), p + Vector2(u * .12, u * .16), p + Vector2(-u * .02, u * .1)]), Color("72d5dc"))
 	if m.room == 1: pressure(c)
 	if m.room == 2: light_room(c)
-	portal(c, c.point(m.exit_cell), m.room < 2 or m.rescued)
+	if m.room == 3:
+		relay(c); crate(c)
+	if m.room == 4: light_bridge(c)
+	portal(c, c.point(m.exit_cell), m.room != 2 or m.rescued)
 	if m.room == 2 and not m.rescued: actor(c, c.point(m.goal), c.BROTHER, .85)
 	var player: Vector2 = c.point(m.visual_player())
 	if m.room == 2 and m.rescued: actor(c, player + Vector2(-u * .35, -u * .12), c.BROTHER, .7)
 	actor(c, player, c.DAD, 1)
 	if m.scarf and not m.rescued:
 		c.draw_line(player + Vector2(u * .05, -u * .32), player + Vector2(u * .16, -u * .08), Color("72d5dc"), maxf(3, u * .07), true)
-	if m.room == 2 and m.lamp_held: lantern(c, player + Vector2(u * .3, -u * .22), u * .14, .7)
+	if m.room in [2, 4] and m.lamp_held: lantern(c, player + Vector2(u * .3, -u * .22), u * .14, .7)
 
 func tile(c: Control, cell: Vector2, lit: bool) -> void:
 	var u: float = c.unit
@@ -125,19 +128,49 @@ func bridge(c: Control, index: int) -> void:
 	var polygon := PackedVector2Array()
 	for v in corners:
 		var r: Vector2 = v.rotated(c.model.angle(index)); polygon.append(center + Vector2(r.x, r.y * .72) * u)
-	c.draw_colored_polygon(polygon, Color("ceac78"))
+	c.draw_colored_polygon(polygon, Color("ceac78") if c.model.room != 4 or c.model.lit() else Color("555b4f"))
 	for n in range(-7, 8):
 		var a := Vector2(n * .19, -.30).rotated(c.model.angle(index)); var z := Vector2(n * .19, .30).rotated(c.model.angle(index))
 		c.draw_line(center + Vector2(a.x, a.y * .72) * u, center + Vector2(z.x, z.y * .72) * u, Color("96723e"), 2, true)
 
 func pressure(c: Control) -> void:
 	Lore.shared_ears(c)
+	crate(c)
+
+func crate(c: Control) -> void:
 	var u: float = c.unit
 	var b: Vector2 = c.point(c.model.visual_box())
 	var rect := Rect2(b - Vector2(u * .35, u * .56), Vector2(u * .70, u * .68))
 	c.draw_rect(rect, Color("90663c")); c.draw_rect(rect.grow(-2), Color("c19b60"), false, 2)
 	c.draw_line(rect.position + Vector2(3, 3), rect.end - Vector2(3, 3), Color("735330"), 3, true)
 	c.draw_line(Vector2(rect.end.x - 3, rect.position.y + 3), Vector2(rect.position.x + 3, rect.end.y - 3), Color("735330"), 3, true)
+
+func relay(c: Control) -> void:
+	var m: CaveModel = c.model; var u: float = c.unit
+	for i in 2:
+		var p: Vector2 = c.point(m.plates()[i]); var g: Vector2 = c.point(m.gates()[i])
+		var color := Color("ffe1a1") if m.gate_open(i) else Color("9c886a")
+		c.draw_polyline(PackedVector2Array([p, Vector2(g.x, p.y), g]), color, 3, true)
+		c.draw_circle(p, u * .3, Color("6f8877") if m.plate_active(i) else Color("756747"))
+		c.draw_arc(p, u * .27, 0, TAU, 24, color, 2, true)
+		for x in [-.42, .42]: c.draw_line(g + Vector2(x * u, u * .25), g + Vector2(x * u, -u * .5), Color("98764e"), 5, true)
+		var h: float = u * .7 * (1 - c.gate_visual[i])
+		if h > .5: c.draw_rect(Rect2(g + Vector2(-u * .35, -u * .45), Vector2(u * .70, h)), Color("8c6944"))
+		if i == 0:
+			var latch_pos := g + Vector2(u * .6, -u * .35)
+			c.draw_arc(latch_pos, u * .15, 0, TAU, 16, color, 3, true)
+			if m.latch: c.draw_polyline(PackedVector2Array([latch_pos + Vector2(-u * .1, 0), latch_pos + Vector2(0, u * .08), latch_pos + Vector2(u * .18, -u * .17)]), Color("ffe1a1"), 3, true)
+
+func light_bridge(c: Control) -> void:
+	var m: CaveModel = c.model; var u: float = c.unit
+	var p: Vector2 = c.point(CaveModel.STANDS[0])
+	c.draw_circle(p, u * .3, Color("756747")); c.draw_arc(p, u * .27, 0, TAU, 24, Color("e0c58e"), 2, true)
+	if not m.lamp_held: lantern(c, c.point(m.lamp) - Vector2(0, u * .2), u * .16, .8)
+	if m.lit():
+		c.draw_colored_polygon(PackedVector2Array([p, c.point(Vector2(2.4, 1.3)), c.point(Vector2(3.6, 1.3))]), Color(1, .83, .48, .12))
+		for y in [2, 3, 4]:
+			var a: Vector2 = c.point(Vector2(3, y))
+			c.draw_polyline(PackedVector2Array([a + Vector2(-u * .12, .05 * u), a + Vector2(0, -.1 * u), a + Vector2(u * .12, .05 * u)]), Color("ffe3a1"), 3, true)
 
 func light_room(c: Control) -> void:
 	var m: CaveModel = c.model; var u: float = c.unit

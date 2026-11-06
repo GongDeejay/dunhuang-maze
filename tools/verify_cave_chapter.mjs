@@ -19,7 +19,7 @@ try{for(const p of profiles.filter(p=>!process.env.PROFILE||p.id===process.env.P
  async function button(key){await tap((await state())[key]);}
  async function steps(route){for(const dir of route){const s=await state(),[i,key]=dirs[dir];if(p.mobile)await tap(s.arrows[i]);else await page.keyboard.press(key);await page.waitForFunction(m=>window.caveProbe.moves===m+1&&window.caveProbe.busy==='',s.moves);}}
  async function blocked(dir){const s=await state(),[i,key]=dirs[dir];if(p.mobile)await tap(s.arrows[i]);else await page.keyboard.press(key);await page.waitForFunction(f=>window.caveProbe.frame>f+12,s.frame);assert.equal((await state()).moves,s.moves,'blocked move never advances');}
- async function action(){const s=await state();await button('action');if(s.reached)await page.waitForFunction(r=>window.caveProbe.room===r+1,s.room);else await page.waitForFunction(h=>window.caveProbe.history===h+1&&window.caveProbe.busy==='',s.history);}
+ async function action(){const s=await state();await button('action');if(s.reached)await page.waitForFunction(r=>window.caveProbe.room==={0:1,1:3,3:4,4:2}[r],s.room);else await page.waitForFunction(h=>window.caveProbe.history===h+1&&window.caveProbe.busy==='',s.history);}
  async function undo(){const s=await state();await button('undo');await page.waitForFunction(h=>window.caveProbe.history===h-1,s.history);}
  async function layout(){const s=await state(),controls=[...s.arrows,s.action,s.undo,s.note,s.pause];for(const b of controls){assert.ok(b.left>=0&&b.right<=s.width+.5&&b.top>=0&&b.bottom<=s.height+.5,'controls fit');assert.ok(b.right-b.left>=47.99&&b.bottom-b.top>=47.99,'48px hit target');}for(let i=0;i<controls.length;i++)for(let j=i+1;j<controls.length;j++){const a=controls[i],b=controls[j];assert.ok(!(a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top),'controls do not overlap');}assert.ok(s.hint.bottom<=s.height+.5,'hint stays inside viewport');assert.ok(s.objective.bottom<=s.height-176,'objective not in controls');}
  try{
@@ -50,7 +50,18 @@ try{for(const p of profiles.filter(p=>!process.env.PROFILE||p.id===process.env.P
   await steps('LLUUR');assert.deepEqual((await state()).box,[3,4]);await undo();assert.deepEqual((await state()).box,[2,4]);
   await steps('RDRU');assert.deepEqual((await state()).box,[3,3]);assert.deepEqual((await state()).gates,[true,true]);
   await page.waitForFunction(()=>window.caveProbe.gateVisual.every(v=>v===1));
-  await shot('05-shared-ears');await steps('LUURUU');await action();await layout();await shot('06-lamp');
+  await shot('05-shared-ears');await steps('LUURUU');await action();await layout();
+  assert.equal((await state()).room,3);assert.equal((await state()).checkpoint,3);
+  await steps('LLUURDRURRUU');assert.equal((await state()).latch,true);await shot('05b-latched');
+  await undo();assert.equal((await state()).latch,false);
+  await steps('UUDDDLLLURRDRUUULLUUU');assert.equal((await state()).reached,true);await shot('05c-relay-solved');await action();
+  assert.equal((await state()).room,4);assert.equal((await state()).checkpoint,4);
+  // Real reload validates the stable room checkpoint; solved earlier rooms are not replayed.
+  await page.reload({waitUntil:'domcontentloaded'}); // Returning players auto-enter; do not click the transient replay button.
+  await page.waitForFunction(()=>window.caveProbe?.room===4&&!document.getElementById('status')&&window.caveProbe.frame>12);
+  await action();await steps('LLU');await action();assert.equal((await state()).lit,true);await shot('05d-light-bridge');
+  await steps('RRRR');await action();await steps('LLUU');assert.equal((await state()).action.disabled,true);
+  await steps('UUUU');await action();assert.equal((await state()).room,2);await layout();await shot('06-lamp');
   await action();assert.equal((await state()).held,true);
   await steps('LLU');await action();assert.equal((await state()).deer,true);assert.equal((await state()).lit,false);await shot('07-mural');
   await action();assert.equal((await state()).held,true);await steps('RRRR');await action();

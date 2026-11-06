@@ -17,6 +17,8 @@ var primary: Button
 var secondary: Button
 var sensitivity: HSlider
 var sensitivity_label: Label
+var quality: Button
+var quality_index := 1
 var content_margin: MarginContainer
 var stick_center := Vector2.ZERO
 var stick_radius := 58.0
@@ -84,6 +86,7 @@ func _ready() -> void:
 	sensitivity.value = 1
 	sensitivity.custom_minimum_size.y = 40
 	body.add_child(sensitivity)
+	quality = _button("3D · 中 · 点击切换", "quality", body)
 	primary = _button("出发", "primary", column)
 	secondary = _button("返回", "secondary", column)
 	overlay.hide()
@@ -157,6 +160,7 @@ func show_card(card_title: String, text: String, first: String, second: String =
 	photo.visible = with_photo
 	sensitivity.visible = settings
 	sensitivity_label.visible = settings
+	quality.visible = settings
 	overlay.show()
 	for control in [title, objective, status, hint, interact_button, pause_button, menu_button]: control.hide()
 	primary.grab_focus()
@@ -167,7 +171,12 @@ func close_card() -> void:
 	for control in [title, objective, status, hint, interact_button, pause_button, menu_button]: control.show()
 	primary.release_focus()
 	secondary.release_focus()
+	quality.release_focus()
 	queue_redraw()
+
+func set_quality(index: int) -> void:
+	quality_index = clampi(index, 0, 2)
+	quality.text = "3D · %s · 点击切换" % ["低", "中", "高"][quality_index]
 
 func _draw() -> void:
 	if overlay != null and overlay.visible: return

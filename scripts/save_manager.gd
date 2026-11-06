@@ -3,13 +3,14 @@ extends RefCounted
 
 const SAVE_PATH := "user://dunhuang_save.json"
 
-static func save_progress(level_index: int, difficulty: String, player_level: int, player_xp: int) -> bool:
+static func save_progress(level_index: int, difficulty: String, player_level: int, player_xp: int, cave_room: int = -1) -> bool:
 	var data := {
 		"level_index": level_index,
 		"difficulty": difficulty,
 		"player_level": player_level,
 		"player_xp": player_xp,
 	}
+	if level_index == 1 and cave_room in CaveModel.ORDER: data["cave_room"] = cave_room
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		return false
