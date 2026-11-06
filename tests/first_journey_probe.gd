@@ -23,6 +23,7 @@ func _process(delta: float) -> void:
 			"right": panel_rect.end.x, "bottom": panel_rect.end.y},
 		"won": game_won, "over": game_over, "cooldown": attack_cooldown,
 		"moves": move_count, "level": current_level_index,
+		"cave": cave_chapter != null,
 		"difficulty": selected_difficulty,
 		"normalButton": {"x": difficulty_center.x, "y": difficulty_center.y},
 		"objective": first_journey.objective() if first_journey else "",

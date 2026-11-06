@@ -20,7 +20,7 @@
     },
     {
       "name": "莫高窟",
-      "description": "沿窟前栈道寻找哥哥，拨正纹样可以打开近路",
+      "description": "走入莫高窟，转桥、推箱、提灯照路，在洞窟深处找到哥哥",
       "maze_width": 30,
       "maze_height": 25,
       "monster_density": 0.10,

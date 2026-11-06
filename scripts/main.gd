@@ -50,6 +50,7 @@ var first_journey: FirstJourney
 var journey_card: JourneyCard
 var advance_after_story := false
 var third_chapter: ThirdChapter
+var cave_chapter: MogaoChapter
 var mogao_journey: MogaoJourney
 var pattern_panel: PatternPanel
 var pattern_prompt: Button
@@ -146,7 +147,7 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
-	if third_chapter != null: return
+	if third_chapter != null or cave_chapter != null: return
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		held_inputs.clear()
 		if pattern_panel and pattern_panel.visible: pattern_panel.suspend()
@@ -181,7 +182,7 @@ func _request_redraw() -> void:
 		mobile_controls.queue_redraw()
 
 func _on_mobile_move(dir: int) -> void:
-	if third_chapter != null: return
+	if third_chapter != null or cave_chapter != null: return
 	if _modal_open() or _input_guarded(): return
 	if game.is_difficulty_select():
 		if dir == MazeGenerator.N:
@@ -217,7 +218,7 @@ func _refresh_layout() -> void:
 		current_layout.log_rect = Rect2()
 	if mobile_controls:
 		mobile_controls.apply_layout(current_layout)
-		mobile_controls.visible = third_chapter == null and not game.is_difficulty_select() and not show_new_journey_confirm and not _pattern_open() and not _gate_revealing() and not _notebook_open()
+		mobile_controls.visible = third_chapter == null and cave_chapter == null and not game.is_difficulty_select() and not show_new_journey_confirm and not _pattern_open() and not _gate_revealing() and not _notebook_open()
 	if pattern_prompt:
 		var resume_reveal := _gate_revealing() and game.is_paused()
 		pattern_prompt.visible = resume_reveal or (mogao_journey != null and game.can_move() and not _modal_open() and mogao_journey.can_inspect(maze, player.pos))
@@ -234,7 +235,7 @@ func _refresh_layout() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if third_chapter != null: return
+	if third_chapter != null or cave_chapter != null: return
 	_track_held_input(event)
 	if _modal_open(): return
 	if _input_guarded():
@@ -250,7 +251,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _on_mobile_action(action: String) -> void:
-	if third_chapter != null: return
+	if third_chapter != null or cave_chapter != null: return
 	if _modal_open() or _input_guarded(): return
 	if not game.can_move() and action in ["use_item", "cycle_item"]:
 		return
@@ -286,6 +287,7 @@ func _ensure_data_loaded() -> void:
 
 func _new_game(level_idx: int = -1) -> void:
 	_close_third_chapter()
+	_close_cave_chapter()
 	attack_cooldown = 0.0
 	if journey_card: journey_card.visible = false
 	advance_after_story = false
@@ -297,6 +299,9 @@ func _new_game(level_idx: int = -1) -> void:
 	modal_release_guard = false
 	if level_idx >= 0:
 		game.current_level_index = level_idx
+	if current_level_index == 1:
+		_start_cave_chapter()
+		return
 	if current_level_index == 2:
 		_start_third_chapter()
 		return
@@ -446,6 +451,28 @@ func _close_third_chapter() -> void:
 	third_chapter.shutdown()
 	third_chapter.queue_free()
 	third_chapter = null
+
+func _close_cave_chapter() -> void:
+	if cave_chapter == null: return
+	cave_chapter.shutdown()
+	cave_chapter.queue_free()
+	cave_chapter = null
+
+func _start_cave_chapter() -> void:
+	for child in get_children():
+		if child is MonsterEntity or child is ItemEntity: child.queue_free()
+	monsters.clear(); items.clear(); maze = null
+	inventory.clear(); key_tracker.setup(1)
+	game.reset_round(); game.start_game()
+	cave_chapter = MogaoChapter.new()
+	cave_chapter.menu_requested.connect(func():
+		_close_cave_chapter()
+		game.return_to_menu()
+		_request_redraw())
+	cave_chapter.completed.connect(func(): _new_game(2))
+	add_child(cave_chapter)
+	SaveManager.save_progress(1, selected_difficulty, player.level, player.xp)
+	_refresh_layout(); queue_redraw()
 
 func _start_third_chapter() -> void:
 	for child in get_children():
@@ -695,7 +722,7 @@ func _add_log(msg: String) -> void:
 	_request_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if third_chapter != null: return
+	if third_chapter != null or cave_chapter != null: return
 	if _gate_revealing():
 		# A focus-loss pause must remain resumable even while the reveal is frozen.
 		if game.is_paused() and event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_P, KEY_ESCAPE, KEY_ENTER]: game.toggle_pause()
@@ -735,7 +762,7 @@ func _input_context() -> Dictionary:
 	}
 
 func _apply_game_action(action: GameAction) -> void:
-	if third_chapter != null: return
+	if third_chapter != null or cave_chapter != null: return
 	if _modal_open() or _input_guarded(): return
 	match action.type:
 		GameAction.Type.CONFIRM:
@@ -920,7 +947,7 @@ func _get_buff_display() -> String:
 	return "Buff: " + " ".join(parts)
 
 func _process(delta: float) -> void:
-	if third_chapter != null: return
+	if third_chapter != null or cave_chapter != null: return
 	var was_revealing := _gate_revealing()
 	if was_revealing and game.can_move():
 		mogao_journey.tick_reveal(maze, delta)
@@ -985,7 +1012,7 @@ func _move_monsters(delta: float) -> bool:
 	return changed
 
 func _draw() -> void:
-	if third_chapter != null: return
+	if third_chapter != null or cave_chapter != null: return
 	if game.is_difficulty_select():
 		var save_hint := _get_continue_hint()
 		maze_renderer.draw_difficulty_select(self, get_viewport_rect().size, selected_difficulty, save_hint)
