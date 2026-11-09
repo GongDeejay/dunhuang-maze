@@ -23,13 +23,18 @@ func _init() -> void:
 func solved(id: int) -> bool:
 	return reached if id == room else bool(rooms.get(str(id), {}).get("reached", false))
 
+## The west door itself follows this room. The hub side and the map used to wait
+## for the first walk back, so a solved cave still showed a lock from the hub.
+func shortcut_open() -> bool:
+	return shortcut or solved(3)
+
 func door(cell: Vector2i, target: int, spawn: Vector2i, label: String, open: bool = true) -> Dictionary:
 	return {"cell": cell, "target": target, "spawn": spawn, "label": label, "open": open}
 
 func doors() -> Array:
 	match room:
 		0: return [door(goal, 5, Vector2i(3, 5), "中央窟", reached)]
-		5: return [door(Vector2i(3, 6), 0, Vector2i(2, 0), "入窟"), door(Vector2i(0, 3), 1, Vector2i(3, 6), "共耳窟"), door(Vector2i(6, 3), 4, Vector2i(3, 7), "灯窟"), door(Vector2i(3, 0), 3, Vector2i(1, 2), "栈道捷径", shortcut)]
+		5: return [door(Vector2i(3, 6), 0, Vector2i(2, 0), "入窟"), door(Vector2i(0, 3), 1, Vector2i(3, 6), "共耳窟"), door(Vector2i(6, 3), 4, Vector2i(3, 7), "灯窟"), door(Vector2i(3, 0), 3, Vector2i(1, 2), "栈道捷径", shortcut_open())]
 		1: return [door(Vector2i(3, 6), 5, Vector2i(0, 3), "中央窟"), door(goal, 3, Vector2i(3, 8), "栈道窟", reached)]
 		3: return [door(Vector2i(3, 8), 1, Vector2i(3, 0), "共耳窟"), door(goal, 2, Vector2i(1, 7), "鹿影窟", reached), door(Vector2i(1, 2), 5, Vector2i(3, 0), "栈道捷径", reached)]
 		4: return [door(Vector2i(3, 7), 5, Vector2i(6, 3), "中央窟"), door(goal, 7, Vector2i(4, 8), "镜窟", reached)]
@@ -177,7 +182,7 @@ func reset_current() -> bool:
 	return true
 
 func map_note() -> String:
-	var text := "洞窟相连，左右任一路都能找到哥哥。\n\n入窟 ↔ 中央窟\n左路：中央 ↔ 共耳 ↔ 栈道 ↔ 鹿影\n右路：中央 ↔ 灯窟 ↔ 镜窟 ↔ 鹿影\n栈道捷径：" + ("已通" if shortcut else "从栈道窟西侧开启") + "\n\n"
+	var text := "洞窟相连，左右任一路都能找到哥哥。\n\n入窟 ↔ 中央窟\n左路：中央 ↔ 共耳 ↔ 栈道 ↔ 鹿影\n右路：中央 ↔ 灯窟 ↔ 镜窟 ↔ 鹿影\n栈道捷径：" + ("已通" if shortcut_open() else "从栈道窟西侧开启") + "\n\n"
 	for id in [0, 5, 1, 3, 4, 7, 2]:
 		text += ("● " if id == room else "○ ") + NAMES[id] + (" · 当前" if id == room else (" · 已通" if solved(id) else (" · 来过" if rooms.has(str(id)) else " · 未探索"))) + "\n"
 	return text + ("\n手记里多了一张小兔合影。" if secret else "\n中央窟有三条铜线，汇向同一个小节点。")

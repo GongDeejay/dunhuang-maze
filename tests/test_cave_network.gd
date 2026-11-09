@@ -89,6 +89,41 @@ static func run(t: Node) -> void:
 	t.assert_true(legacy.travel() and legacy.room == 5, "legacy save cannot become trapped behind reset pressure doors")
 	legacy.resume_network(99, {"version": 1})
 	t.assert_eq(legacy.room, 0, "invalid room and empty network safely use entrance")
+	west_shortcut(t)
+
+static func door_at(m: CaveNetwork, cell: Vector2i) -> Dictionary:
+	for d in m.doors():
+		if d.cell == cell:
+			return d
+	return {}
+
+static func west_shortcut(t: Node) -> void:
+	var locked := CaveNetwork.new()
+	locked.load_room(3)
+	t.assert_true(not door_at(locked, CaveModel.PLANK_WEST).open, "the west door stays locked before the rope opens")
+	t.assert_true("从栈道窟西侧开启" in locked.map_note(), "the map keeps the lock note before the cave is solved")
+	locked.remember_room()
+	locked.load_room(5)
+	locked.player = Vector2i(3, 0)
+	locked.destination = locked.player
+	t.assert_true(not door_at(locked, Vector2i(3, 0)).open, "the hub side stays locked before the plank cave is solved")
+	var solved := CaveNetwork.new()
+	solved.load_room(3)
+	walk(t, solved, "UULUULUURRDDRRUULULU")
+	t.assert_true(solved.reached and not solved.shortcut, "solving does not require walking the shortcut first")
+	t.assert_true(door_at(solved, CaveModel.PLANK_WEST).open, "the west door opens together with the rope gate")
+	t.assert_true(solved.map_note().contains("栈道捷径：已通") and not solved.map_note().contains("从栈道窟西侧开启"), "the map lock note disappears once the cave is solved")
+	var saved := solved.save_network()
+	t.assert_eq(int(saved["version"]), 4, "the solved plank cave is stored as version 4")
+	var hub := CaveNetwork.new()
+	hub.resume_network(5, saved)
+	hub.player = Vector2i(3, 0)
+	hub.destination = hub.player
+	t.assert_true(door_at(hub, Vector2i(3, 0)).open, "a reloaded version 4 save opens the hub side of the shortcut")
+	t.assert_true(hub.travel() and hub.room == 3 and hub.reached, "the hub side can enter the solved plank cave")
+	hub.player = CaveModel.PLANK_WEST
+	hub.destination = hub.player
+	t.assert_true(door_at(hub, CaveModel.PLANK_WEST).open and hub.travel() and hub.room == 5, "the west side can return to the hub")
 	var old_room := {"player": [0, 0], "box": [2, 6], "latch": true, "reached": false, "moves": 4}
 	var old := {"version": 3, "shortcut": false, "secret": false, "entry": [0, 0], "rooms": {"3": old_room}}
 	var migrated := CaveNetwork.new()

@@ -16,7 +16,7 @@ func _ready() -> void:
 		mirror_sprites[mirror["id"]] = _make_sprite()
 	lotus = _make_sprite()
 	preview_layer = Node2D.new()
-	preview_layer.z_index = 8
+	preview_layer.z_index = 1
 	add_child(preview_layer)
 	preview_layer.draw.connect(_draw_preview)
 
@@ -25,7 +25,7 @@ func _make_sprite() -> Sprite2D:
 	var sprite := Sprite2D.new()
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.centered = true
-	sprite.z_index = 1
+	sprite.z_index = 0
 	add_child(sprite)
 	return sprite
 

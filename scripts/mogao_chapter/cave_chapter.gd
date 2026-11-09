@@ -762,10 +762,11 @@ func _order_scene_layers() -> void:
 		back.append(plank_art)
 	if lamp_halo:
 		back.append(lamp_halo)
-	if actor_layer:
-		back.append(actor_layer)
 	if mirror_art:
 		back.append(mirror_art)
+	if actor_layer:
+		back.append(actor_layer)
+		actor_layer.z_index = 2
 	for i in back.size():
 		move_child(back[i], i)
 	if modal_layer:

@@ -6,6 +6,7 @@ var stone_sprites: Dictionary = {}
 var tag: Sprite2D
 var gate: Sprite2D
 var thread: Sprite2D
+var west_door: Node2D
 var void_sprites: Dictionary = {}
 var edge_sprites: Dictionary = {}
 var _frames: Array[Texture2D] = []
@@ -40,32 +41,38 @@ func _ready() -> void:
 		for x in 7:
 			var cell := Vector2i(x, y)
 			if _is_void(cell):
-				var hole := _make_sprite(0)
+				var hole := _make_sprite()
 				hole.texture = _void_tex
 				void_sprites[cell] = hole
 			if _has_cliff_edge(cell):
-				var lip := _make_sprite(1)
+				var lip := _make_sprite()
 				lip.texture = _edge_tex
 				edge_sprites[cell] = lip
-	for cell in CaveModel.PLANK_CELLS:
-		plank_sprites[cell] = _make_sprite(3)
-	plank_sprites[CaveModel.PLANK_DEMO] = _make_sprite(3)
 	for cell in CaveModel.PLANK_STONES:
-		stone_sprites[cell] = _make_sprite(2)
-	tag = _make_sprite(4)
+		stone_sprites[cell] = _make_sprite()
+	for cell in CaveModel.PLANK_CELLS:
+		plank_sprites[cell] = _make_sprite()
+	plank_sprites[CaveModel.PLANK_DEMO] = _make_sprite()
+	tag = _make_sprite()
 	var tag_tex := _load_tex("plank_demo_tag")
 	if tag_tex != null:
 		tag.texture = tag_tex
-	gate = _make_sprite(5)
-	thread = _make_sprite(6)
+	gate = _make_sprite()
+	thread = _make_sprite()
 	thread.texture = _load_tex("blue_thread")
+	var doors := Node2D.new()
+	doors.name = "WestDoor"
+	doors.z_index = 0
+	add_child(doors)
+	doors.draw.connect(_draw_west_door)
+	west_door = doors
 
 
-func _make_sprite(z: int) -> Sprite2D:
+func _make_sprite() -> Sprite2D:
 	var sprite := Sprite2D.new()
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.centered = true
-	sprite.z_index = z
+	sprite.z_index = 0
 	add_child(sprite)
 	sprite.visible = false
 	return sprite
@@ -83,15 +90,17 @@ func _process(_delta: float) -> void:
 		tag.visible = false
 		gate.visible = false
 		thread.visible = false
+		if west_door:
+			west_door.visible = false
 		for cell in void_sprites:
 			void_sprites[cell].visible = false
 		for cell in edge_sprites:
 			edge_sprites[cell].visible = false
 		return
 	for cell in void_sprites:
-		_place_grid(void_sprites[cell], cell, _void_tex)
+		_place_grid(void_sprites[cell], cell, _void_tex, false)
 	for cell in edge_sprites:
-		_place_grid(edge_sprites[cell], cell, _edge_tex)
+		_place_grid(edge_sprites[cell], cell, _edge_tex, true)
 	for cell in stone_sprites:
 		var stone: Sprite2D = stone_sprites[cell]
 		var variant: int = 0 if _stones.size() < 2 else int((cell.x + cell.y) % _stones.size())
@@ -107,6 +116,19 @@ func _process(_delta: float) -> void:
 	_place(gate, host.model.goal, gate_tex, -host.unit * 0.12)
 	var thread_tex: Texture2D = thread.texture if host.model.reached else null
 	_place(thread, CaveModel.PLANK_LANDING, thread_tex, -host.unit * 0.08)
+	if west_door:
+		west_door.visible = true
+		west_door.queue_redraw()
+
+
+func _draw_west_door() -> void:
+	if host == null or host.model.room != 3:
+		return
+	var open := false
+	for door in host.model.doors():
+		if door.cell == CaveModel.PLANK_WEST:
+			open = bool(door.open)
+	host.painter.portal(host, host.point(CaveModel.PLANK_WEST), open, west_door)
 
 
 func _plank_texture(cell: Vector2i) -> Texture2D:
@@ -145,15 +167,14 @@ func _has_cliff_edge(cell: Vector2i) -> bool:
 	return above in CaveModel.PLANK_STONES or above in CaveModel.PLANK_CELLS or above == CaveModel.PLANK_DEMO
 
 
-func _place_grid(sprite: Sprite2D, cell: Vector2i, texture: Texture2D) -> void:
+func _place_grid(sprite: Sprite2D, cell: Vector2i, texture: Texture2D, lip: bool) -> void:
 	if texture == null:
 		sprite.visible = false
 		return
 	var u: float = host.unit
 	sprite.texture = texture
 	sprite.visible = true
-	var drop := u * 0.16 if sprite.z_index == 1 else 0.0
-	sprite.position = host.point(cell) + Vector2(0, drop)
+	sprite.position = host.point(cell) + Vector2(0, u * 0.16 if lip else 0.0)
 	sprite.scale = Vector2(u / 16.0, u * 0.72 / 16.0)
 
 

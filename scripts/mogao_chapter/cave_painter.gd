@@ -74,7 +74,7 @@ func paint(c: Control) -> void:
 	if m is CaveNetwork:
 		if m.room == 5: hub(c)
 		for d in m.doors():
-			if not (m.room == 3 and d.cell == m.goal):
+			if not (m.room == 3 and (d.cell == m.goal or d.cell == CaveModel.PLANK_WEST)):
 				portal(c, c.point(d.cell), d.open)
 			var p: Vector2 = c.point(d.cell) - Vector2(0, u * .94)
 			if d.cell.y == int(m.extent.y) - 1: p = c.point(d.cell) + Vector2(0, u * .48)
@@ -147,7 +147,8 @@ func lamp_style() -> StyleBoxFlat:
 	style.set_border_width_all(2); style.set_corner_radius_all(4)
 	return style
 
-func portal(c: Control, p: Vector2, open: bool) -> void:
+func portal(c: Control, p: Vector2, open: bool, canvas: CanvasItem = null) -> void:
+	var draw: CanvasItem = c if canvas == null else canvas
 	var u: float = c.unit
 	# The first scarf must remain readable; its exit is shown only after collection.
 	if c.model.room == 0 and not c.model.reached: return
@@ -155,9 +156,9 @@ func portal(c: Control, p: Vector2, open: bool) -> void:
 	var style := StyleBoxFlat.new(); style.bg_color = Color("acb5a0") if open else Color("35443e")
 	style.corner_radius_top_left = int(u * .38); style.corner_radius_top_right = int(u * .38)
 	style.border_color = Color("d1b78b"); style.set_border_width_all(3)
-	c.draw_style_box(style, rect)
-	if open: c.draw_line(p + Vector2(0, -u * .5), p + Vector2(0, -u * .14), Color("fff0c2"), 4, true)
-	else: c.draw_line(p + Vector2(-u * .31, -u * .35), p + Vector2(u * .31, -u * .35), Color("b58b55"), maxf(4, u * .1), true)
+	draw.draw_style_box(style, rect)
+	if open: draw.draw_line(p + Vector2(0, -u * .5), p + Vector2(0, -u * .14), Color("fff0c2"), 4, true)
+	else: draw.draw_line(p + Vector2(-u * .31, -u * .35), p + Vector2(u * .31, -u * .35), Color("b58b55"), maxf(4, u * .1), true)
 
 func bridge(c: Control, index: int) -> void:
 	var b: Dictionary = c.model.bridges[index]

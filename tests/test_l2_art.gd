@@ -6,6 +6,7 @@ static func run(t: Node) -> void:
 	_mirror_back(t)
 	_halo(t)
 	_planks(t)
+	_player_above_tiles(t)
 
 
 static func _mirrors(t: Node) -> void:
@@ -121,6 +122,43 @@ static func _planks(t: Node) -> void:
 	t.assert_true(chapter.plank_art.thread.visible and chapter.plank_art.thread.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "the solved cave shows the blue thread")
 	var nailed_board: Sprite2D = chapter.plank_art.plank_sprites[CaveModel.PLANK_CELLS[0]]
 	t.assert_eq(nailed_board.texture, nailed, "solved planks use the nailed sheet")
+	chapter.free()
+
+
+static func _effective_z(item: CanvasItem) -> int:
+	if not item.z_as_relative:
+		return item.z_index
+	var parent := item.get_parent()
+	var base := _effective_z(parent as CanvasItem) if parent is CanvasItem else 0
+	return base + item.z_index
+
+
+static func _collect_art(node: Node, into: Array) -> void:
+	for child in node.get_children():
+		if child is CanvasItem:
+			into.append(child)
+		_collect_art(child, into)
+
+
+static func _player_above_tiles(t: Node) -> void:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	for room_id in [3, CaveModel.MIRROR_ROOM]:
+		chapter.model.load_room(room_id)
+		chapter.rebuild_cranks()
+		var player_z := _effective_z(chapter.actor_layer)
+		var art: Array = []
+		_collect_art(chapter.plank_art, art)
+		_collect_art(chapter.mirror_art, art)
+		_collect_art(chapter.lamp_halo, art)
+		art.append(chapter.plank_art)
+		art.append(chapter.mirror_art)
+		art.append(chapter.lamp_halo)
+		for node in art:
+			var canvas := node as CanvasItem
+			t.assert_true(_effective_z(canvas) < player_z, "room %s %s stays under the player" % [room_id, canvas.name])
+		t.assert_true(chapter.actor_layer.get_index() > chapter.plank_art.get_index(), "the player is ordered after the plank tiles")
+		t.assert_true(chapter.actor_layer.get_index() > chapter.mirror_art.get_index(), "the player is ordered after the mirrors")
 	chapter.free()
 
 
