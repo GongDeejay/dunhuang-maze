@@ -45,6 +45,7 @@ func _ready() -> void:
 	test_mobile_pointer_deduplication()
 	test_realtime_monster_intent()
 	test_realtime_player_attack()
+	preload("res://tests/test_input_feel.gd").run(self)
 	test_web_font_payload()
 	print("\n=== 测试完成: %d 通过, %d 失败 ===" % [passed, failed])
 	get_tree().quit(failed)

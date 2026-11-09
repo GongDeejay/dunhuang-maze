@@ -19,7 +19,10 @@ const ROOM_NAMES := {
 	5: "中央窟",
 	7: "镜窟 · 折光",
 }
+const MoveBufferScript = preload("res://scripts/handlers/move_buffer.gd")
 var model := CaveNetwork.new()
+var input_handler := InputHandler.new()
+var move_buffer = MoveBufferScript.new()
 var heading: Label
 var objective: Label
 var hint: Label
@@ -306,6 +309,9 @@ func pause_game() -> void:
 
 func show_card(next_mode: String, title: String, body: String, first: String, second: String = "", third: String = "") -> void:
 	mode = next_mode; model.paused = true
+	# A popup invalidates the step that was waiting for the animation to finish.
+	move_buffer.clear()
+	input_handler.held.set_blocked(true)
 	card_title.text = title; card_body.text = body
 	primary.text = first; secondary.text = second; tertiary.text = third
 	secondary.visible = not second.is_empty(); tertiary.visible = not third.is_empty()
@@ -348,31 +354,81 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(overlay): pause_game()
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if stopped or not event is InputEventKey or not event.pressed or event.echo: return
-	var key: int = event.physical_keycode if event.physical_keycode else event.keycode
-	if mode != "playing":
+	if stopped or not event is InputEventKey: return
+	var key_event := event as InputEventKey
+	var playing := mode == "playing" and not model.paused
+	var action := input_handler.handle_direction(key_event, playing)
+	if key_event.echo or not key_event.pressed:
+		get_viewport().set_input_as_handled()
+		return
+	var key: int = key_event.physical_keycode if key_event.physical_keycode else key_event.keycode
+	if mode != "playing" or model.paused:
 		if key == KEY_ESCAPE and mode in ["note", "pause", "reset", "menu"]: close_card()
-		get_viewport().set_input_as_handled(); return
+		get_viewport().set_input_as_handled()
+		return
 	if model.room == CaveModel.MIRROR_ROOM:
-		var action := InputHandler.new().handle_feature(event, {"mirror_cave": true})
-		if action.type == GameAction.Type.INTERACT:
+		var feature := input_handler.handle_feature(event, {"mirror_cave": true})
+		if feature.type == GameAction.Type.INTERACT:
 			interact()
 			get_viewport().set_input_as_handled()
 			return
+	if action.type == GameAction.Type.MOVE:
+		_take_direction(action.direction)
+		get_viewport().set_input_as_handled()
+		return
 	match key:
-		KEY_W, KEY_UP: move(Vector2i.UP)
-		KEY_A, KEY_LEFT: move(Vector2i.LEFT)
-		KEY_S, KEY_DOWN: move(Vector2i.DOWN)
-		KEY_D, KEY_RIGHT: move(Vector2i.RIGHT)
 		KEY_SPACE, KEY_E: interact()
 		KEY_Z: undo()
 		KEY_F: show_note()
 		KEY_P, KEY_ESCAPE: pause_game()
 	get_viewport().set_input_as_handled()
 
+
+func _take_direction(direction: int) -> void:
+	if stopped or mode != "playing" or model.paused:
+		move_buffer.clear()
+		return
+	if model.busy == "step":
+		move_buffer.remember(direction)
+		return
+	if not model.busy.is_empty():
+		return
+	move(_direction_vector(direction))
+
+
+func _direction_vector(direction: int) -> Vector2i:
+	return Vector2i(MazeGenerator.DX[direction], MazeGenerator.DY[direction])
+
+
+func _collect_step_repeat(delta: float) -> void:
+	if stopped or mode != "playing" or model.paused:
+		move_buffer.clear()
+		input_handler.held.set_blocked(true)
+		return
+	input_handler.held.set_blocked(false)
+	if model.busy != "step":
+		return
+	for direction in input_handler.held.pull(delta):
+		move_buffer.remember(int(direction))
+
+
+func _settle_buffered_step(previous: String) -> void:
+	if stopped or mode != "playing" or model.paused:
+		move_buffer.clear()
+		input_handler.held.set_blocked(true)
+		return
+	if previous != "step" or not model.busy.is_empty():
+		return
+	var direction := int(move_buffer.take())
+	if direction < 0:
+		direction = int(input_handler.held.current())
+	if direction >= 0:
+		move(_direction_vector(direction))
+
 func _process(delta: float) -> void:
 	if stopped: return
 	frame += 1
+	_collect_step_repeat(delta)
 	var previous := model.busy
 	var was_lit := model.lit()
 	var previous_deer := model.deer_time
@@ -384,6 +440,7 @@ func _process(delta: float) -> void:
 			show_card("rescue", "终于找到哥哥了", "哥哥：“爸爸，我把灯留在路边，怕你找不到。”\n\n爸爸：“看见了。我们一起出去。”\n\n沿上方平台，走向右侧透光的窟口。", "一起走向窟口")
 		refresh()
 		if model.busy.is_empty(): checkpoint_changed.emit(model.room)
+	_settle_buffered_step(previous)
 	if was_lit != model.lit():
 		refresh(); checkpoint_changed.emit(model.room)
 	if previous_deer != model.deer_time: queue_redraw()
