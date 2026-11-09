@@ -34,13 +34,8 @@ func feed(event: InputEvent, allowed: bool) -> int:
 	if direction < 0:
 		return -1
 	if key_event.pressed:
-		# Browser key-repeat sometimes arrives without echo. The key is already
-		# held, so keep the 0.14s clock instead of restarting it or stepping again.
-		var already_holding := not _order.is_empty() and _order[_order.size() - 1] == direction
 		_order.erase(direction)
 		_order.append(direction)
-		if already_holding:
-			return -1
 		_elapsed = 0.0
 		if _blocked or not allowed:
 			return -1
