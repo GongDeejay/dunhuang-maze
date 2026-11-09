@@ -85,12 +85,18 @@ func paint(c: Control) -> void:
 		if m.room == 2: portal(c, c.point(m.exit_cell), m.rescued)
 	else: portal(c, c.point(m.exit_cell), m.room != 2 or m.rescued)
 	if m.room == 2 and not m.rescued: actor(c, c.point(m.goal), c.BROTHER, .85)
+
+
+func paint_actors(c: Control, canvas: CanvasItem = null) -> void:
+	var draw: CanvasItem = c if canvas == null else canvas
+	var m: CaveModel = c.model
+	var u: float = c.unit
 	var player: Vector2 = c.point(m.visual_player())
-	if m.room == 2 and m.rescued: actor(c, player + Vector2(-u * .35, -u * .12), c.BROTHER, .7)
-	actor(c, player, c.DAD, 1)
+	if m.room == 2 and m.rescued: actor(c, player + Vector2(-u * .35, -u * .12), c.BROTHER, .7, draw)
+	actor(c, player, c.DAD, 1, draw)
 	if m.scarf and not m.rescued:
-		c.draw_line(player + Vector2(u * .05, -u * .32), player + Vector2(u * .16, -u * .08), Color("72d5dc"), maxf(3, u * .07), true)
-	if m.room in [2, 4] and m.lamp_held: lantern(c, player + Vector2(u * .3, -u * .22), u * .14, .7)
+		draw.draw_line(player + Vector2(u * .05, -u * .32), player + Vector2(u * .16, -u * .08), Color("72d5dc"), maxf(3, u * .07), true)
+	if m.room in [2, 4] and m.lamp_held: lantern(c, player + Vector2(u * .3, -u * .22), u * .14, .7, draw)
 
 func hub(c: Control) -> void:
 	var u: float = c.unit
@@ -120,18 +126,20 @@ func tile(c: Control, cell: Vector2, lit: bool) -> void:
 		for offset in [-.1, .1]:
 			c.draw_circle(p + Vector2(offset * u, offset * u * .7), maxf(2, u * .065), Color("ffe3a1"))
 
-func actor(c: Control, position: Vector2, sprite: Texture2D, scale: float) -> void:
+func actor(c: Control, position: Vector2, sprite: Texture2D, scale: float, canvas: CanvasItem = null) -> void:
+	var draw: CanvasItem = c if canvas == null else canvas
 	var height := maxf(28, c.unit * .78) * scale
-	c.draw_set_transform(position, 0, Vector2(1, .35))
-	c.draw_circle(Vector2.ZERO, height * .3, Color(0, 0, 0, .3)); c.draw_set_transform(Vector2.ZERO)
-	c.draw_texture_rect(sprite, Rect2(position - Vector2(height * .5, height * .85), Vector2.ONE * height), false)
+	draw.draw_set_transform(position, 0, Vector2(1, .35))
+	draw.draw_circle(Vector2.ZERO, height * .3, Color(0, 0, 0, .3)); draw.draw_set_transform(Vector2.ZERO)
+	draw.draw_texture_rect(sprite, Rect2(position - Vector2(height * .5, height * .85), Vector2.ONE * height), false)
 
-func lantern(c: Control, p: Vector2, radius: float, strength: float) -> void:
-	for i in range(4, 0, -1): c.draw_circle(p, radius * i * 1.8, Color(1, .67, .27, strength * .035))
-	c.draw_line(p + Vector2(0, radius), p + Vector2(0, radius * 1.8), Color("735338"), 3, true)
-	c.draw_style_box(lamp_style(), Rect2(p - Vector2.ONE * radius, Vector2.ONE * radius * 2))
-	c.draw_arc(p - Vector2(0, radius), radius * .7, PI, TAU, 12, Color("d6b276"), 2, true)
-	c.draw_line(p - Vector2(0, radius), p + Vector2(0, radius), Color("ffeab3"), 2, true)
+func lantern(c: Control, p: Vector2, radius: float, strength: float, canvas: CanvasItem = null) -> void:
+	var draw: CanvasItem = c if canvas == null else canvas
+	for i in range(4, 0, -1): draw.draw_circle(p, radius * i * 1.8, Color(1, .67, .27, strength * .035))
+	draw.draw_line(p + Vector2(0, radius), p + Vector2(0, radius * 1.8), Color("735338"), 3, true)
+	draw.draw_style_box(lamp_style(), Rect2(p - Vector2.ONE * radius, Vector2.ONE * radius * 2))
+	draw.draw_arc(p - Vector2(0, radius), radius * .7, PI, TAU, 12, Color("d6b276"), 2, true)
+	draw.draw_line(p - Vector2(0, radius), p + Vector2(0, radius), Color("ffeab3"), 2, true)
 
 func lamp_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new(); style.bg_color = Color("e7b665"); style.border_color = Color("966c39")
@@ -222,8 +230,10 @@ func light_room(c: Control) -> void:
 func _mirror_floor(c: Control) -> void:
 	var m: CaveModel = c.model
 	var u: float = c.unit
-	for cell in [CaveModel.MIRROR_FIXED_CELL, CaveModel.MIRROR_TURN_CELL, CaveModel.MIRROR_LAMP, CaveModel.MIRROR_LOTUS]:
-		tile(c, cell, false)
+	for mirror in CaveModel.MIRROR_DEFS:
+		tile(c, mirror["cell"], false)
+	tile(c, CaveModel.MIRROR_LAMP, false)
+	tile(c, CaveModel.MIRROR_LOTUS, false)
 	for cell in CaveModel.MIRROR_LIT_PATH:
 		if m.lotus_lit():
 			tile(c, cell, true)
@@ -231,3 +241,5 @@ func _mirror_floor(c: Control) -> void:
 			var p: Vector2 = c.point(cell)
 			c.draw_line(p + Vector2(-u * .35, u * .25), p + Vector2(u * .35, u * .25), Color("485149"), 1, true)
 	lantern(c, c.point(CaveModel.MIRROR_LAMP) + Vector2(0, -u * 0.15), u * 0.14, 0.55)
+
+

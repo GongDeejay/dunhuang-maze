@@ -1,3 +1,4 @@
+class_name JourneyBranches
 extends RefCounted
 ## First-chapter side branches: carve, rewards, camp clue, footprint pulse.
 ## Numbers live on FirstJourney; this module only applies them.
@@ -52,7 +53,7 @@ static func reward(journey, pos: Vector2i, maze: MazeGenerator, player: PlayerCo
 static func camp_card() -> Dictionary:
 	return {
 		"title": "驿站里的线索",
-		"body": "驿卒：我见过妈妈，她往北边石门的方向去了。\n先去北边找到她，再一起回营地。",
+		"body": "驿卒：见过妈妈，她过了石门往北去了。\n先去北边找到她，再一起回来歇脚。",
 		"button": "去北边找妈妈",
 	}
 
@@ -114,6 +115,8 @@ static func discovery_line(journey) -> String:
 			line += "没走到的" + "、".join(skipped) + "，可以留待下次。"
 	if journey.fragments.size() >= int(journey.FRAGMENTS_TOTAL):
 		line += "\n妈妈说：这三片画，就是我一路走来的样子。"
+	if journey.caravan_found and int(journey.water_skin) > 0:
+		line += "\n水囊没喝完，留给了妈妈。"
 	return line
 
 
@@ -139,20 +142,19 @@ static func _beacon(journey, maze: MazeGenerator, player: PlayerController) -> D
 	}
 
 
-static func _caravan(journey, maze: MazeGenerator, player: PlayerController) -> Dictionary:
-	var amount := scaled_heal(int(journey.CARAVAN_HEAL))
-	player.heal(amount)
+static func _caravan(journey, maze: MazeGenerator, _player: PlayerController) -> Dictionary:
+	var amount := scaled_heal(int(journey.WATER_SKIN_HEAL))
 	journey.caravan_found = true
+	journey.water_skin = 1
 	journey.fragments[2] = true
 	if maze.landmarks.has(journey.CARAVAN):
 		maze.landmarks[journey.CARAVAN]["searched"] = true
 		maze.landmarks[journey.CARAVAN]["ghost"] = false
 	return {
 		"title": "商队遗驼",
-		"body": "驼囊里还有一点清水，当场恢复 %d 点体力。旁边压着一块壁画残片，不必放进背包。" % amount,
-		"button": "收下残片",
-		"image": AssetRegistry.extra_item_path("fragment_2"),
-		"image_caption": "非文物原图",
+		"body": "驼鞍上还挂着一只水囊，你把它系在腰间。\n需要时按 H（手机点“囊”）喝下，恢复 %d 点体力。\n旁边压着一块壁画残片，你也收好了。" % amount,
+		"button": "收下水囊",
+		"image": AssetRegistry.extra_item_path("water_skin"),
 	}
 
 
@@ -163,8 +165,8 @@ static func _stele(journey, maze: MazeGenerator) -> Dictionary:
 		maze.landmarks[journey.STELE]["read"] = true
 	return {
 		"title": "残碑小龛",
-		"body": "妈妈在碑旁留下的话：孩子们往莫高窟去了。哥哥和弟弟都在那边。\n你收起一块壁画残片。",
-		"button": "记下留言",
+		"body": "碑脚有一行新刻的小字：\n“弟弟追着九色鹿的画跑远了，我进窟里找他。——哥哥”\n你收起一块壁画残片。",
+		"button": "记下哥哥的字",
 		"image": AssetRegistry.extra_item_path("fragment_3"),
 		"image_caption": "非文物原图",
 	}

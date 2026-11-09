@@ -34,7 +34,7 @@ const FOOTPRINTS: Array = [
 ]
 const VISION_BONUS_CAP := 2
 const FRAGMENTS_TOTAL := 3
-const CARAVAN_HEAL := 5
+const WATER_SKIN_HEAL := 6
 const SILHOUETTE_SECONDS := 3.0
 const BEACON_REVEAL := 1
 const SPRING_HEAL := 6
@@ -55,6 +55,8 @@ var safe_route: Array[Vector2i] = []
 var short_route: Array[Vector2i] = []
 var beacon_found := false
 var caravan_found := false
+var water_skin := 0
+var map_seed := 1
 var stele_found := false
 var bell_clue := false
 var camp_clue := false
@@ -63,6 +65,7 @@ var silhouette_time := 0.0
 var fragments: Dictionary = {}
 
 func build(maze: MazeGenerator) -> void:
+	maze.theme_key = "l1"
 	assert(Vector2i(maze.width, maze.height) == SIZE)
 	maze._init_grid()
 	_carve(maze, [Vector2i(0, 0), Vector2i(2, 0), Vector2i(2, 2), Vector2i(4, 2), FORK], MazeGenerator.Terrain.ANCIENT_ROAD)
@@ -136,9 +139,9 @@ func enter(pos: Vector2i, maze: MazeGenerator, player: PlayerController) -> Dict
 		return branch
 	match pos:
 		Vector2i(2, 1):
-			return {"title": "沙地里的足迹", "body": "这是妈妈的脚印！她应该往古道深处去了。\n前面有一份疗伤卷，走过去即可拾取。低血量时会自动使用，也可以主动使用。", "button": "沿着足迹出发"}
+			return {"title": "沙地里的足迹", "body": "这是妈妈的脚印，一路向东。她要先到东边的石门，过了石门，就往北走了。\n前面有一份疗伤卷，走过去即可拾取；低血量时会自动使用。", "button": "沿着足迹出发"}
 		FORK:
-			return {"title": "路牌前，选一条路", "body": "↓ 古道：绕远，但没有风沙伤害，沿路有一眼清泉。\n→ 近路：更短，要经过四格风沙，还会遇到沙蝎。\n↗ 远处有座烽燧，站上去能望得更远。\n两条路都能找到妈妈，可以随时折返。", "button": "我来选路"}
+			return {"title": "路牌前，选一条路", "body": "↓ 古道：绕远，没有风沙，沿路有一眼清泉。\n→ 近路：更短，要过四格风沙，有沙蝎。\n↗ 远处有座烽燧，登台能望得更远。\n古道南头偏西，沙里半埋着一支驼队。\n古道东南的岔口，立着一块残碑。\n两条路都通石门，过了石门再往北找妈妈。", "button": "我来选路"}
 		Vector2i(4, 6):
 			return {"title": "古道旁的石窟", "body": "← 沿古道继续，前面有清泉。\n→ 石窟里有壁画和补给，但有沙蝎守着。\n探索石窟不是必需的，想去看看吗？", "button": "继续探索"}
 		SPRING:
@@ -169,7 +172,10 @@ func rescue(maze: MazeGenerator, player: PlayerController) -> Dictionary:
 	player.heal(RESCUE_HEAL)
 	_carve(maze, [FAMILY, Vector2i(16, 4), CAMP], MazeGenerator.Terrain.ANCIENT_ROAD)
 	maze.landmarks[Vector2i(16, 4)] = {"symbol": "归", "kind": "shortcut"}
-	return {"title": "终于找到妈妈了", "body": "“你没事，太好了！孩子们往莫高窟那边去了。”\n妈妈帮你包扎，恢复 %d 点体力，并指出右侧通往营地的旧路。\n捷径已经打开。先一起到营地，再去找孩子们。" % RESCUE_HEAL, "button": "一起回营地"}
+	var quote := "“你没事，太好了！孩子们往莫高窟那边去了。”"
+	if stele_found:
+		quote = "“你看到哥哥刻的字了？他们进了莫高窟，弟弟总爱追着画跑。”"
+	return {"title": "终于找到妈妈了", "body": quote + "\n妈妈帮你包扎，恢复 %d 点体力，并指出右侧通往营地的旧路。\n捷径已经打开。先一起到营地，再去找孩子们。" % RESCUE_HEAL, "button": "一起回营地"}
 
 func objective() -> String:
 	if rescued: return "与妈妈前往营地"
@@ -178,6 +184,45 @@ func objective() -> String:
 
 func discovery_line() -> String:
 	return Branches.discovery_line(self)
+
+func water_skin_hud() -> String:
+	if not caravan_found:
+		return ""
+	if water_skin > 0:
+		return "水囊 ×%d（H 喝）" % water_skin
+	return "水囊 已空"
+
+
+func survey_offset(salt: int) -> Vector2i:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(map_seed) + salt * 17
+	var neighbors: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
+	]
+	return neighbors[rng.randi_range(0, neighbors.size() - 1)]
+
+
+func roadbook_ranges() -> Array:
+	if not beacon_found:
+		return []
+	return [
+		_survey_mark(CARAVAN, "驼", 11, caravan_found),
+		_survey_mark(STELE, "碑", 29, stele_found),
+	]
+
+
+func _survey_mark(target: Vector2i, label: String, salt: int, found: bool) -> Dictionary:
+	if found:
+		return {"cell": target, "label": label, "kind": "found"}
+	return {
+		"cell": target + survey_offset(salt),
+		"target": target,
+		"label": label,
+		"kind": "area",
+		"radius": 2.0,
+	}
+
 
 func fragment_mask() -> Array:
 	return [fragments.has(1), fragments.has(2), fragments.has(3)]

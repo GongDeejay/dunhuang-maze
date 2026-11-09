@@ -44,10 +44,22 @@ var first_family_tip_shown: bool = false
 var guide_assist_active: bool = false
 var moves_since_progress: int = 0
 var low_hp_pulse: float = 0.0
+const JourneyBranchesScript = preload("res://scripts/journey_branches.gd")
+const WallFeedbackScript = preload("res://scripts/wall_feedback.gd")
+const ATTACK_COOLDOWN := 0.35
+const MoveBufferScript = preload("res://scripts/handlers/move_buffer.gd")
+const HazardGateScript = preload("res://scripts/handlers/hazard_gate.gd")
 var input_handler := InputHandler.new()
+var attack_buffer = MoveBufferScript.new()
+var hazard_gate = HazardGateScript.new()
 var attack_cooldown := 0.0
 var first_journey: FirstJourney
 var _branch_visual_tick := 0.0
+var wall_bumps := 0
+var bump_tween: Tween
+var _bumping := false
+var _bump_wall_key := ""
+var _bump_wall_at := -1.0
 var journey_card: JourneyCard
 var advance_after_story := false
 var third_chapter: ThirdChapter
@@ -151,6 +163,9 @@ func _notification(what: int) -> void:
 	if third_chapter != null or cave_chapter != null: return
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		held_inputs.clear()
+		input_handler.held.clear()
+		attack_buffer.clear()
+		hazard_gate.clear()
 		if pattern_panel and pattern_panel.visible: pattern_panel.suspend()
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and game != null and game.is_playing():
 		game.toggle_pause()
@@ -218,6 +233,7 @@ func _refresh_layout() -> void:
 		current_layout.maze_rect = Rect2(0, hud_height, vp.x, current_layout.controls_rect.position.y - hud_height)
 		current_layout.log_rect = Rect2()
 	if mobile_controls:
+		mobile_controls.drink_visible = first_journey != null and first_journey.water_skin > 0
 		mobile_controls.apply_layout(current_layout)
 		mobile_controls.visible = third_chapter == null and cave_chapter == null and not game.is_difficulty_select() and not show_new_journey_confirm and not _pattern_open() and not _gate_revealing() and not _notebook_open()
 	if pattern_prompt:
@@ -235,9 +251,15 @@ func _refresh_layout() -> void:
 			pattern_prompt.position.x = area.end.x - pattern_prompt.size.x - 8
 
 
+func _keyboard_move_allowed() -> bool:
+	return game.can_move() and not _modal_open() and not _input_guarded()
+
+
 func _input(event: InputEvent) -> void:
 	if third_chapter != null or cave_chapter != null: return
 	_track_held_input(event)
+	# Track presses while a card is open so the close frame cannot replay them.
+	input_handler.handle_direction(event, _keyboard_move_allowed())
 	if _modal_open(): return
 	if _input_guarded():
 		get_viewport().set_input_as_handled()
@@ -269,6 +291,9 @@ func _on_mobile_action(action: String) -> void:
 		"menu":
 			game.return_to_menu()
 			_request_redraw()
+		"drink":
+			if game.can_move():
+				_drink_water_skin(false)
 
 func _handle_regenerate() -> void:
 	if game_won:
@@ -290,6 +315,9 @@ func _new_game(level_idx: int = -1) -> void:
 	_close_third_chapter()
 	_close_cave_chapter()
 	attack_cooldown = 0.0
+	attack_buffer.clear()
+	hazard_gate.clear()
+	input_handler.held.clear()
 	if journey_card: journey_card.visible = false
 	advance_after_story = false
 	first_journey = null
@@ -322,6 +350,7 @@ func _new_game(level_idx: int = -1) -> void:
 	maze = MazeGenerator.new(maze_width, maze_height)
 	if current_level_index == 0:
 		first_journey = FirstJourney.new()
+		first_journey.map_seed = randi()
 		first_journey.build(maze)
 	elif current_level_index == 1:
 		mogao_journey = MogaoJourney.new()
@@ -420,8 +449,7 @@ func _track_held_input(event: InputEvent) -> void:
 func _inspect_pattern() -> void:
 	if first_journey and first_journey.mural_found and game.can_move() and not _modal_open() and not _input_guarded():
 		mobile_controls.maze_touch_active = false
-		route_notebook.open(first_journey.notebook_path(maze), first_journey.route_studied)
-		_refresh_layout()
+		_open_roadbook()
 		return
 	if _gate_revealing() and game.is_paused():
 		game.toggle_pause()
@@ -509,6 +537,8 @@ func _start_third_chapter() -> void:
 
 func _show_story(card: Dictionary) -> void:
 	if journey_card and not card.is_empty():
+		attack_buffer.clear()
+		input_handler.held.set_blocked(true)
 		journey_card.open_card(card)
 		_request_redraw()
 
@@ -681,7 +711,7 @@ func _update_guide_assist() -> void:
 func _combat(target: MonsterEntity) -> void:
 	if attack_cooldown > 0.0 or not target.is_alive():
 		return
-	attack_cooldown = 0.35
+	attack_cooldown = ATTACK_COOLDOWN
 	if not first_combat_warned:
 		first_combat_warned = true
 		_add_tutorial("【即时战斗】怪物会持续行动；黄色箭头表示下一步意图，P 可暂停")
@@ -813,12 +843,11 @@ func _apply_game_action(action: GameAction) -> void:
 		GameAction.Type.TOGGLE_PAUSE:
 			game.toggle_pause()
 			_request_redraw()
+		GameAction.Type.DRINK:
+			if game.can_move():
+				_drink_water_skin(false)
 		GameAction.Type.MOVE:
-			if not game.can_move():
-				return
-			if _try_move(action.direction):
-				AudioManager.play_step()
-				TurnResolver.resolve_after_move(self)
+			_apply_move_action(action.direction, false)
 
 func _start_playing() -> void:
 	if GameDirector.needs_new_journey_confirm(selected_difficulty):
@@ -890,23 +919,121 @@ func _try_auto_heal() -> void:
 		return
 	var key = inventory.use_first_heal()
 	if key == "":
+		_drink_water_skin(true)
 		return
 	var def = DataLoader.get_item_def(key)
 	player.heal(def.get("value", 0))
 	_add_log("自动使用 %s: 恢复 %d HP" % [def.get("name", ""), def.get("value", 0)])
 	_request_redraw()
 
+func _open_roadbook() -> void:
+	if route_notebook == null or first_journey == null:
+		return
+	route_notebook.sketch.ranges = first_journey.roadbook_ranges()
+	route_notebook.open(first_journey.notebook_path(maze), first_journey.route_studied)
+	_refresh_layout()
+
+
+func _drink_water_skin(automatic: bool) -> void:
+	if first_journey == null or first_journey.water_skin <= 0:
+		if not automatic:
+			_add_log("水囊已喝完")
+		return
+	if player.hp >= player.max_hp:
+		if not automatic:
+			_add_log("体力已满，水囊先留着")
+		return
+	var amount: int = JourneyBranchesScript.scaled_heal(FirstJourney.WATER_SKIN_HEAL)
+	var before := player.hp
+	player.heal(amount)
+	first_journey.water_skin = 0
+	AudioManager.play_drink()
+	var gained := player.hp - before
+	if automatic:
+		_add_log("体力不支，自动喝下水囊：恢复 %d 点体力" % gained)
+	else:
+		_add_log("喝下水囊：恢复 %d 点体力" % gained)
+	_update_mobile_ui()
+
+
+func _bump_player(dir: int) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	var wall_key: String = WallFeedbackScript.wall_key(player.pos, dir)
+	if not WallFeedbackScript.allow(player.is_hurt, _bump_wall_key, _bump_wall_at, wall_key, now):
+		return
+	_bump_wall_key = wall_key
+	_bump_wall_at = now
+	wall_bumps += 1
+	AudioManager.play_wall_hit()
+	if bump_tween != null and bump_tween.is_valid():
+		bump_tween.kill()
+	player.bump_offset = Vector2.ZERO
+	_bumping = true
+	bump_tween = create_tween()
+	bump_tween.tween_property(player, "bump_offset", WallFeedbackScript.offset(dir), WallFeedbackScript.OUT_SECONDS)
+	bump_tween.tween_property(player, "bump_offset", Vector2.ZERO, WallFeedbackScript.BACK_SECONDS)
+	bump_tween.finished.connect(func():
+		_bumping = false
+		if is_instance_valid(player):
+			player.bump_offset = Vector2.ZERO
+		_request_redraw())
+	_request_redraw()
+
+
+func _apply_move_action(direction: int, repeated: bool) -> void:
+	if not game.can_move():
+		return
+	if repeated and hazard_gate.blocks_repeat(direction, _standing_on_hazard(), _step_enters_hazard(direction)):
+		# Hold-repeat stops on the safe cell. A later real press may enter.
+		return
+	if _try_move(direction):
+		AudioManager.play_step()
+		TurnResolver.resolve_after_move(self)
+		if repeated:
+			hazard_gate.note_after_repeat(direction, _standing_on_hazard())
+		else:
+			hazard_gate.authorize(direction, _standing_on_hazard())
+
+
+func _step_enters_hazard(direction: int) -> bool:
+	if maze == null or not maze.can_move(player.pos.x, player.pos.y, direction):
+		return false
+	var destination := player.pos + Vector2i(MazeGenerator.DX[direction], MazeGenerator.DY[direction])
+	return _cell_hazard_damage(destination) > 0
+
+
+func _standing_on_hazard() -> bool:
+	return maze != null and _cell_hazard_damage(player.pos) > 0
+
+
+func _cell_hazard_damage(cell: Vector2i) -> int:
+	if maze == null or not maze.in_bounds(cell.x, cell.y):
+		return 0
+	var terrain_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(cell.x, cell.y)]
+	var effect: Dictionary = level_terrain_effects.get(terrain_key, {})
+	# Level data marks the damaging terrains. Easy's multiplier can round the
+	# dealt damage to zero; the cell is still a wind-sand stop for hold-repeat.
+	return int(effect.get("move_damage", 0))
+
+
 func _try_move(dir: int) -> bool:
 	if maze.can_move(player.pos.x, player.pos.y, dir):
 		var destination := player.pos + Vector2i(MazeGenerator.DX[dir], MazeGenerator.DY[dir])
 		var target := _get_monster_at(destination)
 		if target != null:
+			# A living enemy on cooldown keeps one direction, then strikes once it ends.
+			if target.is_alive() and attack_cooldown > 0.0:
+				attack_buffer.remember(dir)
+				return false
+			attack_buffer.clear()
 			_combat(target)
 			return false
+		attack_buffer.clear()
 		player.pos = destination
 		player.moved.emit(player.pos)
 		return true
-	AudioManager.play_wall_hit()
+	attack_buffer.clear()
+	_bump_player(dir)
 	return false
 
 func _mark_visited(pos: Vector2i) -> void:
@@ -917,8 +1044,7 @@ func _mark_visited(pos: Vector2i) -> void:
 		if card.get("kind", "") == "roadbook":
 			_add_log(card.body)
 			mobile_controls.maze_touch_active = false
-			route_notebook.open(first_journey.notebook_path(maze), first_journey.route_studied)
-			_refresh_layout()
+			_open_roadbook()
 		else: _show_story(card)
 	elif mogao_journey:
 		var had_scarf := mogao_journey.scarf_found
@@ -992,6 +1118,13 @@ func _process(delta: float) -> void:
 		dirty = true
 	if game.can_move() and not _modal_open() and not was_revealing:
 		attack_cooldown = maxf(0.0, attack_cooldown - delta)
+		if _input_guarded():
+			input_handler.held.set_blocked(true)
+			attack_buffer.clear()
+		else:
+			input_handler.held.set_blocked(false)
+			_flush_attack_buffer()
+			_repeat_held_move(delta)
 		var monster_delta := delta
 		if maze != null:
 			var terrain_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(player.pos.x, player.pos.y)]
@@ -999,6 +1132,9 @@ func _process(delta: float) -> void:
 			monster_delta *= maxf(0.45, 1.0 - float(effect.get("move_speed_bonus", 0.0)))
 		if _move_monsters(monster_delta):
 			dirty = true
+	else:
+		input_handler.held.set_blocked(true)
+		attack_buffer.clear()
 	if first_journey and maze != null and game.can_move() and not _story_open():
 		if first_journey.silhouette_time > 0.0:
 			first_journey.tick_silhouette(delta, maze)
@@ -1007,11 +1143,36 @@ func _process(delta: float) -> void:
 		if _branch_visual_tick >= 0.1:
 			_branch_visual_tick = 0.0
 			dirty = true
+	if _bumping:
+		dirty = true
 	if dirty:
 		_request_redraw()
 	if needs_redraw:
 		queue_redraw()
 		needs_redraw = false
+
+func _flush_attack_buffer() -> void:
+	if attack_cooldown > 0.0 or not attack_buffer.pending():
+		return
+	if not _keyboard_move_allowed():
+		attack_buffer.clear()
+		return
+	_apply_move_action(attack_buffer.take(), false)
+
+
+func _repeat_held_move(delta: float) -> void:
+	hazard_gate.sync_held(input_handler.held.current())
+	for direction in input_handler.held.pull(delta):
+		if not _keyboard_move_allowed():
+			input_handler.held.set_blocked(true)
+			attack_buffer.clear()
+			return
+		_apply_move_action(direction, true)
+		if not _keyboard_move_allowed():
+			input_handler.held.set_blocked(true)
+			attack_buffer.clear()
+			return
+
 
 func _move_monsters(delta: float) -> bool:
 	var changed := false
@@ -1081,6 +1242,7 @@ func _draw_context() -> Dictionary:
 		"guide_dir": _get_guide_direction(),
 		"low_hp_pulse": low_hp_pulse,
 		"journey_objective": first_journey.objective() if first_journey else (mogao_journey.objective() if mogao_journey else ""),
+		"water_skin_line": first_journey.water_skin_hud() if first_journey else "",
 		"first_journey": first_journey != null or mogao_journey != null,
 		"mogao_focus": mogao_journey != null and mogao_journey.encounter_focus(player.pos),
 		"gate_revealing": _gate_revealing(),

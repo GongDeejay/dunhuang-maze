@@ -15,6 +15,7 @@ enum Type {
 	CLICK_AT,
 	TOGGLE_PAUSE,
 	INTERACT,
+	DRINK,
 }
 
 var type: Type = Type.NONE
@@ -83,4 +84,10 @@ static func toggle_pause() -> GameAction:
 static func interact() -> GameAction:
 	var a := GameAction.new()
 	a.type = Type.INTERACT
+	return a
+
+
+static func drink() -> GameAction:
+	var a := GameAction.new()
+	a.type = Type.DRINK
 	return a
