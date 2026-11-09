@@ -6,6 +6,7 @@ const HQ_PLAYER_DIR := "res://assets/high_quality/player/"
 const LOW_PLAYER_DIR := "res://assets/sprites/player/"
 const ITEM_DIR := "res://assets/sprites/item/"
 const TERRAIN_DIR := "res://assets/sprites/terrain/"
+const L1_TERRAIN_DIR := "res://assets/sprites/terrain/l1/"
 const HEART_DIR := "res://assets/sprites/heart/"
 const LANDMARK_DIR := "res://assets/sprites/landmark/"
 const DECAL_DIR := "res://assets/sprites/decal/"
@@ -72,8 +73,18 @@ const EXTRA_ITEM_FILES := {
 	"fragment_1": "fragment_1.png",
 	"fragment_2": "fragment_2.png",
 	"fragment_3": "fragment_3.png",
-	"water_skin": "water_skin.png",
-	"water_skin_empty": "water_skin_empty.png",
+	"water_skin": "waterskin.png",
+	"water_skin_empty": "waterskin_empty.png",
+}
+
+const L1_TERRAIN_FILES := {
+	"wall": "wall.png",
+	"wall_alt": "wall_alt.png",
+	"wall_face": "wall_face.png",
+	"floor_sand": "floor_sand.png",
+	"floor_road": "floor_road.png",
+	"floor_desert": "floor_desert.png",
+	"floor_grotto": "floor_grotto.png",
 }
 
 const MOGAO_SPRITE_FILES := {
@@ -134,6 +145,13 @@ static func item_sprite_path(item_type: String) -> String:
 	if file.is_empty():
 		return ""
 	return ITEM_DIR + file
+
+
+static func l1_terrain_path(key: String) -> String:
+	var file: String = L1_TERRAIN_FILES.get(key, "")
+	if file.is_empty():
+		return ""
+	return L1_TERRAIN_DIR + file
 
 
 static func terrain_sprite_path(key: String) -> String:

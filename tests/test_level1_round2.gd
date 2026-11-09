@@ -94,7 +94,8 @@ static func _audio(t: Node) -> void:
 	t.assert_eq(spec.get("duration", 0), 0.09, "thud lasts 0.09 seconds")
 	t.assert_eq(spec.get("volume", 0), 0.25, "thud volume")
 	t.assert_true(float(spec.get("decay_at", 1.0)) < 0.3, "thud decays quickly")
-	t.assert_eq(AudioManager.wall_hit_source(), "", "missing wall_hit file falls back to the thud")
+	t.assert_eq(AudioManager.wall_hit_source(), "res://assets/audio/wall_hit.ogg", "wall hit plays the recorded sample")
+	t.assert_true(ResourceLoader.exists("res://assets/audio/drink.ogg"), "drink sample is available")
 
 
 static func _bump_rules(t: Node) -> void:

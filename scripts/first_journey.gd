@@ -65,6 +65,7 @@ var silhouette_time := 0.0
 var fragments: Dictionary = {}
 
 func build(maze: MazeGenerator) -> void:
+	maze.theme_key = "l1"
 	assert(Vector2i(maze.width, maze.height) == SIZE)
 	maze._init_grid()
 	_carve(maze, [Vector2i(0, 0), Vector2i(2, 0), Vector2i(2, 2), Vector2i(4, 2), FORK], MazeGenerator.Terrain.ANCIENT_ROAD)

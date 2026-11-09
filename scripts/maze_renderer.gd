@@ -37,6 +37,10 @@ func load_sprites() -> void:
 		if ResourceLoader.exists(path):
 			terrain_sprites[t_key] = load(path)
 	_load_terrain_variants()
+	for l1_key in AssetRegistry.L1_TERRAIN_FILES:
+		var l1_path := AssetRegistry.l1_terrain_path(l1_key)
+		if ResourceLoader.exists(l1_path):
+			terrain_sprites["l1_" + l1_key] = load(l1_path)
 
 func _load_character_sprite(name: String) -> Texture2D:
 	var path := AssetRegistry.character_sprite_path(name, true)
@@ -141,7 +145,8 @@ func draw_pc_view(
 	canvas.draw_rect(Rect2(offset, Vector2(scaled_w, scaled_h)), Color(0.92, 0.88, 0.78))
 
 	draw_cells(canvas, maze, maze_width, maze_height, offset, draw_scale, visited, is_revealed)
-	draw_pillars(canvas, maze, maze_width, maze_height, offset, draw_scale)
+	if maze.theme_key != "l1":
+		draw_pillars(canvas, maze, maze_width, maze_height, offset, draw_scale)
 	draw_exit(canvas, exit_pos, offset, draw_scale, is_revealed, exit_visible, game_won)
 	for pos in maze.landmarks:
 		var revealed := bool(is_revealed.call(pos))
@@ -174,6 +179,9 @@ func draw_cells(
 	visited: Dictionary,
 	is_revealed: Callable,
 ) -> void:
+	if maze.theme_key == "l1":
+		_draw_l1_cells(canvas, maze, maze_width, maze_height, offset, scale, visited, is_revealed)
+		return
 	var sc: float = scale
 	var cs: float = cell_size * sc
 	var wt: float = wall_thickness * sc
@@ -209,6 +217,106 @@ func draw_cells(
 
 			_draw_walls(canvas, maze.grid[y][x], cell_pos, cs, wt, x, y, maze_width, maze_height)
 			draw_charted_route(canvas, maze, pos, cell_pos, cs)
+
+func _l1_solid(maze: MazeGenerator, x: int, y: int) -> bool:
+	return x < 0 or y < 0 or x >= maze.width or y >= maze.height or maze.grid[y][x] == 0
+
+
+func _l1_known(maze: MazeGenerator, pos: Vector2i, visited: Dictionary, is_revealed: Callable) -> bool:
+	return bool(is_revealed.call(pos)) or bool(visited.get(pos, false)) or maze.charted_route.has(pos)
+
+
+func _draw_l1_cells(
+	canvas: CanvasItem,
+	maze: MazeGenerator,
+	maze_width: int,
+	maze_height: int,
+	offset: Vector2,
+	scale: float,
+	visited: Dictionary,
+	is_revealed: Callable,
+) -> void:
+	var cs: float = cell_size * scale
+	for y in maze_height:
+		for x in maze_width:
+			draw_l1_cell(canvas, maze, x, y, offset + Vector2(x * cs, y * cs), cs, visited, is_revealed)
+	for y in maze_height:
+		for x in maze_width:
+			draw_l1_edges(canvas, maze, x, y, offset + Vector2(x * cs, y * cs), cs, visited, is_revealed)
+
+
+func draw_l1_cell(
+	canvas: CanvasItem,
+	maze: MazeGenerator,
+	x: int,
+	y: int,
+	origin: Vector2,
+	cs: float,
+	visited: Dictionary,
+	is_revealed: Callable,
+) -> void:
+	var pos := Vector2i(x, y)
+	if not _l1_known(maze, pos, visited, is_revealed):
+		canvas.draw_rect(Rect2(origin, Vector2(cs, cs)), Color(0.15, 0.12, 0.10, 0.85))
+		return
+	var dim := Color.WHITE if bool(is_revealed.call(pos)) else Color(0.6, 0.6, 0.6)
+	if _l1_solid(maze, x, y):
+		var wall_key := "l1_wall" if (x * 7 + y * 3) % 5 != 0 else "l1_wall_alt"
+		if not _l1_solid(maze, x, y + 1):
+			wall_key = "l1_wall_face"
+		var wall_tex: Texture2D = terrain_sprites.get(wall_key)
+		if wall_tex:
+			canvas.draw_texture_rect(wall_tex, Rect2(origin, Vector2(cs, cs)), false, dim)
+	else:
+		var floor_tex := _l1_floor_texture(maze, x, y)
+		if floor_tex:
+			canvas.draw_texture_rect(floor_tex, Rect2(origin, Vector2(cs, cs)), false, dim)
+		draw_charted_route(canvas, maze, pos, origin, cs)
+
+
+func draw_l1_edges(
+	canvas: CanvasItem,
+	maze: MazeGenerator,
+	x: int,
+	y: int,
+	origin: Vector2,
+	cs: float,
+	visited: Dictionary,
+	is_revealed: Callable,
+) -> void:
+	if not _l1_known(maze, Vector2i(x, y), visited, is_revealed):
+		return
+	var wt := cs * 4.0 / 40.0
+	if _l1_solid(maze, x, y):
+		if not _l1_solid(maze, x, y - 1):
+			canvas.draw_rect(Rect2(origin, Vector2(cs, cs * 2.0 / 40.0)), Color("9a6236"))
+		return
+	var cell: int = maze.grid[y][x]
+	var wall_col := Color("74421f")
+	if (cell & MazeGenerator.E) == 0 and not _l1_solid(maze, x + 1, y):
+		canvas.draw_rect(Rect2(origin + Vector2(cs - wt * 0.5, 0), Vector2(wt, cs)), wall_col)
+	if (cell & MazeGenerator.S) == 0 and not _l1_solid(maze, x, y + 1):
+		canvas.draw_rect(Rect2(origin + Vector2(0, cs - wt * 0.5), Vector2(cs, wt)), wall_col)
+	if _l1_solid(maze, x, y - 1) or (cell & MazeGenerator.N) == 0:
+		var shadow_y := 0.0 if _l1_solid(maze, x, y - 1) else wt * 0.5
+		canvas.draw_rect(Rect2(origin + Vector2(0, shadow_y), Vector2(cs, cs * 3.0 / 40.0)), Color(0.24, 0.13, 0.05, 0.38))
+	if _l1_solid(maze, x - 1, y):
+		canvas.draw_rect(Rect2(origin, Vector2(cs * 2.0 / 40.0, cs)), Color(0.24, 0.13, 0.05, 0.22))
+
+
+func _l1_floor_texture(maze: MazeGenerator, x: int, y: int) -> Texture2D:
+	match maze.get_terrain(x, y):
+		MazeGenerator.Terrain.DESERT:
+			return terrain_sprites.get("l1_floor_desert")
+		MazeGenerator.Terrain.ANCIENT_ROAD:
+			return terrain_sprites.get("l1_floor_road")
+		MazeGenerator.Terrain.GROTTO:
+			return terrain_sprites.get("l1_floor_grotto")
+		MazeGenerator.Terrain.OASIS:
+			return terrain_sprites.get("oasis")
+		_:
+			return terrain_sprites.get("l1_floor_sand")
+
 
 func draw_charted_route(canvas: CanvasItem, maze: MazeGenerator, pos: Vector2i, origin: Vector2, cs: float) -> void:
 	if not maze.charted_route.has(pos): return

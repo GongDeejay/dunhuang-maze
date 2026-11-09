@@ -27,7 +27,7 @@ func _ready():
 		add_child(sample_player)
 		sample_players.append(sample_player)
 
-func _play_sample(name: String) -> bool:
+func _play_sample(name: String, pitch: float = 1.0) -> bool:
 	var extensions: Array[String] = [".wav", ".ogg", ".mp3"]
 	for ext in extensions:
 		var path: String = AUDIO_DIR + name + ext
@@ -35,6 +35,7 @@ func _play_sample(name: String) -> bool:
 			var idx: int = _get_free_sample_index()
 			var player_node: AudioStreamPlayer = sample_players[idx]
 			player_node.stream = load(path)
+			player_node.pitch_scale = pitch
 			player_node.play()
 			return true
 	return false
@@ -155,9 +156,13 @@ func play_mirror_back() -> void:
 	_play_tone(90.0, 0.08, 0.25, 0, 0.12)
 
 
+func play_drink() -> void:
+	_play_sample("drink")
+
+
 func play_wall_hit() -> void:
 	if wall_hit_source() != "":
-		_play_sample("wall_hit")
+		_play_sample("wall_hit", randf_range(0.94, 1.06))
 		return
 	var spec := wall_hit_fallback()
 	_play_tone(float(spec.freq), float(spec.duration), float(spec.volume), 0, float(spec.decay_at))

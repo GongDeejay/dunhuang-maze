@@ -947,6 +947,7 @@ func _drink_water_skin(automatic: bool) -> void:
 	var before := player.hp
 	player.heal(amount)
 	first_journey.water_skin = 0
+	AudioManager.play_drink()
 	var gained := player.hp - before
 	if automatic:
 		_add_log("体力不支，自动喝下水囊：恢复 %d 点体力" % gained)

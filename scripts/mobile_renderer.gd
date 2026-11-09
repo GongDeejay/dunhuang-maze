@@ -69,8 +69,9 @@ func draw_follow_in_rect(
 				canvas.draw_rect(Rect2(screen_x, screen_y, cell_sz, cell_sz), Color(0.15, 0.12, 0.10))
 				continue
 
-			var t_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(gx, gy)]
-			var cfg := DataLoader.get_terrain_config(t_key)
+			if maze.theme_key == "l1":
+				maze_renderer.draw_l1_cell(canvas, maze, gx, gy, Vector2(screen_x, screen_y), cell_sz, visited, is_revealed)
+				continue
 			var floor_color := maze_renderer.get_floor_color(maze, gx, gy)
 			if not is_revealed.call(Vector2i(gx, gy)) and not visited.get(Vector2i(gx, gy), false):
 				floor_color = Color(0.15, 0.12, 0.10)
@@ -85,6 +86,28 @@ func draw_follow_in_rect(
 			var cell: int = maze.grid[gy][gx]
 			maze_renderer._draw_walls(canvas, cell, Vector2(screen_x, screen_y), cell_sz, wall_w, gx, gy, maze_width, maze_height)
 			maze_renderer.draw_charted_route(canvas, maze, Vector2i(gx, gy), Vector2(screen_x, screen_y), cell_sz)
+
+	if maze.theme_key == "l1":
+		for vy in view_rows:
+			for vx in view_cols:
+				var gx := start_x + vx
+				var gy := start_y + vy
+				if gx < 0 or gx >= maze_width or gy < 0 or gy >= maze_height:
+					continue
+				maze_renderer.draw_l1_edges(
+					canvas, maze, gx, gy,
+					Vector2(origin.x + vx * cell_sz, origin.y + vy * cell_sz),
+					cell_sz, visited, is_revealed,
+				)
+
+	for vy in view_rows:
+		for vx in view_cols:
+			var gx := start_x + vx
+			var gy := start_y + vy
+			var screen_x := origin.x + vx * cell_sz
+			var screen_y := origin.y + vy * cell_sz
+			if gx < 0 or gx >= maze_width or gy < 0 or gy >= maze_height:
+				continue
 
 			if gx == exit_pos.x and gy == exit_pos.y and (game_won or is_revealed.call(exit_pos)):
 				var ep := Vector2(screen_x, screen_y)
