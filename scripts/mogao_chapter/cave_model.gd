@@ -321,6 +321,14 @@ static func solution_rots() -> Dictionary:
 	return rots
 
 
+## Clockwise turns from the authored opening to the authored solution. Opening facings live only in MIRROR_DEFS.
+static func turns_from_start(id: String) -> int:
+	for mirror in MIRROR_DEFS:
+		if str(mirror["id"]) == id:
+			return posmod(int(mirror["solution_rot"]) - int(mirror["start_rot"]), MIRROR_STATES)
+	return 0
+
+
 func _reset_mirror_rots() -> void:
 	mirror_rots = {}
 	for mirror in MIRROR_DEFS:
@@ -394,6 +402,7 @@ func turn_mirror() -> bool:
 	return true
 
 
+## Dashed preview. The trace inside preview_for never receives the player, so standing on the beam cannot hide it.
 func mirror_previews() -> Array:
 	var result: Array = []
 	if room != MIRROR_ROOM or paused or reached or not busy.is_empty():
