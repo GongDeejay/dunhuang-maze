@@ -541,7 +541,7 @@ func _draw_monster_avatar(
 func draw_player(canvas: CanvasItem, player: PlayerController, offset: Vector2, scale: float) -> void:
 	var cs: float = cell_size * scale
 	var wt: float = wall_thickness * scale
-	var pp := offset + Vector2(player.pos.x * cs, player.pos.y * cs)
+	var pp := offset + Vector2(player.pos.x * cs, player.pos.y * cs) + player.bump_offset * scale
 	if player_sprite:
 		draw_sprite_in_cell(canvas, player_sprite, pp, cs, wt * 0.45)
 	else:

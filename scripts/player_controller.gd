@@ -19,6 +19,7 @@ var temp_reveal_bonus: int = 0
 var reveal_bonus: int = 0
 var buff_timer: int = 0
 var is_hurt: bool = false
+var bump_offset := Vector2.ZERO
 var move_speed: float = 1.0
 var xp: int = 0
 var level: int = 1

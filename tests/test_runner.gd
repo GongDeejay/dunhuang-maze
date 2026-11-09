@@ -18,6 +18,7 @@ func _ready() -> void:
 	preload("res://tests/test_cave_chapter.gd").run(self)
 	preload("res://tests/test_cave_network.gd").run(self)
 	preload("res://tests/test_level_round.gd").run(self)
+	preload("res://tests/test_level1_round2.gd").run(self)
 	await preload("res://tests/test_third_chapter.gd").run(self)
 	test_terrain_system()
 	test_monster_data()

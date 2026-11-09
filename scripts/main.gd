@@ -44,10 +44,17 @@ var first_family_tip_shown: bool = false
 var guide_assist_active: bool = false
 var moves_since_progress: int = 0
 var low_hp_pulse: float = 0.0
+const JourneyBranchesScript = preload("res://scripts/journey_branches.gd")
+const WallFeedbackScript = preload("res://scripts/wall_feedback.gd")
 var input_handler := InputHandler.new()
 var attack_cooldown := 0.0
 var first_journey: FirstJourney
 var _branch_visual_tick := 0.0
+var wall_bumps := 0
+var bump_tween: Tween
+var _bumping := false
+var _bump_wall_key := ""
+var _bump_wall_at := -1.0
 var journey_card: JourneyCard
 var advance_after_story := false
 var third_chapter: ThirdChapter
@@ -218,6 +225,7 @@ func _refresh_layout() -> void:
 		current_layout.maze_rect = Rect2(0, hud_height, vp.x, current_layout.controls_rect.position.y - hud_height)
 		current_layout.log_rect = Rect2()
 	if mobile_controls:
+		mobile_controls.drink_visible = first_journey != null and first_journey.water_skin > 0
 		mobile_controls.apply_layout(current_layout)
 		mobile_controls.visible = third_chapter == null and cave_chapter == null and not game.is_difficulty_select() and not show_new_journey_confirm and not _pattern_open() and not _gate_revealing() and not _notebook_open()
 	if pattern_prompt:
@@ -269,6 +277,9 @@ func _on_mobile_action(action: String) -> void:
 		"menu":
 			game.return_to_menu()
 			_request_redraw()
+		"drink":
+			if game.can_move():
+				_drink_water_skin(false)
 
 func _handle_regenerate() -> void:
 	if game_won:
@@ -420,8 +431,7 @@ func _track_held_input(event: InputEvent) -> void:
 func _inspect_pattern() -> void:
 	if first_journey and first_journey.mural_found and game.can_move() and not _modal_open() and not _input_guarded():
 		mobile_controls.maze_touch_active = false
-		route_notebook.open(first_journey.notebook_path(maze), first_journey.route_studied)
-		_refresh_layout()
+		_open_roadbook()
 		return
 	if _gate_revealing() and game.is_paused():
 		game.toggle_pause()
@@ -813,6 +823,9 @@ func _apply_game_action(action: GameAction) -> void:
 		GameAction.Type.TOGGLE_PAUSE:
 			game.toggle_pause()
 			_request_redraw()
+		GameAction.Type.DRINK:
+			if game.can_move():
+				_drink_water_skin(false)
 		GameAction.Type.MOVE:
 			if not game.can_move():
 				return
@@ -890,11 +903,65 @@ func _try_auto_heal() -> void:
 		return
 	var key = inventory.use_first_heal()
 	if key == "":
+		_drink_water_skin(true)
 		return
 	var def = DataLoader.get_item_def(key)
 	player.heal(def.get("value", 0))
 	_add_log("自动使用 %s: 恢复 %d HP" % [def.get("name", ""), def.get("value", 0)])
 	_request_redraw()
+
+func _open_roadbook() -> void:
+	if route_notebook == null or first_journey == null:
+		return
+	route_notebook.sketch.ranges = first_journey.roadbook_ranges()
+	route_notebook.open(first_journey.notebook_path(maze), first_journey.route_studied)
+	_refresh_layout()
+
+
+func _drink_water_skin(automatic: bool) -> void:
+	if first_journey == null or first_journey.water_skin <= 0:
+		if not automatic:
+			_add_log("水囊已喝完")
+		return
+	if player.hp >= player.max_hp:
+		if not automatic:
+			_add_log("体力已满，水囊先留着")
+		return
+	var amount: int = JourneyBranchesScript.scaled_heal(FirstJourney.WATER_SKIN_HEAL)
+	var before := player.hp
+	player.heal(amount)
+	first_journey.water_skin = 0
+	var gained := player.hp - before
+	if automatic:
+		_add_log("体力不支，自动喝下水囊：恢复 %d 点体力" % gained)
+	else:
+		_add_log("喝下水囊：恢复 %d 点体力" % gained)
+	_update_mobile_ui()
+
+
+func _bump_player(dir: int) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	var wall_key: String = WallFeedbackScript.wall_key(player.pos, dir)
+	if not WallFeedbackScript.allow(player.is_hurt, _bump_wall_key, _bump_wall_at, wall_key, now):
+		return
+	_bump_wall_key = wall_key
+	_bump_wall_at = now
+	wall_bumps += 1
+	AudioManager.play_wall_hit()
+	if bump_tween != null and bump_tween.is_valid():
+		bump_tween.kill()
+	player.bump_offset = Vector2.ZERO
+	_bumping = true
+	bump_tween = create_tween()
+	bump_tween.tween_property(player, "bump_offset", WallFeedbackScript.offset(dir), WallFeedbackScript.OUT_SECONDS)
+	bump_tween.tween_property(player, "bump_offset", Vector2.ZERO, WallFeedbackScript.BACK_SECONDS)
+	bump_tween.finished.connect(func():
+		_bumping = false
+		if is_instance_valid(player):
+			player.bump_offset = Vector2.ZERO
+		_request_redraw())
+	_request_redraw()
+
 
 func _try_move(dir: int) -> bool:
 	if maze.can_move(player.pos.x, player.pos.y, dir):
@@ -906,7 +973,7 @@ func _try_move(dir: int) -> bool:
 		player.pos = destination
 		player.moved.emit(player.pos)
 		return true
-	AudioManager.play_wall_hit()
+	_bump_player(dir)
 	return false
 
 func _mark_visited(pos: Vector2i) -> void:
@@ -917,8 +984,7 @@ func _mark_visited(pos: Vector2i) -> void:
 		if card.get("kind", "") == "roadbook":
 			_add_log(card.body)
 			mobile_controls.maze_touch_active = false
-			route_notebook.open(first_journey.notebook_path(maze), first_journey.route_studied)
-			_refresh_layout()
+			_open_roadbook()
 		else: _show_story(card)
 	elif mogao_journey:
 		var had_scarf := mogao_journey.scarf_found
@@ -1007,6 +1073,8 @@ func _process(delta: float) -> void:
 		if _branch_visual_tick >= 0.1:
 			_branch_visual_tick = 0.0
 			dirty = true
+	if _bumping:
+		dirty = true
 	if dirty:
 		_request_redraw()
 	if needs_redraw:
@@ -1081,6 +1149,7 @@ func _draw_context() -> Dictionary:
 		"guide_dir": _get_guide_direction(),
 		"low_hp_pulse": low_hp_pulse,
 		"journey_objective": first_journey.objective() if first_journey else (mogao_journey.objective() if mogao_journey else ""),
+		"water_skin_line": first_journey.water_skin_hud() if first_journey else "",
 		"first_journey": first_journey != null or mogao_journey != null,
 		"mogao_focus": mogao_journey != null and mogao_journey.encounter_focus(player.pos),
 		"gate_revealing": _gate_revealing(),

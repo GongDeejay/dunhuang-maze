@@ -111,7 +111,8 @@ func draw_follow_in_rect(
 
 	var player_screen_x := origin.x + (player.pos.x - start_x) * cell_sz
 	var player_screen_y := origin.y + (player.pos.y - start_y) * cell_sz
-	_draw_player_in_cell(canvas, Vector2(player_screen_x, player_screen_y), cell_sz, wall_w)
+	var player_origin := Vector2(player_screen_x, player_screen_y) + player.bump_offset * draw_scale
+	_draw_player_in_cell(canvas, player_origin, cell_sz, wall_w)
 	if guide_dir >= 0:
 		maze_renderer.draw_path_arrow(
 			canvas, player.pos - Vector2i(start_x, start_y), guide_dir,

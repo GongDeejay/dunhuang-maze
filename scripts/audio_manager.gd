@@ -51,15 +51,15 @@ func _get_free_index() -> int:
 			return i
 	return 0
 
-func _play_tone(freq: float, duration: float, volume: float = 0.3, waveform: int = 0) -> void:
+func _play_tone(freq: float, duration: float, volume: float = 0.3, waveform: int = 0, decay_at: float = 0.7) -> void:
 	var idx = _get_free_index()
 	var gen = generators[idx]
 	gen.play()
 	var playback = gen.get_stream_playback() as AudioStreamGeneratorPlayback
 	players[idx] = playback
-	_generate_tone(playback, freq, duration, volume, waveform)
+	_generate_tone(playback, freq, duration, volume, waveform, decay_at)
 
-func _generate_tone(playback: AudioStreamGeneratorPlayback, freq: float, duration: float, volume: float, waveform: int) -> void:
+func _generate_tone(playback: AudioStreamGeneratorPlayback, freq: float, duration: float, volume: float, waveform: int, decay_at: float = 0.7) -> void:
 	var frames = int(SAMPLE_RATE * duration)
 	var increment = freq / SAMPLE_RATE
 	var phase = 0.0
@@ -74,8 +74,8 @@ func _generate_tone(playback: AudioStreamGeneratorPlayback, freq: float, duratio
 		var t = float(i) / frames
 		if t < 0.05:
 			envelope = t / 0.05
-		elif t > 0.7:
-			envelope = (1.0 - t) / 0.3
+		elif t > decay_at:
+			envelope = (1.0 - t) / maxf(0.001, 1.0 - decay_at)
 		sample *= volume * envelope
 		playback.push_frame(Vector2(sample, sample))
 		phase += increment
@@ -136,7 +136,22 @@ func play_step() -> void:
 		return
 	_play_tone(80, 0.05, 0.15, 2)
 
+func wall_hit_source() -> String:
+	var extensions: Array[String] = [".ogg", ".wav", ".mp3"]
+	for ext in extensions:
+		var path: String = AUDIO_DIR + "wall_hit" + ext
+		if ResourceLoader.exists(path):
+			return path
+	return ""
+
+
+func wall_hit_fallback() -> Dictionary:
+	return {"freq": 70.0, "duration": 0.09, "volume": 0.25, "decay_at": 0.12}
+
+
 func play_wall_hit() -> void:
-	if _play_sample("wall_hit"):
+	if wall_hit_source() != "":
+		_play_sample("wall_hit")
 		return
-	_play_tone(100, 0.06, 0.2, 1)
+	var spec := wall_hit_fallback()
+	_play_tone(float(spec.freq), float(spec.duration), float(spec.volume), 0, float(spec.decay_at))

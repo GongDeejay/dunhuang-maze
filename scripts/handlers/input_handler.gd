@@ -33,6 +33,10 @@ func handle(
 				return GameAction.select_slot(event.keycode - KEY_1)
 			KEY_Q:
 				return GameAction.menu()
+			KEY_H:
+				if event.echo:
+					return GameAction.new()
+				return GameAction.drink()
 	if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
 			or (event is InputEventScreenTouch and event.pressed):
 		if ctx.get("use_mobile_ui", false):

@@ -16,6 +16,7 @@ var maze_touch_active: bool = false
 var _dpad_centers: Array = []
 var _func_centers: Dictionary = {}
 var _func_labels: Dictionary = {}
+var drink_visible := false
 
 
 func _ready() -> void:
@@ -169,6 +170,8 @@ func _draw_portrait_controls(rect: Rect2, alpha: float, fs: int) -> void:
 		draw_rect(btn_rect, Color(1, 1, 1, alpha * 0.42), false, 2.0)
 		draw_string(ThemeDB.fallback_font, Vector2(btn_rect.position.x, pos.y + fs * 0.26), label,
 			HORIZONTAL_ALIGNMENT_CENTER, int(func_btn_size), int(fs * 0.72), Color(1, 1, 1, alpha))
+		if action == "drink":
+			_draw_drink_badge(btn_rect.end - Vector2(10, btn_rect.size.y - 12), fs)
 
 
 func _layout_portrait_zones(rect: Rect2, _alpha: float, _fs: int) -> void:
@@ -183,9 +186,7 @@ func _layout_portrait_zones(rect: Rect2, _alpha: float, _fs: int) -> void:
 	for d in dirs:
 		_dpad_centers.append({"dir": d[1], "pos": d[2], "label": d[0]})
 
-	var funcs := [
-		["换", "cycle_item"], ["用", "use_item"], ["暂停", "pause"], ["重开", "regenerate"], ["菜单", "menu"],
-	]
+	var funcs := _tool_buttons()
 	var cols := 3
 	var start_x := rect.position.x + rect.size.x * 0.575
 	var start_y := rect.position.y + rect.size.y * 0.32
@@ -211,6 +212,8 @@ func _draw_landscape_controls(rect: Rect2, alpha: float, fs: int) -> void:
 		draw_rect(btn_rect, Color(1, 1, 1, alpha * 0.22))
 		draw_string(ThemeDB.fallback_font, Vector2(pos.x - func_btn_size * 0.35, pos.y + fs * 0.25),
 			_func_labels[action], HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.7), Color(1, 1, 1, alpha))
+		if action == "drink":
+			_draw_drink_badge(btn_rect.end - Vector2(8, btn_rect.size.y - 10), fs)
 
 
 func _layout_landscape_zones(rect: Rect2, _alpha: float, _fs: int) -> void:
@@ -224,14 +227,24 @@ func _layout_landscape_zones(rect: Rect2, _alpha: float, _fs: int) -> void:
 	for d in dirs:
 		_dpad_centers.append({"dir": d[1], "pos": d[2], "label": d[0]})
 
-	var funcs := [
-		["换", "cycle_item", 0.56],
-		["用", "use_item", 0.65],
-		["暂停", "pause", 0.74],
-		["重开", "regenerate", 0.83],
-		["菜单", "menu", 0.92],
-	]
-	for f in funcs:
-		var pos := Vector2(rect.position.x + rect.size.x * f[2], center_y)
-		_func_centers[f[1]] = pos
-		_func_labels[f[1]] = f[0]
+	var funcs := _tool_buttons()
+	var step := 0.09
+	var last := 0.92
+	for i in funcs.size():
+		var frac: float = last - float(funcs.size() - 1 - i) * step
+		var pos := Vector2(rect.position.x + rect.size.x * frac, center_y)
+		_func_centers[funcs[i][1]] = pos
+		_func_labels[funcs[i][1]] = funcs[i][0]
+
+
+func _tool_buttons() -> Array:
+	var funcs: Array = [["换", "cycle_item"], ["用", "use_item"]]
+	if drink_visible:
+		funcs.append(["囊", "drink"])
+	funcs.append_array([["暂停", "pause"], ["重开", "regenerate"], ["菜单", "menu"]])
+	return funcs
+
+
+func _draw_drink_badge(center: Vector2, fs: int) -> void:
+	draw_circle(center, maxf(7.0, fs * 0.28), Color("8c3b2a"))
+	draw_string(ThemeDB.fallback_font, center + Vector2(-6, 5), "1", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(12, int(fs * 0.45)), Color("fff6e8"))

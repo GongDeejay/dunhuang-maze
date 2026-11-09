@@ -55,6 +55,7 @@
 | `landmark/stele.png` / `stele_read.png` | 16×16 | 残碑未读 / 已读 |
 | `item/fragment_1.png` `fragment_2.png` `fragment_3.png` | 16×16 | 壁画残片标记，对应合图左中右 |
 | `item/bell.png` | 16×16 | 妈妈的驼铃 |
+| `item/water_skin.png` / `water_skin_empty.png` | 16×16 | 水囊满 / 空。当前是占位图，美术按同名文件覆盖即可 |
 | `lore/mother_fragments.png` | 96×64 | 通关卡合图，未收集的段压暗。非文物原图 |
 | `decal/footprint_n/e/s/w.png` | 16×16 | 支路入口脚印，后缀是前进方向 |
 | `mogao/mirror_ne/se/sw/nw.png` 及 `_lit` | 16×16 | 单面铜镜四朝向与受光态。光束由代码画 |

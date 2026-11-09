@@ -12,6 +12,7 @@ var inventory_hit_rects: Array[Rect2] = []
 var panel_origin_x: float = 0.0
 var heart_bar := HeartBar.new()
 var journey_objective := ""
+var water_skin_line := ""
 
 func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		player, maze, maze_w: int, maze_h: int, exit_pos: Vector2i,
@@ -133,6 +134,10 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 
 	# Inventory
 	y = _draw_inventory(owner, lx, y, panel_w - pad * 2.0, inventory, selected_slot, s)
+	if water_skin_line != "":
+		y += 20.0 * s
+		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
+			water_skin_line, HORIZONTAL_ALIGNMENT_LEFT, int(panel_w - pad * 2.0), small_fs, Color("d7e4c4"))
 
 	y += 8
 

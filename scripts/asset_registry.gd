@@ -72,6 +72,8 @@ const EXTRA_ITEM_FILES := {
 	"fragment_1": "fragment_1.png",
 	"fragment_2": "fragment_2.png",
 	"fragment_3": "fragment_3.png",
+	"water_skin": "water_skin.png",
+	"water_skin_empty": "water_skin_empty.png",
 }
 
 const MOGAO_SPRITE_FILES := {
