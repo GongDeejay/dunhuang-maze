@@ -8,10 +8,12 @@ static func run(t: Node) -> void:
 	print("\n[TEST] Keyboard hold, attack buffer, and cave step buffer")
 	t.assert_eq(HeldMoveScript.REPEAT_SECONDS, 0.14, "held movement interval is 0.14 seconds")
 	_test_hold_rhythm(t)
+	_test_long_hold_keeps_rhythm(t)
 	_test_echo_and_latest_direction(t)
 	_test_modal_does_not_catch_up(t)
 	_test_attack_buffer(t)
 	_test_cave_buffer(t)
+	_test_hazard_hold_stop(t)
 
 
 static func _test_hold_rhythm(t: Node) -> void:
@@ -33,6 +35,34 @@ static func _test_hold_rhythm(t: Node) -> void:
 	controller._on_mobile_move(MazeGenerator.E)
 	t.assert_eq(controller.player.pos, touch_pos + Vector2i(2, 0), "touch still steps twice with no time debounce")
 	_release(controller)
+	controller.free()
+
+
+static func _test_long_hold_keeps_rhythm(t: Node) -> void:
+	var controller = _maze(t)
+	controller.player.pos = Vector2i(0, 2)
+	_press(controller, KEY_D, true)
+	var elapsed := 0.0
+	while elapsed < 0.9 - 0.0001:
+		_key(controller, KEY_D, true, true)
+		controller._process(0.05)
+		elapsed += 0.05
+	# Press plus one step each 0.14s. Echoes must not reset that clock.
+	var repeats := int(0.9 / HeldMoveScript.REPEAT_SECONDS)
+	t.assert_eq(repeats, 6, "0.9 seconds contains six repeat intervals")
+	t.assert_eq(controller.player.pos, Vector2i(1 + repeats, 2), "small frames and echoes still match 0.14 seconds")
+	_release(controller)
+	controller.free()
+
+	controller = _maze(t)
+	controller.player.pos = Vector2i(0, 2)
+	_press(controller, KEY_D, true)
+	controller._process(0.9)
+	t.assert_eq(controller.player.pos, Vector2i(1 + repeats, 2), "one 0.9 second frame matches the same rhythm")
+	var stopped: Vector2i = controller.player.pos
+	_release(controller)
+	controller._process(0.9)
+	t.assert_eq(controller.player.pos, stopped, "a key release stops further hold steps")
 	controller.free()
 
 
@@ -209,6 +239,107 @@ static func _test_cave_buffer(t: Node) -> void:
 	t.assert_eq(chapter.model.busy, "", "cave movement stays idle after a discarded buffer")
 	controller.free()
 	SaveManager.clear_save()
+
+
+static func _test_hazard_hold_stop(t: Node) -> void:
+	for difficulty in ["easy", "normal", "hard"]:
+		DataLoader.set_difficulty(difficulty)
+		var controller = _maze(t)
+		controller.player.dodge_chance = 0.0
+		controller.player.max_hp = 80
+		controller.player.hp = 80
+		controller.maze = _terrain_row([
+			MazeGenerator.Terrain.ANCIENT_ROAD,
+			MazeGenerator.Terrain.ANCIENT_ROAD,
+			MazeGenerator.Terrain.GROTTO,
+			MazeGenerator.Terrain.DESERT,
+			MazeGenerator.Terrain.DESERT,
+			MazeGenerator.Terrain.DESERT,
+			MazeGenerator.Terrain.ANCIENT_ROAD,
+			MazeGenerator.Terrain.DESERT,
+		])
+		controller.player.pos = Vector2i(0, 0)
+		var hp = controller.player.hp
+		_press(controller, KEY_D, true)
+		for echo in range(4):
+			_key(controller, KEY_D, true, true)
+		controller._process(1.0)
+		t.assert_eq(controller.player.pos, Vector2i(2, 0), "hold enters a grotto and stops before wind sand on %s" % difficulty)
+		t.assert_eq(controller.player.hp, hp, "stopping before wind sand deals no damage on %s" % difficulty)
+		_key(controller, KEY_D, false, false)
+		_press(controller, KEY_D, true)
+		controller._process(1.0)
+		t.assert_eq(controller.player.pos, Vector2i(6, 0), "one new press walks the whole sand patch on %s" % difficulty)
+		t.assert_true(controller.player.pos.x < 7, "the next sand patch stops the same hold on %s" % difficulty)
+		var dealt := int(1.0 * float(DataLoader.get_difficulty().get("terrain_damage_multiplier", 1.0)))
+		t.assert_eq(controller.player.hp, hp - dealt * 3, "only the three sand cells just crossed deal damage on %s" % difficulty)
+		_release(controller)
+		controller.free()
+	DataLoader.set_difficulty("normal")
+	var turned = _maze(t)
+	turned.player.dodge_chance = 0.0
+	turned.player.max_hp = 80
+	turned.player.hp = 80
+	turned.maze = _sand_with_side_path()
+	turned.player.pos = Vector2i(0, 1)
+	_press(turned, KEY_D, true)
+	turned._process(0.6)
+	t.assert_eq(turned.player.pos, Vector2i(1, 1), "hold is waiting in front of the sand")
+	_press(turned, KEY_W, true)
+	turned._process(0.6)
+	t.assert_eq(turned.player.pos, Vector2i(1, 0), "changing direction leaves the sand approach")
+	t.assert_eq(turned.player.hp, 80, "changing direction does not enter wind sand")
+	_release(turned)
+	turned.free()
+	var tapped = _maze(t)
+	tapped.player.dodge_chance = 0.0
+	tapped.player.max_hp = 80
+	tapped.player.hp = 80
+	tapped.maze = _terrain_row([
+		MazeGenerator.Terrain.ANCIENT_ROAD,
+		MazeGenerator.Terrain.DESERT,
+		MazeGenerator.Terrain.DESERT,
+	])
+	tapped.player.pos = Vector2i(0, 0)
+	_press(tapped, KEY_D, true)
+	_key(tapped, KEY_D, false, false)
+	t.assert_eq(tapped.player.pos, Vector2i(1, 0), "a tap enters wind sand")
+	t.assert_eq(tapped.player.hp, 79, "a tap takes the sand damage")
+	tapped._process(0.6)
+	t.assert_eq(tapped.player.pos, Vector2i(1, 0), "a released tap does not keep walking")
+	tapped.player.pos = Vector2i(0, 0)
+	tapped.player.hp = 80
+	tapped.hazard_gate.clear()
+	tapped._on_mobile_move(MazeGenerator.E)
+	tapped._on_mobile_move(MazeGenerator.E)
+	t.assert_eq(tapped.player.pos, Vector2i(2, 0), "touch enters wind sand without a hold delay")
+	t.assert_eq(tapped.player.hp, 78, "each touch step can take sand damage")
+	tapped.free()
+
+
+static func _sand_with_side_path() -> MazeGenerator:
+	var maze := MazeGenerator.new(3, 2)
+	maze._init_grid()
+	for x in 3:
+		maze.terrain[1][x] = MazeGenerator.Terrain.DESERT if x == 2 else MazeGenerator.Terrain.ANCIENT_ROAD
+		if x + 1 < 3:
+			maze.grid[1][x] |= MazeGenerator.E
+			maze.grid[1][x + 1] |= MazeGenerator.W
+	maze.terrain[0][1] = MazeGenerator.Terrain.ANCIENT_ROAD
+	maze.grid[1][1] |= MazeGenerator.N
+	maze.grid[0][1] |= MazeGenerator.S
+	return maze
+
+
+static func _terrain_row(kinds: Array) -> MazeGenerator:
+	var maze := MazeGenerator.new(kinds.size(), 1)
+	maze._init_grid()
+	for x in kinds.size():
+		maze.terrain[0][x] = kinds[x]
+		if x + 1 < kinds.size():
+			maze.grid[0][x] |= MazeGenerator.E
+			maze.grid[0][x + 1] |= MazeGenerator.W
+	return maze
 
 
 static func _maze(t: Node):

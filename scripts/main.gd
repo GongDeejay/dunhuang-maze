@@ -46,8 +46,10 @@ var moves_since_progress: int = 0
 var low_hp_pulse: float = 0.0
 const ATTACK_COOLDOWN := 0.35
 const MoveBufferScript = preload("res://scripts/handlers/move_buffer.gd")
+const HazardGateScript = preload("res://scripts/handlers/hazard_gate.gd")
 var input_handler := InputHandler.new()
 var attack_buffer = MoveBufferScript.new()
+var hazard_gate = HazardGateScript.new()
 var attack_cooldown := 0.0
 var first_journey: FirstJourney
 var journey_card: JourneyCard
@@ -155,6 +157,7 @@ func _notification(what: int) -> void:
 		held_inputs.clear()
 		input_handler.held.clear()
 		attack_buffer.clear()
+		hazard_gate.clear()
 		if pattern_panel and pattern_panel.visible: pattern_panel.suspend()
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and game != null and game.is_playing():
 		game.toggle_pause()
@@ -301,6 +304,7 @@ func _new_game(level_idx: int = -1) -> void:
 	_close_cave_chapter()
 	attack_cooldown = 0.0
 	attack_buffer.clear()
+	hazard_gate.clear()
 	input_handler.held.clear()
 	if journey_card: journey_card.visible = false
 	advance_after_story = false
@@ -821,11 +825,7 @@ func _apply_game_action(action: GameAction) -> void:
 			game.toggle_pause()
 			_request_redraw()
 		GameAction.Type.MOVE:
-			if not game.can_move():
-				return
-			if _try_move(action.direction):
-				AudioManager.play_step()
-				TurnResolver.resolve_after_move(self)
+			_apply_move_action(action.direction, false)
 
 func _start_playing() -> void:
 	if GameDirector.needs_new_journey_confirm(selected_difficulty):
@@ -902,6 +902,42 @@ func _try_auto_heal() -> void:
 	player.heal(def.get("value", 0))
 	_add_log("自动使用 %s: 恢复 %d HP" % [def.get("name", ""), def.get("value", 0)])
 	_request_redraw()
+
+func _apply_move_action(direction: int, repeated: bool) -> void:
+	if not game.can_move():
+		return
+	if repeated and hazard_gate.blocks_repeat(direction, _standing_on_hazard(), _step_enters_hazard(direction)):
+		# Hold-repeat stops on the safe cell. A later real press may enter.
+		return
+	if _try_move(direction):
+		AudioManager.play_step()
+		TurnResolver.resolve_after_move(self)
+		if repeated:
+			hazard_gate.note_after_repeat(direction, _standing_on_hazard())
+		else:
+			hazard_gate.authorize(direction, _standing_on_hazard())
+
+
+func _step_enters_hazard(direction: int) -> bool:
+	if maze == null or not maze.can_move(player.pos.x, player.pos.y, direction):
+		return false
+	var destination := player.pos + Vector2i(MazeGenerator.DX[direction], MazeGenerator.DY[direction])
+	return _cell_hazard_damage(destination) > 0
+
+
+func _standing_on_hazard() -> bool:
+	return maze != null and _cell_hazard_damage(player.pos) > 0
+
+
+func _cell_hazard_damage(cell: Vector2i) -> int:
+	if maze == null or not maze.in_bounds(cell.x, cell.y):
+		return 0
+	var terrain_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(cell.x, cell.y)]
+	var effect: Dictionary = level_terrain_effects.get(terrain_key, {})
+	# Level data marks the damaging terrains. Easy's multiplier can round the
+	# dealt damage to zero; the cell is still a wind-sand stop for hold-repeat.
+	return int(effect.get("move_damage", 0))
+
 
 func _try_move(dir: int) -> bool:
 	if maze.can_move(player.pos.x, player.pos.y, dir):
@@ -1034,16 +1070,17 @@ func _flush_attack_buffer() -> void:
 	if not _keyboard_move_allowed():
 		attack_buffer.clear()
 		return
-	_apply_game_action(GameAction.move(attack_buffer.take()))
+	_apply_move_action(attack_buffer.take(), false)
 
 
 func _repeat_held_move(delta: float) -> void:
+	hazard_gate.sync_held(input_handler.held.current())
 	for direction in input_handler.held.pull(delta):
 		if not _keyboard_move_allowed():
 			input_handler.held.set_blocked(true)
 			attack_buffer.clear()
 			return
-		_apply_game_action(GameAction.move(direction))
+		_apply_move_action(direction, true)
 		if not _keyboard_move_allowed():
 			input_handler.held.set_blocked(true)
 			attack_buffer.clear()
