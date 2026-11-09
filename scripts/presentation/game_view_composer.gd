@@ -48,6 +48,7 @@ func draw(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -> void:
 
 func _draw_desktop(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -> void:
 	ui_panel.water_skin_line = str(ctx.get("water_skin_line", ""))
+	ui_panel.water_skin_filled = bool(ctx.get("water_skin_filled", false))
 	maze_renderer.draw_pc_view(
 		canvas, layout.maze_rect, layout.hud_rect, layout.ui_scale,
 		ctx.maze, ctx.maze_width, ctx.maze_height,

@@ -32,7 +32,7 @@ func doors() -> Array:
 		5: return [door(Vector2i(3, 6), 0, Vector2i(2, 0), "入窟"), door(Vector2i(0, 3), 1, Vector2i(3, 6), "共耳窟"), door(Vector2i(6, 3), 4, Vector2i(3, 7), "灯窟"), door(Vector2i(3, 0), 3, Vector2i(1, 2), "回廊捷径", shortcut)]
 		1: return [door(Vector2i(3, 6), 5, Vector2i(0, 3), "中央窟"), door(goal, 3, Vector2i(3, 8), "借路回廊", reached)]
 		3: return [door(Vector2i(3, 8), 1, Vector2i(3, 0), "共耳窟"), door(goal, 2, Vector2i(1, 7), "鹿影窟", reached), door(Vector2i(1, 2), 5, Vector2i(3, 0), "回廊捷径", reached)]
-		4: return [door(Vector2i(3, 7), 5, Vector2i(6, 3), "中央窟"), door(goal, 7, Vector2i(3, 8), "镜窟", reached)]
+		4: return [door(Vector2i(3, 7), 5, Vector2i(6, 3), "中央窟"), door(goal, 7, Vector2i(4, 8), "镜窟", reached)]
 		7: return [door(Vector2i(3, 8), 4, Vector2i(3, 0), "灯窟"), door(goal, 2, Vector2i(5, 7), "鹿影窟", reached)]
 		2: return [door(Vector2i(1, 7), 3, Vector2i(3, 0), "借路回廊", solved(3)), door(Vector2i(5, 7), 7, Vector2i(3, 0), "镜窟", solved(7))]
 	return []

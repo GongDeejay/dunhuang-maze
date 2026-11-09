@@ -17,10 +17,23 @@ var _dpad_centers: Array = []
 var _func_centers: Dictionary = {}
 var _func_labels: Dictionary = {}
 var drink_visible := false
+var _drink_icon: Texture2D
+
+
+func _init() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var path := AssetRegistry.extra_item_path("water_skin")
+	if ResourceLoader.exists(path):
+		_drink_icon = load(path)
 
 
 func _ready() -> void:
 	_refresh_mobile_flag()
+
+
+func drink_icon_rect(btn_rect: Rect2) -> Rect2:
+	var side := minf(32.0, btn_rect.size.x - 12.0)
+	return Rect2(btn_rect.get_center() - Vector2.ONE * side * 0.5, Vector2.ONE * side)
 
 
 func apply_layout(profile: LayoutProfile) -> void:
@@ -168,8 +181,11 @@ func _draw_portrait_controls(rect: Rect2, alpha: float, fs: int) -> void:
 		var btn_rect := Rect2(pos.x - func_btn_size / 2, pos.y - func_btn_size / 2, func_btn_size, func_btn_size)
 		draw_rect(btn_rect, Color(1, 1, 1, alpha * 0.24))
 		draw_rect(btn_rect, Color(1, 1, 1, alpha * 0.42), false, 2.0)
-		draw_string(ThemeDB.fallback_font, Vector2(btn_rect.position.x, pos.y + fs * 0.26), label,
-			HORIZONTAL_ALIGNMENT_CENTER, int(func_btn_size), int(fs * 0.72), Color(1, 1, 1, alpha))
+		if action == "drink" and _drink_icon != null:
+			draw_texture_rect(_drink_icon, drink_icon_rect(btn_rect), false)
+		else:
+			draw_string(ThemeDB.fallback_font, Vector2(btn_rect.position.x, pos.y + fs * 0.26), label,
+				HORIZONTAL_ALIGNMENT_CENTER, int(func_btn_size), int(fs * 0.72), Color(1, 1, 1, alpha))
 		if action == "drink":
 			_draw_drink_badge(btn_rect.end - Vector2(10, btn_rect.size.y - 12), fs)
 
@@ -210,8 +226,11 @@ func _draw_landscape_controls(rect: Rect2, alpha: float, fs: int) -> void:
 		var pos: Vector2 = _func_centers[action]
 		var btn_rect := Rect2(pos.x - func_btn_size / 2, pos.y - func_btn_size / 2, func_btn_size, func_btn_size)
 		draw_rect(btn_rect, Color(1, 1, 1, alpha * 0.22))
-		draw_string(ThemeDB.fallback_font, Vector2(pos.x - func_btn_size * 0.35, pos.y + fs * 0.25),
-			_func_labels[action], HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.7), Color(1, 1, 1, alpha))
+		if action == "drink" and _drink_icon != null:
+			draw_texture_rect(_drink_icon, drink_icon_rect(btn_rect), false)
+		else:
+			draw_string(ThemeDB.fallback_font, Vector2(pos.x - func_btn_size * 0.35, pos.y + fs * 0.25),
+				_func_labels[action], HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.7), Color(1, 1, 1, alpha))
 		if action == "drink":
 			_draw_drink_badge(btn_rect.end - Vector2(8, btn_rect.size.y - 10), fs)
 

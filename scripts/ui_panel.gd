@@ -13,6 +13,7 @@ var panel_origin_x: float = 0.0
 var heart_bar := HeartBar.new()
 var journey_objective := ""
 var water_skin_line := ""
+var water_skin_filled := true
 
 func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		player, maze, maze_w: int, maze_h: int, exit_pos: Vector2i,
@@ -135,10 +136,16 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 	# Inventory
 	y = _draw_inventory(owner, lx, y, panel_w - pad * 2.0, inventory, selected_slot, s)
 	if water_skin_line != "":
-		y += line_h
-		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-			water_skin_line, HORIZONTAL_ALIGNMENT_LEFT, int(panel_w - pad * 2.0), small_fs, Color("d7e4c4"))
-		y += line_h
+		var icon_px := 32.0 * s
+		y += 6.0 * s
+		var icon := water_skin_texture()
+		var text_x := lx
+		if icon != null:
+			owner.draw_texture_rect(icon, Rect2(lx, y, icon_px, icon_px), false)
+			text_x += icon_px + 8.0 * s
+		owner.draw_string(ThemeDB.fallback_font, Vector2(text_x, y + icon_px * 0.72),
+			water_skin_line, HORIZONTAL_ALIGNMENT_LEFT, int(panel_w - pad * 2.0 - (text_x - lx)), small_fs, Color("d7e4c4"))
+		y += icon_px + 8.0 * s
 
 	# Optional legends share columns; reserve room for controls and live messages.
 	var legend_h := (maxi(DataLoader.terrain_data.size(), DataLoader.monster_data.size()) + 2) * line_h
@@ -227,6 +234,17 @@ func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: In
 
 	y += 8
 	return y
+
+func water_skin_icon_key() -> String:
+	return "water_skin" if water_skin_filled else "water_skin_empty"
+
+
+func water_skin_texture() -> Texture2D:
+	var path := AssetRegistry.extra_item_path(water_skin_icon_key())
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	return load(path)
+
 
 func get_inventory_slot_at(global_pos: Vector2) -> int:
 	for i in inventory_hit_rects.size():

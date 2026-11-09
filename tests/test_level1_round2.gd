@@ -74,12 +74,34 @@ static func _ranges(t: Node) -> void:
 		t.assert_eq(center, again[i]["cell"], "survey offset repeats for the same map seed")
 		t.assert_eq(absi(center.x - target.x) + absi(center.y - target.y) > 0, true, "circle center is not the target cell")
 		t.assert_true(maxi(absi(center.x - target.x), absi(center.y - target.y)) == 1, "center is offset by one cell")
+		t.assert_eq(str(area["kind"]), "area", "an unfound mark is a circle")
 		t.assert_eq(float(area["radius"]), 2.0, "survey circle radius is two cells")
 		t.assert_true(str(area["label"]) in ["驼", "碑"], "circles are labeled 驼 and 碑")
+		for page in [Vector2(520, 230), Vector2(360, 175)]:
+			var bounds := RouteSketch.range_rect(center, float(area["radius"]), page)
+			t.assert_true(Rect2(Vector2.ZERO, page).grow(-1.0).encloses(bounds), "%s circle stays on the page" % area["label"])
+	var neighbors: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
+	]
+	for target in [FirstJourney.CARAVAN, FirstJourney.STELE]:
+		for offset in neighbors:
+			var fitted := RouteSketch.range_rect(target + offset, 2.0, Vector2(520, 230))
+			t.assert_true(Rect2(Vector2.ZERO, Vector2(520, 230)).grow(-1.0).encloses(fitted), "radius 2 around %s fits" % [target + offset])
 	journey.caravan_found = true
 	var found: Array = journey.roadbook_ranges()
 	t.assert_eq(str(found[0]["kind"]), "found", "finding the caravan replaces the circle")
+	t.assert_eq(str(found[1]["kind"]), "area", "the stele stays a circle until it is found")
 	t.assert_eq(found[0]["cell"], FirstJourney.CARAVAN, "the found mark sits on the caravan")
+	journey.caravan_found = false
+	journey.stele_found = true
+	var stele_only: Array = journey.roadbook_ranges()
+	t.assert_eq(str(stele_only[0]["kind"]), "area", "the caravan stays a circle until it is found")
+	t.assert_eq(str(stele_only[1]["kind"]), "found", "finding the stele replaces its circle")
+	journey.caravan_found = true
+	var both: Array = journey.roadbook_ranges()
+	t.assert_eq(str(both[0]["kind"]), "found", "a found caravan stays a point")
+	t.assert_eq(str(both[1]["kind"]), "found", "a found stele stays a point")
 	t.assert_true(not bool(maze.landmarks[FirstJourney.FAMILY].get("discovered", false)), "mother is not marked discovered")
 	var sketch := Vector2(520, 230)
 	var span := RouteSketch.range_span(2.2, sketch)
@@ -115,12 +137,16 @@ static func _mobile(t: Node) -> void:
 		var controls := MobileControls.new()
 		controls.drink_visible = true
 		controls.apply_layout(profile)
+		t.assert_eq(controls.texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST, "drink icon is nearest")
 		t.assert_true(controls._func_centers.has("drink"), "drink button exists at %s" % vp)
 		var center: Vector2 = controls._func_centers["drink"]
 		var size := controls.func_btn_size
 		t.assert_true(size >= 48.0, "drink button is at least 48 px at %s" % vp)
 		var hit := Rect2(center - Vector2.ONE * size * 0.5, Vector2.ONE * size)
 		t.assert_true(profile.controls_rect.encloses(hit), "drink button stays in the control area at %s" % vp)
+		var icon := controls.drink_icon_rect(hit)
+		t.assert_true(hit.encloses(icon), "waterskin icon sits inside the drink button at %s" % vp)
+		t.assert_true(icon.size.x >= 28.0 and icon.size.x <= 34.0, "drink icon is about twice the 16px art at %s" % vp)
 		for entry in controls._dpad_centers:
 			var dpad := Rect2((entry.pos as Vector2) - Vector2.ONE * controls.btn_radius, Vector2.ONE * controls.btn_radius * 2.0)
 			t.assert_true(not hit.intersects(dpad), "drink button does not cover the d-pad at %s" % vp)
@@ -219,8 +245,17 @@ static func _skin(t: Node, main, journey: FirstJourney) -> void:
 	t.assert_eq(journey.water_skin, 1, "a heal scroll is used before the skin")
 	t.assert_eq(main.inventory.get_count(), 0, "the scroll was consumed")
 	t.assert_eq(journey.water_skin_hud(), "水囊 ×1（H 喝）", "hud shows the remaining skin")
+	var panel := UIPanel.new()
+	panel.water_skin_filled = true
+	t.assert_eq(panel.water_skin_icon_key(), "water_skin", "a full skin uses waterskin.png")
+	var full := panel.water_skin_texture()
+	t.assert_eq(Vector2i(full.get_width(), full.get_height()), Vector2i(16, 16), "waterskin.png is 16x16")
 	journey.water_skin = 0
 	t.assert_eq(journey.water_skin_hud(), "水囊 已空", "hud shows an empty skin")
+	panel.water_skin_filled = false
+	t.assert_eq(panel.water_skin_icon_key(), "water_skin_empty", "an empty skin uses waterskin_empty.png")
+	var empty := panel.water_skin_texture()
+	t.assert_eq(Vector2i(empty.get_width(), empty.get_height()), Vector2i(16, 16), "waterskin_empty.png is 16x16")
 	journey.water_skin = 1
 	t.assert_true(journey.discovery_line().contains("水囊没喝完，留给了妈妈。"), "settlement mentions a leftover skin")
 	var paused := InputHandler.new()

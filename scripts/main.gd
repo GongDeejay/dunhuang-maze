@@ -1262,6 +1262,7 @@ func _draw_context() -> Dictionary:
 		"low_hp_pulse": low_hp_pulse,
 		"journey_objective": first_journey.objective() if first_journey else (mogao_journey.objective() if mogao_journey else ""),
 		"water_skin_line": first_journey.water_skin_hud() if first_journey else "",
+		"water_skin_filled": first_journey != null and first_journey.water_skin > 0,
 		"first_journey": first_journey != null or mogao_journey != null,
 		"mogao_focus": mogao_journey != null and mogao_journey.encounter_focus(player.pos),
 		"gate_revealing": _gate_revealing(),

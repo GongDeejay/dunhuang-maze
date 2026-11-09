@@ -58,7 +58,8 @@ static func run(t: Node) -> void:
 	m.use_lamp(); m.advance(1); walk(t, m, "LLU"); m.use_lamp(); m.advance(1)
 	walk(t, m, "RRRR"); m.turn(); m.advance(1); 	walk(t, m, "LLUUUUUU")
 	t.assert_true(m.reached and m.travel() and m.room == CaveModel.MIRROR_ROOM, "right route enters the mirror cave")
-	walk(t, m, "RR")
+	t.assert_eq(m.player, Vector2i(4, 8), "mirror cave entry is one cell right of the door")
+	walk(t, m, "R")
 	for _i in CaveModel.turns_from_start("T"):
 		t.assert_true(m.turn_mirror(), "teaching mirror turns from the south")
 		m.advance(1)

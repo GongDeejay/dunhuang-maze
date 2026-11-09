@@ -7,8 +7,16 @@ var gate_button: Button
 var ranges: Array = []
 const LABEL_FONT = preload("res://assets/fonts/NotoSansSC-GameSubset.ttf")
 
+# Window includes a radius-2 circle around a survey center that can sit one cell
+# past the caravan (bottom-left) or the stele. The old window ended on y=12, so
+# the caravan ellipse was clipped down to a speck.
+const MAP_ORIGIN := Vector2(-2, 5)
+const MAP_SPAN := Vector2(16, 10)
+const MAP_PAD := Vector2(18, 18)
+const MAP_PAD_END := Vector2(18, 16)
+
 func map_point(cell: Vector2i) -> Vector2:
-	return Vector2(20 + cell.x / 14.0 * (size.x - 40), 24 + (cell.y - 5) / 7.0 * (size.y - 48))
+	return project(Vector2(cell), size)
 
 func _draw() -> void:
 	draw_style_box(_paper(), Rect2(Vector2.ZERO, size))
@@ -28,9 +36,23 @@ func _draw() -> void:
 	if gate_button:
 		gate_button.position = map_point(FirstJourney.STONE_GATE) - gate_button.size / 2
 
+static func project(cell: Vector2, sketch_size: Vector2) -> Vector2:
+	var inner := sketch_size - MAP_PAD - MAP_PAD_END
+	return MAP_PAD + Vector2(
+		(cell.x - MAP_ORIGIN.x) / MAP_SPAN.x * inner.x,
+		(cell.y - MAP_ORIGIN.y) / MAP_SPAN.y * inner.y,
+	)
+
+
 static func range_span(radius: float, sketch_size: Vector2) -> Vector2:
-	var cell := Vector2((sketch_size.x - 40.0) / 14.0, (sketch_size.y - 48.0) / 7.0)
+	var inner := sketch_size - MAP_PAD - MAP_PAD_END
+	var cell := Vector2(inner.x / MAP_SPAN.x, inner.y / MAP_SPAN.y)
 	return cell * radius * 2.0
+
+
+static func range_rect(cell: Vector2i, radius: float, sketch_size: Vector2) -> Rect2:
+	var span := range_span(radius, sketch_size)
+	return Rect2(project(Vector2(cell), sketch_size) - span * 0.5, span)
 
 
 func _draw_ranges() -> void:

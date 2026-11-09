@@ -260,6 +260,20 @@ static func _mirror_room(t: Node) -> void:
 	t.assert_eq(previews.size(), 1, "only the teaching mirror previews")
 	t.assert_eq(str(previews[0]["id"]), "T", "preview belongs to the teaching mirror")
 	t.assert_eq(int(previews[0]["k"]), CaveModel.turns_from_start("T"), "the teaching preview counts the remaining turns")
+	t.assert_eq(previews[0]["from"], _def_cell("T"), "the preview label follows the teaching mirror")
+	_preview_label_clears_mirror(t, previews[0])
+	t.assert_eq(blocked.player, CaveModel.MIRROR_ENTRY, "the mirror cave starts on the entry cell")
+	t.assert_eq(CaveModel.MIRROR_ENTRY, Vector2i(4, 8), "entry moved one cell right of the door")
+	t.assert_true(blocked.walkable(CaveModel.MIRROR_ENTRY), "the entry cell can be stood on")
+	t.assert_true(not dark["cells"].has(CaveModel.MIRROR_ENTRY), "the entry cell is not on the opening beam")
+	var lamp := CaveNetwork.new()
+	lamp.load_room(4)
+	lamp.reached = true
+	var mirror_spawn := Vector2i(-1, -1)
+	for door in lamp.doors():
+		if int(door["target"]) == CaveModel.MIRROR_ROOM:
+			mirror_spawn = door["spawn"]
+	t.assert_eq(mirror_spawn, CaveModel.MIRROR_ENTRY, "walking in from the lamp cave uses the same entry")
 	var on_beam := CaveNetwork.new()
 	on_beam.load_room(CaveModel.MIRROR_ROOM)
 	on_beam.player = Vector2i(3, 7)
@@ -287,7 +301,7 @@ static func _mirror_room(t: Node) -> void:
 	var search := _mirror_search(t)
 	print("MEASURE mirror min_actions=%d min_turns=%d" % [search["actions"], search["turns"]])
 	t.assert_true(int(search["actions"]) > 0, "the mirror cave has a solution")
-	t.assert_eq(int(search["actions"]), 34, "the recommended openings take 34 actions")
+	t.assert_eq(int(search["actions"]), 33, "the recommended openings take 33 actions from the shifted entry")
 	t.assert_true(int(search["turns"]) >= 6, "the mirror cave takes at least six turns")
 	t.assert_eq(search["solutions"], 1, "only one facing triple lights the lotus")
 	var saved := CaveNetwork.new()
@@ -304,6 +318,24 @@ static func _mirror_room(t: Node) -> void:
 	t.assert_true(legacy.reached and legacy.lotus_lit(), "a solved version 2 save migrates onto the solution facings")
 
 
+static func _preview_label_clears_mirror(t: Node, seg: Dictionary) -> void:
+	var font := MogaoChapter.FONT
+	var text := "还要转%d下" % int(seg["k"])
+	var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
+	var mirror := Vector2(420, 280)
+	var beam := Vector2(seg["dir"])
+	var far := mirror + beam * 180.0
+	for unit_value in [30.0, 56.0, 70.0]:
+		var unit := float(unit_value)
+		var label := Painter.preview_label_rect(mirror, beam, unit, text_size)
+		var sprite := Painter.mirror_sprite_rect(mirror, unit)
+		t.assert_true(not label.intersects(sprite), "turn count stays off the mirror at unit %s" % unit)
+		var start := mirror + beam * unit * 0.55
+		var stroke := maxf(3.0, unit * 0.06)
+		t.assert_true(not Painter.segment_hits_rect(start, far, label.grow(stroke)), "turn count stays off the dashed line at unit %s" % unit)
+		t.assert_true(label.get_center().distance_to(mirror) < label.get_center().distance_to(far), "turn count sits by the lit mirror")
+
+
 static func _turn_times(t: Node, model: CaveNetwork, id: String) -> void:
 	var times := CaveModel.turns_from_start(id)
 	for _i in times:
@@ -312,7 +344,7 @@ static func _turn_times(t: Node, model: CaveNetwork, id: String) -> void:
 
 
 static func _solve_mirrors(t: Node, model: CaveNetwork) -> void:
-	Puzzle.route(t, model, "RR")
+	Puzzle.route(t, model, "R")
 	_turn_times(t, model, "T")
 	Puzzle.route(t, model, "RUUUUUU")
 	_turn_times(t, model, "A")
