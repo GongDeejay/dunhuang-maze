@@ -187,21 +187,10 @@ func crate(c: Control) -> void:
 	c.draw_line(Vector2(rect.end.x - 3, rect.position.y + 3), Vector2(rect.position.x + 3, rect.end.y - 3), Color("735330"), 3, true)
 
 func planks(c: Control) -> void:
-	var m: CaveModel = c.model
 	var u: float = c.unit
-	for y in int(m.extent.y):
-		for x in int(m.extent.x):
-			var cell := Vector2i(x, y)
-			if m.land.has(cell) or cell == m.goal:
-				continue
-			var p: Vector2 = c.point(cell)
-			c.draw_rect(Rect2(p - Vector2(u * .5, u * .4), Vector2(u, u * .78)), Color("16211f"))
 	var niche: Vector2 = c.point(CaveModel.PLANK_NICHE)
 	c.draw_circle(niche + Vector2(-u * .12, u * .08), maxf(2.0, u * .07), Color("6a5340"))
 	c.draw_circle(niche + Vector2(u * .12, u * .12), maxf(1.5, u * .045), Color("6a5340"))
-	if m.reached:
-		var rail: Vector2 = c.point(CaveModel.PLANK_LANDING)
-		c.draw_line(rail + Vector2(-u * .02, -u * .22), rail + Vector2(u * .2, -u * .02), Color("72d5dc"), maxf(3.0, u * .07), true)
 
 func light_bridge(c: Control) -> void:
 	var m: CaveModel = c.model; var u: float = c.unit

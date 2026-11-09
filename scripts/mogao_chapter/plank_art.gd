@@ -5,10 +5,15 @@ var plank_sprites: Dictionary = {}
 var stone_sprites: Dictionary = {}
 var tag: Sprite2D
 var gate: Sprite2D
+var thread: Sprite2D
+var void_sprites: Dictionary = {}
+var edge_sprites: Dictionary = {}
 var _frames: Array[Texture2D] = []
 var _stones: Array[Texture2D] = []
 var _gates: Array[Texture2D] = []
 var _nailed: Texture2D
+var _void_tex: Texture2D
+var _edge_tex: Texture2D
 
 
 func _ready() -> void:
@@ -29,16 +34,31 @@ func _ready() -> void:
 		for i in count:
 			_gates.append(_region(rope, i * 16))
 	_nailed = _load_tex("plank_nailed")
+	_void_tex = _load_tex("cliff_void")
+	_edge_tex = _load_tex("cliff_edge")
+	for y in 9:
+		for x in 7:
+			var cell := Vector2i(x, y)
+			if _is_void(cell):
+				var hole := _make_sprite(0)
+				hole.texture = _void_tex
+				void_sprites[cell] = hole
+			if _has_cliff_edge(cell):
+				var lip := _make_sprite(1)
+				lip.texture = _edge_tex
+				edge_sprites[cell] = lip
 	for cell in CaveModel.PLANK_CELLS:
-		plank_sprites[cell] = _make_sprite(1)
-	plank_sprites[CaveModel.PLANK_DEMO] = _make_sprite(1)
+		plank_sprites[cell] = _make_sprite(3)
+	plank_sprites[CaveModel.PLANK_DEMO] = _make_sprite(3)
 	for cell in CaveModel.PLANK_STONES:
-		stone_sprites[cell] = _make_sprite(0)
-	tag = _make_sprite(2)
+		stone_sprites[cell] = _make_sprite(2)
+	tag = _make_sprite(4)
 	var tag_tex := _load_tex("plank_demo_tag")
 	if tag_tex != null:
 		tag.texture = tag_tex
-	gate = _make_sprite(3)
+	gate = _make_sprite(5)
+	thread = _make_sprite(6)
+	thread.texture = _load_tex("blue_thread")
 
 
 func _make_sprite(z: int) -> Sprite2D:
@@ -62,7 +82,16 @@ func _process(_delta: float) -> void:
 			stone_sprites[cell].visible = false
 		tag.visible = false
 		gate.visible = false
+		thread.visible = false
+		for cell in void_sprites:
+			void_sprites[cell].visible = false
+		for cell in edge_sprites:
+			edge_sprites[cell].visible = false
 		return
+	for cell in void_sprites:
+		_place_grid(void_sprites[cell], cell, _void_tex)
+	for cell in edge_sprites:
+		_place_grid(edge_sprites[cell], cell, _edge_tex)
 	for cell in stone_sprites:
 		var stone: Sprite2D = stone_sprites[cell]
 		var variant: int = 0 if _stones.size() < 2 else int((cell.x + cell.y) % _stones.size())
@@ -76,6 +105,8 @@ func _process(_delta: float) -> void:
 	if not _gates.is_empty():
 		gate_tex = _gates[1] if open and _gates.size() > 1 else _gates[0]
 	_place(gate, host.model.goal, gate_tex, -host.unit * 0.12)
+	var thread_tex: Texture2D = thread.texture if host.model.reached else null
+	_place(thread, CaveModel.PLANK_LANDING, thread_tex, -host.unit * 0.08)
 
 
 func _plank_texture(cell: Vector2i) -> Texture2D:
@@ -95,6 +126,35 @@ func _frame_index(cell: Vector2i) -> int:
 	if model.planks_up.has(cell):
 		return 2
 	return 0
+
+
+func _is_void(cell: Vector2i) -> bool:
+	if cell == CaveModel.PLANK_GOAL or cell == CaveModel.PLANK_DEMO:
+		return false
+	if cell in CaveModel.PLANK_STONES or cell in CaveModel.PLANK_CELLS:
+		return false
+	return cell.x >= 0 and cell.x < 7 and cell.y >= 0 and cell.y < 9
+
+
+func _has_cliff_edge(cell: Vector2i) -> bool:
+	if not _is_void(cell):
+		return false
+	var above := Vector2i(cell.x, cell.y - 1)
+	if above.y < 0:
+		return false
+	return above in CaveModel.PLANK_STONES or above in CaveModel.PLANK_CELLS or above == CaveModel.PLANK_DEMO
+
+
+func _place_grid(sprite: Sprite2D, cell: Vector2i, texture: Texture2D) -> void:
+	if texture == null:
+		sprite.visible = false
+		return
+	var u: float = host.unit
+	sprite.texture = texture
+	sprite.visible = true
+	var drop := u * 0.16 if sprite.z_index == 1 else 0.0
+	sprite.position = host.point(cell) + Vector2(0, drop)
+	sprite.scale = Vector2(u / 16.0, u * 0.72 / 16.0)
 
 
 func _place(sprite: Sprite2D, cell: Vector2i, texture: Texture2D, lift: float) -> void:

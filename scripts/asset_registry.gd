@@ -104,6 +104,9 @@ const MOGAO_SPRITE_FILES := {
 	"plank_nailed": "plank_nailed.png",
 	"ledge_stone": "ledge_stone.png",
 	"rope_gate": "rope_gate.png",
+	"cliff_void": "cliff_void.png",
+	"cliff_edge": "cliff_edge.png",
+	"blue_thread": "blue_thread.png",
 }
 
 const FRAGMENT_SHEET := "mother_fragments.png"
