@@ -9,6 +9,7 @@ static func run(t: Node) -> void:
 	t.assert_eq(HeldMoveScript.REPEAT_SECONDS, 0.14, "held movement interval is 0.14 seconds")
 	_test_hold_rhythm(t)
 	_test_long_hold_keeps_rhythm(t)
+	_test_duplicate_keydown_keeps_rhythm(t)
 	_test_echo_and_latest_direction(t)
 	_test_modal_does_not_catch_up(t)
 	_test_attack_buffer(t)
@@ -65,6 +66,71 @@ static func _test_long_hold_keeps_rhythm(t: Node) -> void:
 	controller._process(0.9)
 	t.assert_eq(controller.player.pos, stopped, "a key release stops further hold steps")
 	controller.free()
+
+
+static func _test_duplicate_keydown_keeps_rhythm(t: Node) -> void:
+	# A browser can emit another keydown for a key that is still held, with echo left false.
+	var controller = _maze(t)
+	controller.player.pos = Vector2i(0, 2)
+	_press(controller, KEY_D, true)
+	var elapsed := 0.0
+	var resent := false
+	while elapsed < 0.9 - 0.0001:
+		if not resent and elapsed >= 0.10:
+			var pos: Vector2i = controller.player.pos
+			_key(controller, KEY_D, true, false)
+			t.assert_eq(controller.player.pos, pos, "a repeated keydown without echo does not take an extra step")
+			resent = true
+		controller._process(0.05)
+		elapsed += 0.05
+	t.assert_true(resent, "the repeated keydown was inserted during the hold")
+	var repeats := int(0.9 / HeldMoveScript.REPEAT_SECONDS)
+	t.assert_eq(repeats, 6, "0.9 seconds still contains six repeat intervals")
+	t.assert_eq(controller.player.pos, Vector2i(1 + repeats, 2), "first level stays on the 0.14 second rhythm after a non-echo resend")
+	_release(controller)
+	# Releasing and pressing again is a real new press, including into wind sand.
+	controller.player.pos = Vector2i(0, 2)
+	_press(controller, KEY_D, true)
+	t.assert_eq(controller.player.pos, Vector2i(1, 2), "a press after release still steps")
+	controller.free()
+
+	SaveManager.clear_save()
+	var host = MainScript.new()
+	t.add_child(host)
+	host.game.start_game()
+	host._new_game(1)
+	var chapter: MogaoChapter = host.cave_chapter
+	var quiet := _cave_hold_moves(chapter, false)
+	var noisy := _cave_hold_moves(chapter, true)
+	t.assert_eq(noisy, quiet, "cave hold keeps the same number of steps when the browser resends the key")
+	t.assert_true(noisy >= 4, "cave hold still finishes several steps in 0.9 seconds")
+	host.free()
+	SaveManager.clear_save()
+
+
+static func _cave_hold_moves(chapter: MogaoChapter, resend: bool) -> int:
+	_reset_cave(chapter, Vector2i(0, 6))
+	for x in 12:
+		chapter.model.land[Vector2i(x, 6)] = true
+	chapter.model.player = Vector2i(0, 6)
+	chapter.model.destination = chapter.model.player
+	chapter.model.moves = 0
+	_cave(chapter, KEY_RIGHT, true, false)
+	var elapsed := 0.0
+	var resent := false
+	while elapsed < 0.9 - 0.0001:
+		if resend and not resent and elapsed >= 0.10:
+			var moves_now: int = chapter.model.moves
+			var pos: Vector2i = chapter.model.player
+			_cave(chapter, KEY_RIGHT, true, false)
+			if moves_now != chapter.model.moves or pos != chapter.model.player:
+				return -1
+			resent = true
+		chapter._process(0.05)
+		elapsed += 0.05
+	if resend and not resent:
+		return -1
+	return chapter.model.moves
 
 
 static func _test_echo_and_latest_direction(t: Node) -> void:
