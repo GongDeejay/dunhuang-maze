@@ -686,9 +686,14 @@ func test_web_font_payload():
 	var mogao_chars := {}
 	var mogao_files: Array[String] = []
 	_collect_files("res://scripts/mogao_chapter", ".gd", mogao_files)
+	_collect_files("res://scripts/mogao_chapter", ".json", mogao_files)
+	var saw_mirror_script := false
 	for file in mogao_files:
+		if file.get_file().begins_with("mirror_") and file.ends_with(".gd"):
+			saw_mirror_script = true
 		_collect_string_chars(FileAccess.get_file_as_string(file), mogao_chars)
-	var mogao_watch := "镜洞窟灯折光"
+	assert_true(saw_mirror_script, "chapter 2 glyph scan includes mirror_*.gd")
+	var mogao_watch := "镜洞窟灯折光反变告固学实所才教整时淡直站箭致花莲预"
 	var mogao_missed := ""
 	for i in mogao_watch.length():
 		var mogao_code: int = mogao_watch.unicode_at(i)
