@@ -650,9 +650,101 @@ func test_realtime_monster_intent():
 
 func test_web_font_payload():
 	print("\n[TEST] Web Font Payload")
+	# The old check only limited file size, so new copy such as “烽燧” could ship as tofu.
 	var path := "res://assets/fonts/NotoSansSC-GameSubset.ttf"
 	assert_true(FileAccess.file_exists(path), "subset font exists")
 	assert_true(FileAccess.get_file_as_bytes(path).size() < 400_000, "subset font stays below 400 KB")
+	var game_font: Font = load(path)
+	var game_chars := {}
+	var script_files: Array[String] = []
+	_collect_files("res://scripts", ".gd", script_files)
+	for file in script_files:
+		_collect_string_chars(FileAccess.get_file_as_string(file), game_chars)
+	for folder in ["res://assets/data", "res://assets/lore"]:
+		var json_files: Array[String] = []
+		_collect_files(folder, ".json", json_files)
+		for file in json_files:
+			var parsed = JSON.parse_string(FileAccess.get_file_as_string(file))
+			if parsed == null:
+				_collect_string_chars(FileAccess.get_file_as_string(file), game_chars)
+			else:
+				_collect_json_chars(parsed, game_chars)
+	_assert_font_covers(game_font, game_chars, "game subset")
+	var mogao_font: Font = load("res://assets/fonts/MogaoSubset.ttf")
+	var mogao_chars := {}
+	var mogao_files: Array[String] = []
+	_collect_files("res://scripts/mogao_chapter", ".gd", mogao_files)
+	for file in mogao_files:
+		_collect_string_chars(FileAccess.get_file_as_string(file), mogao_chars)
+	_assert_font_covers(mogao_font, mogao_chars, "mogao subset")
+
+
+func _collect_files(path: String, suffix: String, into: Array[String]) -> void:
+	var dir := DirAccess.open(path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var name := dir.get_next()
+	while name != "":
+		if not name.begins_with("."):
+			var full := path.path_join(name)
+			if dir.current_is_dir():
+				_collect_files(full, suffix, into)
+			elif name.ends_with(suffix):
+				into.append(full)
+		name = dir.get_next()
+
+
+func _collect_string_chars(text: String, chars: Dictionary) -> void:
+	var i := 0
+	var n := text.length()
+	while i < n:
+		var quote := text.unicode_at(i)
+		if quote != 34 and quote != 39:
+			i += 1
+			continue
+		var triple := i + 2 < n and text.unicode_at(i + 1) == quote and text.unicode_at(i + 2) == quote
+		i += 3 if triple else 1
+		while i < n:
+			var code := text.unicode_at(i)
+			if not triple and code == 92:
+				i += 2
+				continue
+			if triple and code == quote and i + 2 < n and text.unicode_at(i + 1) == quote and text.unicode_at(i + 2) == quote:
+				i += 3
+				break
+			if not triple and code == quote:
+				i += 1
+				break
+			if code == 10 and not triple:
+				break
+			if code >= 32:
+				chars[code] = true
+			i += 1
+
+
+func _collect_json_chars(value, chars: Dictionary) -> void:
+	if value is String:
+		for i in value.length():
+			var code: int = value.unicode_at(i)
+			if code >= 32:
+				chars[code] = true
+	elif value is Array:
+		for item in value:
+			_collect_json_chars(item, chars)
+	elif value is Dictionary:
+		for key in value:
+			_collect_json_chars(value[key], chars)
+
+
+func _assert_font_covers(font: Font, chars: Dictionary, label: String) -> void:
+	var missing := ""
+	for code in chars:
+		if not font.has_char(int(code)):
+			missing += char(int(code))
+			if missing.length() >= 24:
+				break
+	assert_true(missing.is_empty(), "%s is missing player-facing glyphs: %s" % [label, missing])
 
 
 func test_realtime_player_attack():
