@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>敦煌迷途</title>
+		<style>
+html, body, #canvas {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+body {
+	color: white;
+	background-color: black;
+	overflow: hidden;
+	touch-action: none;
+}
+
+#canvas {
+	display: block;
+}
+
+#canvas:focus {
+	outline: none;
+}
+
+#status, #status-splash, #status-progress {
+	position: absolute;
+	left: 0;
+	right: 0;
+}
+
+#status, #status-splash {
+	top: 0;
+	bottom: 0;
+}
+
+#status {
+	background-color: #242424;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	visibility: hidden;
+}
+
+#status-splash {
+	max-height: 100%;
+	max-width: 100%;
+	margin: auto;
+}
+
+#status-splash.show-image--false {
+	display: none;
+}
+
+#status-splash.fullsize--true {
+	height: 100%;
+	width: 100%;
+	object-fit: contain;
+}
+
+#status-splash.use-filter--false {
+	image-rendering: pixelated;
+}
+
+#status-progress, #status-notice {
+	display: none;
+}
+
+#status-progress {
+	bottom: 10%;
+	width: 50%;
+	margin: 0 auto;
+}
+
+#status-notice {
+	background-color: #5b3943;
+	border-radius: 0.5rem;
+	border: 1px solid #9b3943;
+	color: #e0e0e0;
+	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
+	line-height: 1.3;
+	margin: 0 2rem;
+	overflow: hidden;
+	padding: 1rem;
+	text-align: center;
+	z-index: 1;
+}
+
+html { font-family: system-ui, -apple-system, sans-serif; font-size: 100%; }
+@supports (font: -apple-system-body) {
+	html { font: -apple-system-body; }
+}
+#status { background: radial-gradient(ellipse at center, #33291c, #17140f); }
+#status-splash { display: none; }
+#status-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-top: 1.25rem;
+	text-align: center;
+	font-family: system-ui, -apple-system, "Noto Sans SC", sans-serif;
+}
+#status-copy strong { color: #e6c98f; font-size: 1.35rem; font-weight: 600; }
+#status-detail { color: #b9aa91; font-size: 0.9rem; }
+#status-progress {
+	position: static;
+	margin-top: 1.25rem;
+	height: 0.55rem;
+	max-width: 26rem;
+	accent-color: #d5a936;
+}
+
+#status { position:fixed; inset:0; z-index:1000; visibility:visible; display:grid; grid-template-columns:minmax(0, 1.35fr) minmax(24rem, 0.9fr); background:#191913; color:#ece7d9; text-align:left; overflow:auto; touch-action:pan-y; font-family:system-ui,-apple-system,sans-serif; }
+body.intro-open { touch-action:pan-y; }
+#status * { box-sizing:border-box; }
+#status button { font:inherit; cursor:pointer; touch-action:manipulation; }
+#status button:focus-visible { outline:3px solid #f6c57b; outline-offset:4px; }
+#status button:disabled { cursor:wait; opacity:.58; }
+#status [hidden] { display:none !important; }
+.intro-art { position:relative; align-self:stretch; min-height:100%; overflow:hidden; background:#dcb687; }
+.intro-art img { position:absolute; width:100%; height:100%; object-fit:cover; object-position:52% 65%; }
+.intro-art::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,#2f261740,transparent 30%,transparent 75%,#2e241c70); pointer-events:none; }
+.intro-brand { position:absolute; z-index:2; top:2.2rem; left:2.2rem; color:#fff7e8; text-shadow:0 1px 8px #594023; font-size:1.45rem; font-weight:650; letter-spacing:.18em; }
+.intro-brand span { display:block; margin-top:.6rem; font-size:.78rem; font-weight:400; letter-spacing:.12em; }
+.intro-caption { position:absolute; z-index:2; bottom:2.2rem; left:2.2rem; color:#fff4de; font-size:.85rem; letter-spacing:.15em; }
+.intro-art-feedback { position:absolute; z-index:3; left:1rem; right:1rem; bottom:4rem; display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+#intro-art-status { background:#241c14e8; color:#fff3d9; padding:.5rem .75rem; border-radius:.3rem; font-size:.85rem; }
+#intro-art-retry { background:#241c14; color:#fff3d9; border:1px solid #d3ad70; min-height:2.75rem; padding:.4rem .7rem; border-radius:.3rem; }
+.intro-place { margin-top:1rem; padding-top:.8rem; border-top:1px solid #ffffff19; }
+#intro-place-title { margin:0 0 .3rem; font-size:.95rem; color:#e0bd82; font-weight:600; }
+#intro-place-copy { margin:0; font-size:.85rem; line-height:1.75; color:#c6c1b2; }
+.intro-sand { position:absolute; z-index:1; inset:-30%; opacity:0; pointer-events:none; background:repeating-linear-gradient(160deg,transparent 0 60px,#bd873632 62px 65px,transparent 68px 130px); transition:opacity 1.8s; }
+#status[data-chapter="1"] .intro-sand { opacity:1; animation:intro-wind 4s linear infinite; }
+#status[data-chapter="1"] .intro-art img { filter:sepia(.2) brightness(.82); }
+@keyframes intro-wind { from { transform:translateX(-5%); } to { transform:translateX(5%); } }
+.intro-panel { width:100%; max-width:42rem; margin:auto; padding:2.3rem clamp(1.5rem,3.5vw,4rem); }
+.intro-top { display:flex; justify-content:space-between; align-items:center; gap:1rem; font-size:.72rem; letter-spacing:.14em; color:#afa88b; margin-bottom:1rem; }
+.intro-sections { display:flex; gap:.5rem; margin-bottom:1.2rem; }
+.intro-sections button { flex:1; min-height:2.75rem; border:1px solid #68614c; border-radius:.3rem; background:transparent; color:#c6bea7; }
+.intro-sections button[aria-pressed="true"] { background:#d3ad701c; border-color:#d3ad70; color:#f2d8ad; }
+.intro-lore-hint { font-size:.85rem; line-height:1.7; color:#afa88b; margin:0 0 1.4rem; }
+#intro-lore-kind { color:#d2ad72; font-size:.85rem; margin:0 0 .8rem; }
+#intro-lore-title { font-size:clamp(1.5rem,2vw,2rem); font-weight:500; line-height:1.5; margin:0 0 1rem; }
+#intro-lore-copy { font-size:1rem; color:#d8d2c3; line-height:1.95; margin:0; }
+.intro-lore-nav { display:flex; align-items:center; gap:.8rem; margin:1.2rem 0 .5rem; }
+.intro-lore-nav button { min-width:2.75rem; min-height:2.75rem; padding:.4rem .8rem; border:1px solid #68614c; border-radius:.3rem; background:transparent; color:#f2d8ad; }
+#intro-lore-page { margin-right:auto; color:#bbb298; font-size:.85rem; white-space:nowrap; }
+#intro-lore-source { color:#afa88b; font-size:.8rem; line-height:1.7; margin-bottom:.8rem; }
+#intro-lore-source summary { cursor:pointer; min-height:2.75rem; padding:.65rem 0; }
+#intro-lore-link { display:inline-block; color:#e0bd82; padding:.5rem 0; }
+#intro-lore-source span { display:block; }
+#status a:focus-visible, #status summary:focus-visible { outline:3px solid #f6c57b; outline-offset:2px; }
+.intro-top button { color:#c6bea7; background:transparent; border:1px solid #68614c; border-radius:2rem; min-height:2.75rem; padding:.4rem .9rem; font-size:.85rem !important; letter-spacing:0; }
+#intro-chapter { color:#d2ad72; font-size:.8rem; letter-spacing:.13em; margin:0 0 1rem; }
+#intro-title { font-size:clamp(1.7rem,2.5vw,2.8rem); font-weight:500; line-height:1.4; margin:0 0 1.2rem; letter-spacing:.05em; }
+#intro-copy { color:#c6c1b2; font-size:1rem; line-height:1.95; margin:0; min-height:6rem; }
+.intro-tip { margin-top:1.7rem; padding:1rem 1.15rem; border-left:2px solid #bc9a60; background:#ffffff06; }
+#intro-tip-label { color:#e0bd82; font-size:.78rem; letter-spacing:.08em; }
+#intro-tip { font-size:.9rem; line-height:1.85; margin:.55rem 0 0; color:#c8c2b1; }
+.intro-keys { display:flex; gap:.3rem; align-items:center; margin-top:.7rem; color:#aea792; }
+.intro-keys kbd { font: .7rem system-ui; min-width:1.5rem; height:1.5rem; text-align:center; padding-top:.2rem; border:1px solid #595640; border-radius:.2rem; }
+.intro-nav { display:flex; align-items:center; gap:1rem; margin:1.2rem 0 1.6rem; color:#bbb298; font-size:.8rem; }
+.intro-nav button { background:transparent; border:1px solid #55513f; color:#e9dcc4; min-width:2.75rem; min-height:2.75rem; border-radius:50%; }
+.intro-nav #intro-auto { border:0; border-radius:0; margin-left:auto; color:#b9b29d; font-size:.8rem; }
+.intro-loading { padding-top:1.2rem; border-top:1px solid #ffffff19; }
+.intro-progress-row { display:flex; justify-content:space-between; gap:.5rem; font-size:.82rem; }
+#status-detail { color:#e0d8c3; font-size:inherit; }
+.intro-download { color:#99947e; font-size:.72rem; }
+#status-progress { display:block; position:static; width:100%; max-width:none; margin:.85rem 0 .6rem; height:.35rem; accent-color:#d3ad70; border:0; border-radius:1rem; overflow:hidden; }
+#status-progress::-webkit-progress-bar { background:#ffffff18; }
+#status-progress::-webkit-progress-value { background:#d3ad70; }
+#intro-network { font-size:.75rem; color:#a9a28e; line-height:1.6; margin:.65rem 0 1rem; }
+#intro-enter, #intro-retry { min-height:3rem; width:100%; border:1px solid #c4a56d; background:#c4a56d; color:#201e16; border-radius:.25rem; font-weight:650; }
+#status-notice { position:static; margin:1rem 0; text-align:left; overflow-wrap:anywhere; font: .85rem/1.6 system-ui; }
+#status[data-returning="true"] #intro-story, #status[data-returning="true"] .intro-nav { display:none; }
+#status[data-returning="true"] .intro-top { margin-bottom:1rem; }
+#status[data-paused="true"] .intro-sand { animation-play-state:paused; }
+@media (max-width:850px) {
+  #status { display:flex; flex-direction:column; height:100dvh; overflow:hidden; justify-content:flex-start; align-items:stretch; }
+  .intro-art { flex:none; min-height:0; height:clamp(9rem,26dvh,15rem); }
+  .intro-art img { object-fit:contain; object-position:center; }
+  .intro-brand { top:1rem; left:1rem; font-size:1.1rem; }
+  .intro-brand span { font-size:.65rem; margin-top:.3rem; }
+  .intro-caption { bottom:.8rem; left:1rem; font-size:.7rem; }
+  .intro-panel { flex:1; min-height:0; max-width:none; margin:0; display:flex; flex-direction:column; padding:1rem 1.3rem max(.8rem,env(safe-area-inset-bottom)); }
+  .intro-reading { flex:1; min-height:0; overflow-y:auto; padding-bottom:.5rem; overscroll-behavior:contain; }
+  .intro-top { margin-bottom:1rem; }
+  #intro-title { font-size:1.65rem; margin-bottom:.65rem; }
+  #intro-title br { display:none; }
+  #intro-copy { min-height:0; font-size:.95rem; line-height:1.8; }
+  .intro-tip { margin-top:1rem; padding:.7rem .9rem; }
+  .intro-keys { display:none; }
+  .intro-nav { margin:.65rem 0; }
+  .intro-loading { flex:none; padding-top:.8rem; }
+}
+@media (max-width:850px) and (max-height:500px) { .intro-art { display:none; } }
+@media (max-width:850px) and (max-height:700px) {
+  #status[data-reading="lore"] .intro-art { display:none; }
+  #status[data-reading="lore"] .intro-lore-hint { display:none; }
+}
+@media (prefers-reduced-motion:reduce) { .intro-sand { animation:none !important; transition:none; } }
+
+/* Illustrated travel notes stay visually distinct from the family film. */
+#status[data-illustrated="true"] { grid-template-columns:minmax(0, 1fr); background:#262923; }
+#status[data-illustrated="true"] .intro-art { display:none; }
+#status[data-illustrated="true"] .intro-panel { max-width:62rem; height:100dvh; display:flex; flex-direction:column; padding-top:1.2rem; padding-bottom:1rem; }
+#status[data-illustrated="true"] .intro-reading { flex:1; min-height:0; overflow-y:auto; }
+#status[data-illustrated="true"] .intro-loading { flex:none; }
+#status[data-illustrated="true"] #intro-lore-view article { display:grid; grid-template-columns:1fr 1fr; column-gap:2rem; padding:1.5rem; border-radius:.3rem; background:#eee0bd; color:#493b2b; border:1px solid #bb9868; }
+#intro-rabbit-figure { grid-column:1; grid-row:1 / 5; margin:0; text-align:center; }
+#intro-rabbit-figure svg { display:block; width:100%; height:auto; max-height:17rem; }
+#intro-travel-figure { grid-column:1; grid-row:1 / 5; margin:0; text-align:center; }
+#intro-travel-figure svg { display:block; width:100%; height:auto; max-height:17rem; }
+#intro-travel-caption { font-size:.75rem; line-height:1.7; margin:.6rem 0; color:#6e5740; }
+#intro-rabbit-figure figcaption { font-size:.75rem; line-height:1.7; margin:.3rem 0; color:#6e5740; }
+#intro-rabbit-zoom { min-height:2.75rem; border:1px solid #8d7050; border-radius:.3rem; background:transparent; color:#493b2b; padding:.3rem 1rem; }
+#status[data-illustrated="true"] #intro-lore-kind { color:#775137; font-size:.8rem; margin-top:1rem; }
+#status[data-illustrated="true"] #intro-lore-title { color:#3d493e; }
+#status[data-illustrated="true"] #intro-lore-copy { color:#544633; }
+#intro-rabbit-caption { color:#6f5435; font-size:.85rem; line-height:1.7; border-top:1px dashed #b59d78; padding-top:1rem; }
+@media (max-width:600px) {
+  #status[data-illustrated="true"] #intro-lore-view article { display:flex; flex-direction:column; padding:1rem; }
+  #intro-rabbit-figure svg { width:11rem; max-width:100%; margin:auto; }
+  #intro-travel-figure svg { width:15rem; max-width:100%; max-height:11rem; margin:auto; }
+  #status[data-illustrated="true"] #intro-lore-kind { order:-2; margin-top:0; }
+  #status[data-illustrated="true"] #intro-lore-title { order:-1; font-size:1.4rem; }
+  #status[data-illustrated="true"] #intro-lore-copy { margin-top:1rem; }
+}
+@media (max-width:600px) and (max-height:700px) {
+  /* Large system text: show the story before its sketch, with entry always pinned. */
+  #status[data-illustrated="true"][data-rabbit="false"] #intro-lore-kind { order:-3; }
+  #status[data-illustrated="true"][data-rabbit="false"] #intro-lore-title { order:-2; }
+  #status[data-illustrated="true"][data-rabbit="false"] #intro-lore-copy { order:-1; margin:0 0 1rem; }
+}
+
+		</style>
+		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
+<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
+
+		<link rel="preload" href="intro-b907c18ffd4f22e8.webp" as="image" fetchpriority="high">
+		<link rel="preload" href="engine-0e92f6c922b2d3230a5f05c5.wasm" as="fetch" type="application/wasm" crossorigin fetchpriority="low">
+		<link rel="preload" href="game-209f291de6005f74bac8f34e.pck" as="fetch" crossorigin fetchpriority="low">
+
+	</head>
+	<body>
+		<canvas id="canvas">
+			Your browser does not support the canvas tag.
+		</canvas>
+
+		<noscript>
+			Your browser does not support JavaScript.
+		</noscript>
+
+		<section id="status" aria-label="敦煌迷途序章" data-chapter="0">
+  <div class="intro-art">
+    <img src="intro-b907c18ffd4f22e8.webp" data-storm-src="intro-f0b5d2ba8b22881a.webp" data-search-src="intro-f4a6c2591dc0d5f5.webp" alt="一家四口穿行在敦煌金色的山谷中：妈妈、两个孩子和爸爸。" fetchpriority="high" decoding="async">
+    <div class="intro-sand" aria-hidden="true"></div>
+    <div class="intro-brand">敦煌迷途 <span>一场寻找家人的旅程</span></div>
+    <span class="intro-caption">敦煌 · 风起之前</span>
+    <div class="intro-art-feedback"><span id="intro-art-status" role="status" hidden></span><button id="intro-art-retry" type="button" hidden>重试插图</button></div>
+  </div>
+  <div class="intro-panel">
+    <div class="intro-reading">
+    <header class="intro-top"><span>序章 / PROLOGUE</span><button id="intro-skip" type="button">跳过剧情</button></header>
+    <div class="intro-sections" role="group" aria-label="等待时读点什么">
+      <button id="intro-show-story" type="button" aria-pressed="true" aria-controls="intro-story-view">旅途序章</button>
+      <button id="intro-show-lore" type="button" aria-pressed="false" aria-controls="intro-lore-view">敦煌异闻</button>
+    </div>
+    <div id="intro-story-view">
+    <div id="intro-story" aria-live="polite" aria-atomic="true">
+      <p id="intro-chapter">01 / 03 · 一起出发</p>
+      <h1 id="intro-title">那天，我们一起<br>走进敦煌。</h1>
+      <p id="intro-copy">爸爸、妈妈和两个孩子，沿着金色山谷慢慢前行。风很轻，阳光正好，大家约好：下一站，一起去看沙漠。</p>
+      <aside class="intro-place" aria-label="旅途地理小记">
+        <h2 id="intro-place-title">戈壁 · 古道上的足迹</h2>
+        <p id="intro-place-copy">从敦煌周边古道出发，认识戈壁、莫高窟与三危山。</p>
+      </aside>
+    </div>
+    <aside class="intro-tip" aria-label="操作介绍">
+      <span id="intro-tip-label">旅途指南 · 移动</span>
+      <p id="intro-tip">电脑：WASD 或方向键移动。手机：轻触方向键，也可以在地图上滑动。</p>
+      <div class="intro-keys" aria-hidden="true"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span> / </span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div>
+    </aside>
+    <nav class="intro-nav" aria-label="序章翻页">
+      <button id="intro-prev" type="button" aria-label="上一幕">←</button>
+      <span id="intro-page">01 — 03</span>
+      <button id="intro-next" type="button" aria-label="下一幕">→</button>
+      <button id="intro-auto" type="button">暂停播放</button>
+    </nav>
+    </div>
+    <section id="intro-lore-view" aria-label="敦煌异闻" hidden>
+      <p class="intro-lore-hint">等风来，也听一段敦煌往事。手动翻阅，随时启程。</p>
+      <article aria-live="polite" aria-atomic="true">
+        <figure id="intro-rabbit-figure" hidden>
+          <div role="img" aria-label="原创三兔共耳示意：三只追逐的兔子与中央的耳朵"><svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 320 320">
+  <!-- Original geometric interpretation, not a reproduction of a historic mural. -->
+  <circle cx="160" cy="160" r="153" fill="#eee0bd" stroke="#9b6848" stroke-width="3"/>
+  <circle cx="160" cy="160" r="141" fill="none" stroke="#b28d5f" stroke-width="1" stroke-dasharray="3 7"/>
+  <circle cx="160" cy="160" r="125" fill="#294f50" stroke="#bc945e" stroke-width="4"/>
+  <g fill="#d7b273" stroke="#f3d9a6" stroke-width="1.5">
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(60 160 160)"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(120 160 160)"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(180 160 160)"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(240 160 160)"/>
+    <path d="M160 31 Q185 49 160 70 Q135 49 160 31Z" transform="rotate(300 160 160)"/>
+  </g>
+  <g fill="#f4e6c3" stroke="#643f2f" stroke-width="2.4" stroke-linejoin="round">
+    <g id="hare">
+      <path d="M155 112 C144 103 139 85 118 79 C97 74 77 88 80 107 C82 124 106 127 123 116 L141 130Z"/>
+      <path d="M85 101 Q64 91 70 80 Q81 84 89 94"/>
+      <path d="M103 113 Q93 135 114 136 L133 123 M116 89 Q132 84 144 95 L156 100" fill="none"/>
+      <path d="M145 105 Q150 88 163 96 Q175 102 174 118 L163 128 Q145 128 145 105Z"/>
+      <circle cx="156" cy="105" r="2.6" fill="#643f2f" stroke="none"/>
+      <path d="M171 117 L176 120 L170 122" fill="#643f2f"/>
+    </g>
+    <use href="#hare" transform="rotate(120 160 160)"/>
+    <use href="#hare" transform="rotate(240 160 160)"/>
+  </g>
+  <!-- Each lens is ONE ear shared by the two heads at its endpoints. Three total. -->
+  <g id="shared-ears" fill="#f4e6c3" stroke="#643f2f" stroke-width="2.4">
+    <path d="M160 117 Q201 132 197 181 Q160 162 160 117Z"/>
+    <path d="M160 117 Q201 132 197 181 Q160 162 160 117Z" transform="rotate(120 160 160)"/>
+    <path d="M160 117 Q201 132 197 181 Q160 162 160 117Z" transform="rotate(240 160 160)"/>
+  </g>
+  <g fill="none" stroke="#ba754f" stroke-width="2.5" stroke-linecap="round">
+    <path d="M169 133 Q186 150 191 168"/>
+    <path d="M169 133 Q186 150 191 168" transform="rotate(120 160 160)"/>
+    <path d="M169 133 Q186 150 191 168" transform="rotate(240 160 160)"/>
+  </g>
+</svg>
+</div>
+          <figcaption>哥哥的旅行手记 · 原创示意，非文物原图</figcaption>
+          <button id="intro-rabbit-zoom" type="button" aria-expanded="false">放大看看</button>
+        </figure>
+        <figure id="intro-travel-figure" hidden>
+          <div data-note="roadbook" role="img" aria-label="原创旅行画卷：泉水、石窟和石门连接成路" hidden><svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+<rect x="8" y="8" width="624" height="384" rx="18" fill="#eee0bd" stroke="#b28b54" stroke-width="3"/>
+<g fill="#d0b48a"><path d="M25 185 90 75 150 160 202 65 290 185Z"/><path d="m367 132 65-75 51 66 57-90 75 99Z"/></g>
+<path d="M100 216V280H200V341H358V250H513V204" fill="none" stroke="#957c57" stroke-width="25" stroke-linejoin="round"/>
+<path d="M100 216V280H200V341H358V250H513V204" fill="none" stroke="#f5c864" stroke-width="5" stroke-dasharray="9 8"/>
+<g fill="#6b9f9b" stroke="#315e60" stroke-width="3"><ellipse cx="100" cy="208" rx="37" ry="16"/><path d="M72 207q28-18 56 0" fill="none"/></g>
+<path d="M280 230v-57a40 40 0 0 1 80 0v57Z" fill="#a88059" stroke="#71573d" stroke-width="5"/><path d="M300 230v-52a20 20 0 0 1 40 0v52" fill="#51483c"/>
+<path d="M320 230v50H200" fill="none" stroke="#957c57" stroke-width="17"/>
+<g fill="#b58750" stroke="#755332" stroke-width="4"><path d="M475 210V139H493V210ZM534 210V139H552V210Z"/><path d="M465 135H561V151H465Z"/></g>
+<path d="m513 98-10 17h20Z" fill="#476d64"/>
+<g fill="#9f7851"><circle cx="40" cy="330" r="5"/><circle cx="590" cy="295" r="4"/><circle cx="430" cy="340" r="5"/></g>
+</svg>
+</div>
+          <div data-note="golden_light" role="img" aria-label="原创岩缝示意：换个角度，看见暖光中的小脚印" hidden><svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+<rect x="8" y="8" width="624" height="384" rx="18" fill="#eee0bd" stroke="#b28b54" stroke-width="3"/>
+<path d="M30 310 95 90 165 50 235 110 295 315Z" fill="#b58058"/>
+<path d="M368 315 382 120 460 65 520 100 610 315Z" fill="#a56e4e"/>
+<path d="m165 50 28 115 42-55M460 65l-18 128-60-73" fill="none" stroke="#d4a674" stroke-width="12"/>
+<path d="m360 65 34 15-81 265-112-30Z" fill="#f8cd68" opacity=".65"/>
+<path d="m360 65 9 4-99 260-30-8Z" fill="#fff1b3"/>
+<g fill="#6c634b" transform="translate(285 252) rotate(-28)"><ellipse cx="0" cy="0" rx="9" ry="17"/><ellipse cx="25" cy="27" rx="9" ry="17"/><circle cx="0" cy="-25" r="5"/><circle cx="25" cy="2" r="5"/></g>
+<path d="M165 350q-60-45 0-82m-18 8 18-8-2 20" fill="none" stroke="#496e69" stroke-width="6" stroke-linecap="round"/>
+</svg>
+</div>
+          <div data-note="nine_deer" role="img" aria-label="原创鹿形路标与清泉示意" hidden><svg xmlns="http://www.w3.org/2000/svg" width="400" height="320" viewBox="0 0 400 320">
+<rect x="8" y="8" width="384" height="304" rx="20" fill="#eee0bd" stroke="#b28b54" stroke-width="3"/>
+<path d="M40 260q80-35 160 0t160 0v28H40Z" fill="#649c9a"/>
+<g fill="#e0ac62" stroke="#674c35" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+<path d="m100 160 35-18 95 3 35-62 34 6-20 31-17 67-30 14-10 48h-14l3-49-56-6-18 55h-15l7-67-29-5-17-28Z"/>
+<path d="m269 88-15-37m10 16-17-6m29 25 20-37m-10 18 20-3" fill="none"/>
+</g>
+<circle cx="283" cy="98" r="4" fill="#3c3e32"/>
+<g fill="#eee0bd"><circle cx="154" cy="162" r="7"/><circle cx="180" cy="170" r="7"/><circle cx="207" cy="160" r="7"/></g>
+</svg>
+</div>
+          <div data-note="library_cave" role="img" aria-label="原创旅行速写：小洞口与展开的旧卷纸" hidden><svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+<rect x="8" y="8" width="624" height="384" rx="18" fill="#eee0bd" stroke="#b28b54" stroke-width="3"/>
+<path d="M48 320V164Q48 62 190 62T332 164V320Z" fill="#c7a479"/>
+<path d="M91 320V168Q91 97 190 97T289 168V320Z" fill="#8c7157"/>
+<path d="M124 320V175Q124 130 190 130T256 175V320Z" fill="#504e43"/>
+<path d="M70 192H110M274 215H310M76 263H112M140 94L150 117M238 96L230 120" stroke="#a7855d" stroke-width="5"/>
+<path d="M80 326H300" stroke="#715b43" stroke-width="8" stroke-linecap="round"/>
+<g stroke="#846847" stroke-width="4" stroke-linejoin="round">
+<path d="M365 100H542V297H365Z" fill="#f7eac9"/>
+<path d="M352 100Q352 80 368 80H548Q564 80 564 100V111H389V100Q389 80 368 80" fill="#d5b783"/>
+<path d="M365 286H531Q553 286 553 307T531 328H350Q369 318 365 286Z" fill="#d5b783"/>
+</g>
+<g stroke="#9d885f" stroke-width="5" stroke-linecap="round"><path d="M404 144H506M404 170H487M404 196H506M404 222H470"/></g>
+<path d="M306 174Q336 160 352 181" fill="none" stroke="#6d9187" stroke-width="4" stroke-dasharray="4 7"/>
+<g fill="#b28b54"><circle cx="88" cy="350" r="4"/><circle cx="586" cy="314" r="4"/></g>
+</svg>
+</div>
+          <div data-note="pipa" role="img" aria-label="原创意象速写：琵琶与舒展回旋的舞带，并非壁画舞姿复原" hidden><svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+<rect x="8" y="8" width="624" height="384" rx="18" fill="#eee0bd" stroke="#b28b54" stroke-width="3"/>
+<path d="M88 257C190 333 134 97 275 100S454 333 552 166" fill="none" stroke="#749c90" stroke-width="24" stroke-linecap="round"/>
+<path d="M89 254C191 330 135 94 276 97S455 330 553 163" fill="none" stroke="#bad0ad" stroke-width="4"/>
+<g transform="rotate(28 320 200)" stroke="#765539" stroke-linejoin="round">
+<path d="M308 124V62L336 48 343 61 329 73V124C329 158 377 182 377 237A57 57 0 0 1 263 237C263 182 308 158 308 124Z" fill="#c69b5d" stroke-width="5"/>
+<path d="M312 138C307 176 279 193 279 237A41 41 0 0 0 361 237C361 194 333 177 325 138Z" fill="#e6c78e" stroke-width="3"/>
+<path d="M313 84V263M319 80V263M325 77V263" stroke-width="2"/>
+<path d="M298 263H341M305 104H333M305 116H333" stroke-width="5"/>
+</g>
+<path d="M120 151Q169 89 226 73M423 322Q492 323 534 279" fill="none" stroke="#b78762" stroke-width="3" stroke-dasharray="6 8"/>
+<g fill="#b78762"><circle cx="119" cy="151" r="5"/><circle cx="535" cy="278" r="5"/></g>
+</svg>
+</div>
+          <figcaption id="intro-travel-caption"></figcaption>
+        </figure>
+        <p id="intro-lore-kind"></p>
+        <h2 id="intro-lore-title"></h2>
+        <p id="intro-lore-copy"></p>
+        <p id="intro-rabbit-caption" hidden>留意木门上的兔纹。答案，也许就在旅途中。</p>
+      </article>
+      <nav class="intro-lore-nav" aria-label="异闻翻页">
+        <button id="intro-lore-prev" type="button" aria-label="上一则异闻">←</button>
+        <span id="intro-lore-page"></span>
+        <button id="intro-lore-next" type="button">下一则 →</button>
+      </nav>
+      <details id="intro-lore-source"><summary>故事出处</summary><a id="intro-lore-link" target="_blank" rel="noopener noreferrer"></a><span>（新窗口打开）</span></details>
+    </section>
+    </div>
+    <footer class="intro-loading">
+      <div class="intro-progress-row"><span id="status-detail" role="status">正在准备旅途…</span><span class="intro-download">后台加载中</span></div>
+      <progress id="status-progress" aria-label="游戏资源加载进度"></progress>
+      <p id="intro-network">初次进入需要下载引擎；阅读剧情时，下载会同时进行。</p>
+      <button id="intro-enter" type="button" disabled>等待旅途准备就绪…</button>
+      <div id="status-notice" role="alert"></div>
+      <button id="intro-retry" type="button" hidden>重新加载</button>
+    </footer>
+  </div>
+</section>
+
+
+		<script>(() => {
+  'use strict';
+  const overlay = document.getElementById('status');
+  document.body.classList.add('intro-open');
+  const key = 'dunhuang-intro-v1';
+  const artwork = overlay.querySelector('.intro-art img');
+  const illustrations = [
+    [artwork.getAttribute('src'), artwork.alt],
+    [artwork.dataset.stormSrc, '黄沙席卷敦煌山谷，一家四口在风暴中走散，彼此伸手寻找。'],
+    [artwork.dataset.searchSrc, '风暴过后，爸爸独自沿着敦煌古道的脚印，出发寻找家人。'],
+  ];
+  let pendingArtwork = -1;
+  const imageCache = new Map();
+  const artStatus = document.getElementById('intro-art-status');
+  const artRetry = document.getElementById('intro-art-retry');
+
+  function loadArtwork(index) {
+    const src = illustrations[index][0];
+    if (imageCache.has(src)) return imageCache.get(src);
+    const image = new Image();
+    image.decoding = 'async';
+    // These two images total only ~174 KiB. Give the visible story priority over WASM.
+    image.fetchPriority = 'high';
+    const entry = { image, state: 'loading', promise: null };
+    entry.promise = new Promise(resolve => {
+      image.onload = async () => {
+        try { await image.decode(); } catch (_) { /* onload already confirms usable pixels. */ }
+        entry.state = 'ready';
+        resolve(true);
+      };
+      image.onerror = () => { entry.state = 'failed'; resolve(false); };
+    });
+    imageCache.set(src, entry);
+    image.src = src;
+    return entry;
+  }
+
+  function primeArtwork() {
+    if (skip || !overlay.isConnected) return;
+    // Start both later acts while the first is being read, not at the moment of flipping.
+    loadArtwork(1);
+    loadArtwork(2);
+  }
+
+  function renderArtwork() {
+    if (pendingArtwork === chapter) return;
+    pendingArtwork = chapter;
+    const target = chapter;
+    const [src, alt] = illustrations[target];
+    artRetry.hidden = true;
+    artStatus.hidden = true;
+    overlay.querySelector('.intro-art').setAttribute('aria-busy', 'false');
+    if (artwork.getAttribute('src') === src) return;
+    const entry = loadArtwork(target);
+    if (entry.state !== 'ready') {
+      artStatus.textContent = `第 ${target + 1} 幕插图加载中，正文可先阅读`;
+      artStatus.hidden = false;
+      overlay.querySelector('.intro-art').setAttribute('aria-busy', 'true');
+    }
+    // Keep the last usable image; out-of-order responses cannot turn a page back.
+    entry.promise.then(loaded => {
+      if (chapter !== target || !overlay.isConnected) return;
+      overlay.querySelector('.intro-art').setAttribute('aria-busy', 'false');
+      if (!loaded) {
+        artStatus.textContent = '本幕插图暂未载入，仍可阅读或进入游戏';
+        artStatus.hidden = false;
+        artRetry.hidden = false;
+        return;
+      }
+      artwork.src = src;
+      artwork.alt = alt;
+      artStatus.hidden = true;
+      artRetry.hidden = true;
+    });
+  }
+  const chapters = [
+    ['一起出发', '那天，我们一起\n走进敦煌。', '爸爸、妈妈和两个孩子，沿着金色山谷慢慢前行。风很轻，阳光正好，大家约好：下一站，一起去看沙漠。', '敦煌 · 风起之前', '移动', '电脑：WASD 或方向键移动。手机：轻触方向键，也可以在地图上滑动。'],
+    ['风暴突至', '一阵风，\n吹散了四个人。', '天边忽然扬起黄沙，熟悉的山谷转眼被风暴吞没。呼喊声消失在风里，再睁开眼时，身边的家人已经不见了。', '敦煌 · 黄沙遮住了归路', '即时战斗', '敌人不会等你行动。朝相邻敌人的方向移动即可攻击；留意箭头预警，及时避让。电脑按 P / Esc，手机点“暂停”可暂停战斗。'],
+    ['寻找家人', '风停之后，\n我们一定要团聚。', '你决定沿着古道出发，寻找走散的家人。穿过迷途，留意沿路的补给与指引——这趟旅程，要一家人一起走完。', '敦煌 · 旅途从这里开始', '补给与目标', '寻找家人、收集补给。电脑用 1–5 选道具、E 使用；手机点“换”“用”。集齐当前关卡的家人后，跟随指引前往出口。'],
+  ];
+  const places = [
+    ['戈壁 · 古道上的足迹', '戈壁常见砾石与裸露地表，与起伏的沙丘有着不同的荒野风景。我们的旅途从敦煌周边古道开始，寻找家人的足迹。'],
+    ['莫高窟 · 岩壁里的千年故事', '莫高窟以壁画和彩塑著称，留下丝绸之路上文化交流的印记。旅途中的图案与故事，提醒我们仔细观察、记住线索。'],
+    ['三危山 · 风中的归路', '三危山遥对莫高窟。游戏将山谷与远处的营地化为最后一段归路：找到弟弟，让一家四口再次团聚。'],
+  ];
+  // Shared with the in-game reference plate; generated from assets/lore at export.
+  const rabbitNote = {"id": "three_hares", "kind": "旅行手记 · 莫高窟第407窟", "title": "三只兔子，耳朵藏在哪？", "teaser": "哥哥在旅行手记里画下“三兔共耳”：每只兔子看起来都有两只耳朵，整幅图却只有三只。沿着图案慢慢看——到了莫高窟，也许会认出它。", "reference_label": "哥哥的手记 · 纹样临摹", "question": "木门上的哪块门牌，和手记里的图案一样？", "retry": "再看中间的耳朵。参考图一直在，不着急。", "reveal": "原来，相邻的兔子共用一只耳朵！三只耳朵围成一个三角形，每只兔子仍有两只耳朵。", "history": "第407窟藻井的莲花中心绘有三只追逐的兔子，画家用共耳的巧思让它们连成一圈。", "fiction": "本图为原创纹样示意，非文物原图。手记、门牌与开门情节为游戏虚构。", "source_title": "敦煌研究院 · 莫高窟第407窟", "source_url": "https://www.dha.ac.cn/info/1425/3569.htm"};
+  const travelNotes = {"roadbook": {"id": "roadbook", "kind": "画中行旅 · 五台山图的启发", "title": "没有导航，怎样把路画给别人？", "teaser": "莫高窟第61窟的《五台山图》，把山路、建筑和行旅的人们画在一面墙上。妈妈也学着画了一页路书：泉水、石窟、石门。风沙会盖住脚印，熟悉的地标却还在。", "prompt": "妈妈的路书：从石窟折返古道，经过南面的弯路，到石门再向北寻找。点一下图中的石门，把这段路描下来。", "reveal": "石门认出来了！金线只标出这段古道，不代表前方没有危险。沿线到石门，再向北找妈妈。", "fiction": "原创游戏路书，非文物原图。《五台山图》描绘的是五台山，并非本关敦煌地图。", "source_title": "敦煌研究院 · 莫高窟第61窟", "source_url": "https://www.dha.ac.cn/info/1425/3588.htm"}, "golden_light": {"id": "golden_light", "kind": "建窟传说 · 三危山", "title": "换一个地方看，山会告诉你什么？", "teaser": "《莫高窟记》记载，乐僔见到山间金光，因而留下开窟。这是一则建窟传说。弟弟在旅行手记旁画了两道岩缝：同一片山，换个角度，或许会注意到先前忽略的小线索。", "prompt": "弟弟在北面石窟。向左挪半步，看看岩缝里的暖光。", "reveal": "是弟弟画的小脚印！沿金色足迹折回古道，去北面的石窟找他。", "fiction": "金光为建窟传说；岩缝、涂鸦与引路情节为游戏虚构，不是对传说成因的解释。", "source_title": "敦煌保护研究基金会 · 莫高窟记记载", "source_url": "https://www.dhafund.cn/cms/jjhdt/222.html"}, "nine_deer": {"id": "nine_deer", "kind": "壁画故事 · 第257窟", "title": "它为什么回头走向河里？", "teaser": "妈妈的旅行手记里，一只九色鹿停在河岸，回头望着水面。河里似乎有人挥手，对岸却还藏在暗处。它接下来会做什么？古道旁的鹿形路标、莫高窟里的灯影，也许会让你想起这一页。", "reveal": "鹿形路标旁，果然有一眼清泉。想起九色鹿救人的故事，你也攒足力气，继续寻找家人。", "fiction": "鹿形路标、清泉引路、提灯照岸与足迹引路为游戏虚构，并非九色鹿壁画原有情节。", "source_title": "数字敦煌 · 莫高窟第257窟", "source_url": "https://www.e-dunhuang.com/cave/10.0001/0001.0001.0257"}, "library_cave": {"id": "library_cave", "kind": "旅行手记 · 藏经洞的一页", "title": "小小的洞室，装得下多少往事？", "teaser": "妈妈在手记里画了一个小洞口。1900年，人们发现的藏经洞里，不只有经卷，还有文书和绘画。哥哥原以为宝藏都是金银，看到这里却改了主意：原来一张旧纸，也能留下很久以前的生活。", "fiction": "洞口与卷纸为原创旅行示意，非文物原图；家人的旅行片段为虚构。", "source_title": "敦煌研究院 · 藏经洞发现与文物保护（《我爱你，正如深爱莫高窟》）", "source_url": "https://www.dha.ac.cn/info/1159/2519.htm"}, "pipa": {"id": "pipa", "kind": "旅行手记 · 第112窟的舞姿", "title": "壁画没有声音，怎么像在跳舞？", "teaser": "翻到下一页，弟弟画了一条弯弯的舞带。莫高窟第112窟的乐舞图里，有著名的“反弹琵琶”：乐舞伎把琵琶举到身后，舞姿舒展。哥哥沿着画里的曲线比了比——琴声虽听不见，动作却像还没有停下来。", "fiction": "琵琶与舞带为原创意象示意，非文物原图或舞姿复原；家人的旅行片段为虚构。", "source_title": "敦煌研究院 · 盛唐古乐，惊艳千年", "source_url": "https://www.dha.ac.cn/info/1159/2723.htm"}};
+  const noteRow = note => [note.kind, note.title, note.teaser, note.source_title, note.source_url];
+  // Inline text and small original vectors: no additional image requests.
+  const lore = [
+    noteRow(travelNotes.nine_deer),
+    [rabbitNote.kind, rabbitNote.title, rabbitNote.teaser, rabbitNote.source_title, rabbitNote.source_url],
+    noteRow(travelNotes.golden_light),
+    noteRow(travelNotes.library_cave),
+    noteRow(travelNotes.pipa),
+    noteRow(travelNotes.roadbook),
+  ];
+  const notePages = { 0: 'nine_deer', 2: 'golden_light', 3: 'library_cave', 4: 'pipa', 5: 'roadbook' };
+  let seen = false;
+  try { seen = localStorage.getItem(key) === 'seen'; } catch (_) { /* Private storage may be unavailable. */ }
+  let chapter = 0;
+  let ready = false;
+  let failed = false;
+  let skip = seen;
+  let readingLore = false;
+  let loreIndex = 0;
+  let auto = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = id => document.getElementById(id);
+  const enter = $('intro-enter');
+  let timer;
+  let slowTimer;
+
+  function stop() { clearInterval(timer); }
+  function renderLore() {
+    const rabbit = readingLore && loreIndex === 1;
+    overlay.dataset.rabbit = String(rabbit);
+    const noteId = readingLore ? notePages[loreIndex] : null;
+    overlay.dataset.illustrated = String(rabbit || Boolean(noteId));
+    $('intro-travel-figure').hidden = !noteId;
+    for (const illustration of $('intro-travel-figure').querySelectorAll('[data-note]')) {
+      illustration.hidden = illustration.dataset.note !== noteId;
+    }
+    $('intro-travel-caption').textContent = noteId ? travelNotes[noteId].fiction : '';
+    $('intro-rabbit-figure').hidden = !rabbit;
+    $('intro-rabbit-caption').hidden = !rabbit;
+    $('intro-rabbit-zoom').setAttribute('aria-expanded', 'false');
+    $('intro-rabbit-zoom').textContent = '放大看看';
+    $('intro-rabbit-figure').querySelector('svg').setAttribute('viewBox', '0 0 320 320');
+    const [kind, title, copy, source, href] = lore[loreIndex];
+    $('intro-lore-kind').textContent = kind;
+    $('intro-lore-title').textContent = title;
+    $('intro-lore-copy').textContent = copy;
+    $('intro-lore-page').textContent = `${loreIndex + 1} / ${lore.length}`;
+    $('intro-lore-link').textContent = source;
+    $('intro-lore-link').href = href;
+    $('intro-lore-source').open = false;
+    $('intro-lore-prev').disabled = loreIndex === 0;
+    $('intro-lore-next').textContent = loreIndex === lore.length - 1 ? '从头读 ↻' : '下一则 →';
+    overlay.querySelector('.intro-reading').scrollTop = 0;
+    if (readingLore && matchMedia('(max-width: 850px) and (max-height: 500px)').matches) {
+      // In landscape, start on the actual story; the reading selector is a scroll above.
+      $('intro-lore-kind').scrollIntoView({ block: 'start' });
+    }
+  }
+  function showReading(loreSelected) {
+    readingLore = loreSelected;
+    overlay.dataset.reading = readingLore ? 'lore' : 'story';
+    // Explicit reading always cancels returning-visitor auto-entry.
+    skip = false;
+    auto = false;
+    overlay.dataset.returning = 'false';
+    $('intro-skip').textContent = '跳过剧情';
+    $('intro-story-view').hidden = readingLore;
+    $('intro-lore-view').hidden = !readingLore;
+    $('intro-show-story').setAttribute('aria-pressed', String(!readingLore));
+    $('intro-show-lore').setAttribute('aria-pressed', String(readingLore));
+    render(); renderLore(); schedule();
+    if (!readingLore) primeArtwork();
+  }
+  function render() {
+    const c = chapters[chapter];
+    const changedChapter = overlay.dataset.chapter !== String(chapter);
+    overlay.dataset.chapter = String(chapter);
+    renderArtwork();
+    $('intro-chapter').textContent = `0${chapter + 1} / 03 · ${c[0]}`;
+    $('intro-title').textContent = c[1];
+    $('intro-title').style.whiteSpace = 'pre-line';
+    $('intro-copy').textContent = c[2];
+    $('intro-place-title').textContent = places[chapter][0];
+    $('intro-place-copy').textContent = places[chapter][1];
+    overlay.querySelector('.intro-caption').textContent = c[3];
+    $('intro-tip-label').textContent = `旅途指南 · ${c[4]}`;
+    $('intro-tip').textContent = c[5];
+    $('intro-page').textContent = `0${chapter + 1} — 03`;
+    $('intro-prev').disabled = chapter === 0;
+    $('intro-next').disabled = chapter === chapters.length - 1;
+    $('intro-auto').textContent = auto ? '暂停播放' : '自动播放';
+    overlay.dataset.paused = String(!auto);
+    if (changedChapter) overlay.querySelector('.intro-reading').scrollTop = 0;
+  }
+  function schedule() {
+    stop();
+    if (auto && !skip && !readingLore) timer = setInterval(() => {
+      if (document.hidden) return;
+      if (chapter < chapters.length - 1) { chapter++; render(); }
+      else stop();
+    }, 9000);
+  }
+  function dismiss() {
+    if (!ready || failed) return;
+    stop(); clearTimeout(slowTimer);
+    try { localStorage.setItem(key, 'seen'); } catch (_) { /* Loading must still work. */ }
+    overlay.remove();
+    document.body.classList.remove('intro-open');
+    document.getElementById('canvas').focus();
+  }
+  $('intro-next').addEventListener('click', () => { auto = false; chapter = Math.min(2, chapter + 1); render(); schedule(); });
+  $('intro-prev').addEventListener('click', () => { auto = false; chapter = Math.max(0, chapter - 1); render(); schedule(); });
+  $('intro-auto').addEventListener('click', () => { auto = !auto; render(); schedule(); });
+  $('intro-show-story').addEventListener('click', () => showReading(false));
+  $('intro-show-lore').addEventListener('click', () => showReading(true));
+  $('intro-lore-prev').addEventListener('click', () => { loreIndex = Math.max(0, loreIndex - 1); renderLore(); });
+  $('intro-lore-next').addEventListener('click', () => { loreIndex = (loreIndex + 1) % lore.length; renderLore(); });
+  $('intro-rabbit-zoom').addEventListener('click', () => {
+    const expanded = $('intro-rabbit-zoom').getAttribute('aria-expanded') !== 'true';
+    $('intro-rabbit-zoom').setAttribute('aria-expanded', String(expanded));
+    $('intro-rabbit-zoom').textContent = expanded ? '看看整幅图' : '放大看看';
+    $('intro-rabbit-figure').querySelector('svg').setAttribute('viewBox', expanded ? '95 85 135 140' : '0 0 320 320');
+  });
+  $('intro-skip').addEventListener('click', () => {
+    if (readingLore) {
+      showReading(false);
+      // Skip the reading experience, not just the original three acts.
+      skip = false;
+    }
+    skip = !skip;
+    overlay.dataset.returning = String(skip);
+    $('intro-skip').textContent = skip ? '重看序章' : '跳过剧情';
+    if (skip) { stop(); if (ready) dismiss(); }
+    else { primeArtwork(); schedule(); }
+  });
+  artRetry.addEventListener('click', () => {
+    imageCache.delete(illustrations[chapter][0]);
+    pendingArtwork = -1;
+    renderArtwork();
+  });
+  enter.addEventListener('click', dismiss);
+  $('intro-retry').addEventListener('click', () => location.reload());
+  // Keep tutorial keys out of the running canvas until the player chooses to enter.
+  overlay.addEventListener('keydown', event => event.stopPropagation());
+  window.dunhuangIntro = {
+    isLoading() { return !ready && !failed && overlay.isConnected; },
+    ready() {
+      if (failed) return;
+      ready = true;
+      clearTimeout(slowTimer);
+      stop();
+      $('status-detail').textContent = '旅途已准备就绪';
+      overlay.querySelector('.intro-download').textContent = '加载完成';
+      $('intro-network').textContent = '现在可以启程，也可以继续翻阅剧情、操作指南与敦煌异闻。';
+      $('status-progress').value = 1;
+      $('status-progress').max = 1;
+      enter.disabled = false;
+      enter.textContent = '启程 · 寻找家人';
+      if (skip) dismiss();
+      else if (!overlay.contains(document.activeElement)) enter.focus({ preventScroll: true });
+    },
+    fail(message) {
+      if (ready || failed || !overlay.isConnected) return;
+      failed = true;
+      stop(); clearTimeout(slowTimer);
+      enter.disabled = true;
+      enter.textContent = '加载暂时中断';
+      $('status-detail').textContent = message;
+      overlay.querySelector('.intro-download').textContent = '需要重试';
+      $('intro-network').textContent = '请检查网络连接。重试不会删除游戏存档。';
+      $('intro-retry').hidden = false;
+    },
+  };
+  // Godot's tracked WASM stream can reject after fetch() has already resolved.
+  // That rejection does not always reach startGame().catch(), leaving progress stuck.
+  // Handle only transport errors while this loading overlay owns the page.
+  window.addEventListener('unhandledrejection', event => {
+    if (ready || failed || !overlay.isConnected) return;
+    const reason = event.reason;
+    if (!(reason instanceof TypeError) || !/^(network error|failed to fetch|load failed)$/i.test(reason.message)) return;
+    window.dunhuangIntro.fail('资源下载中断，请重试。');
+    event.preventDefault();
+  });
+  overlay.dataset.returning = String(seen);
+  if (seen) $('intro-skip').textContent = '重看序章';
+  render(); renderLore(); schedule();
+  // A reading deep link only; it never chooses a level or unlocks gameplay.
+  if (new URLSearchParams(location.search).get('lore') === rabbitNote.id) {
+    loreIndex = 1;
+    showReading(true);
+  }
+  const requestedNote = new URLSearchParams(location.search).get('lore');
+  const requestedPage = Object.keys(notePages).find(page => notePages[page] === requestedNote);
+  if (requestedPage !== undefined) { loreIndex = Number(requestedPage); showReading(true); }
+  function firstArtworkReady() {
+    if (artwork.getAttribute('src') === illustrations[0][0] && artwork.naturalWidth > 0) {
+      imageCache.set(illustrations[0][0], { image: artwork, state: 'ready', promise: Promise.resolve(true) });
+    }
+    primeArtwork();
+  }
+  if (artwork.complete && artwork.naturalWidth > 0) firstArtworkReady();
+  else {
+    artwork.addEventListener('load', firstArtworkReady, { once: true });
+    artwork.addEventListener('error', primeArtwork, { once: true });
+  }
+  slowTimer = setTimeout(() => {
+    if (!ready && !failed) $('intro-network').textContent = '网络较慢，资源仍在后台加载。可以点“敦煌异闻”，读几则旅途故事。';
+  }, 25000);
+})();
+</script>
+		<script onerror="window.dunhuangIntro.fail('引擎下载失败，请检查网络后重试。')" src="engine-0e92f6c922b2d3230a5f05c5.js"></script>
+		<script>
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"engine-0e92f6c922b2d3230a5f05c5","experimentalVK":false,"fileSizes":{"game-209f291de6005f74bac8f34e.pck":1097516,"engine-0e92f6c922b2d3230a5f05c5.wasm":39509339},"focusCanvas":false,"gdextensionLibs":[],"godotPoolSize":4,"mainPack":"game-209f291de6005f74bac8f34e.pck"};
+const GODOT_THREADS_ENABLED = false;
+const engine = typeof Engine === 'function' ? new Engine(GODOT_CONFIG) : null;
+
+(function () {
+	if (!engine) return;
+	const statusOverlay = document.getElementById('status');
+	const statusProgress = document.getElementById('status-progress');
+	const statusDetail = document.getElementById('status-detail');
+	const statusNotice = document.getElementById('status-notice');
+
+	let initializing = true;
+	let statusMode = '';
+
+	function setStatusMode(mode) {
+		if (statusMode === mode || !initializing) {
+			return;
+		}
+		if (mode === 'hidden') {
+			window.dunhuangIntro.ready();
+			initializing = false;
+			return;
+		}
+		statusOverlay.style.visibility = 'visible';
+		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
+		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
+		statusMode = mode;
+	}
+
+	function setStatusNotice(text) {
+		while (statusNotice.lastChild) {
+			statusNotice.removeChild(statusNotice.lastChild);
+		}
+		const lines = text.split('\n');
+		lines.forEach((line) => {
+			statusNotice.appendChild(document.createTextNode(line));
+			statusNotice.appendChild(document.createElement('br'));
+		});
+	}
+
+	function displayFailureNotice(err) {
+		window.dunhuangIntro.fail('旅途暂时无法启动，请重试。');
+		console.error(err);
+		if (err instanceof Error) {
+			setStatusNotice(err.message);
+		} else if (typeof err === 'string') {
+			setStatusNotice(err);
+		} else {
+			setStatusNotice('An unknown error occurred.');
+		}
+		setStatusMode('notice');
+		initializing = false;
+	}
+
+	const missing = Engine.getMissingFeatures({
+		threads: GODOT_THREADS_ENABLED,
+	});
+
+	if (missing.length !== 0) {
+		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
+			let serviceWorkerRegistrationPromise;
+			try {
+				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
+			} catch (err) {
+				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
+			}
+			// There's a chance that installing the service worker would fix the issue
+			Promise.race([
+				serviceWorkerRegistrationPromise.then((registration) => {
+					if (registration != null) {
+						return Promise.reject(new Error('Service worker already exists.'));
+					}
+					return registration;
+				}).then(() => engine.installServiceWorker()),
+				// For some reason, `getRegistration()` can stall
+				new Promise((resolve) => {
+					setTimeout(() => resolve(), 2000);
+				}),
+			]).then(() => {
+				// Reload if there was no error.
+				window.location.reload();
+			}).catch((err) => {
+				console.error('Error while registering service worker:', err);
+			});
+		} else {
+			// Display the message as usual
+			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
+			displayFailureNotice(missingMsg + missing.join('\n'));
+		}
+	} else {
+		setStatusMode('progress');
+		engine.startGame({
+			'onProgress': function (current, total) {
+				if (window.dunhuangIntro && !window.dunhuangIntro.isLoading()) return;
+				if (current > 0 && total > 0) {
+					statusProgress.value = current;
+					statusProgress.max = total;
+					statusDetail.textContent = current >= total ? '资源就绪，正在进入敦煌…' : `正在加载 ${Math.round(current / total * 100)}%`;
+				} else {
+					statusProgress.removeAttribute('value');
+					statusProgress.removeAttribute('max');
+				}
+			},
+		}).then(() => {
+			setStatusMode('hidden');
+		}, displayFailureNotice);
+	}
+}());
+		</script>
+	</body>
+</html>
+
