@@ -20,6 +20,7 @@ static func run(t: Node) -> void:
 	_mobile(t)
 	_play(t)
 	_measures(t)
+	_roadbook_log(t)
 	_clock(t)
 	_beacon_hint(t)
 	DataLoader.set_difficulty("normal")
@@ -281,10 +282,45 @@ static func _skin(t: Node, main, journey: FirstJourney) -> void:
 	t.assert_eq(paused.handle(held, ctx).type, GameAction.Type.NONE, "pause ignores H")
 
 
+static func _roadbook_log(t: Node) -> void:
+	SaveManager.clear_save()
+	var main = MainScript.new()
+	t.add_child(main)
+	main.game.start_game()
+	main._new_game(0)
+	main.journey_card.close()
+	main.player.pos = FirstJourney.MURAL
+	main._mark_visited(main.player.pos)
+	t.assert_true(main.first_journey.mural_found, "the mural was found")
+	main.route_notebook.traced.emit()
+	var reveal := ""
+	var pickup := ""
+	for msg in main.combat_log:
+		var text := str(msg)
+		if text.contains("不代表前方没有危险"):
+			reveal = text
+		if text.contains("找到路书与补给"):
+			pickup = text
+	t.assert_true(reveal != "" and pickup != "", "tracing and finding the roadbook are both logged")
+	t.assert_true(reveal != pickup, "the two roadbook lines stay separate strings")
+	t.assert_true(not reveal.contains("找到路书与补给"), "the trace line does not swallow the pickup")
+	t.assert_true(not pickup.contains("不代表前方没有危险"), "the pickup line does not swallow the trace")
+	var font: Font = load("res://assets/fonts/NotoSansSC-GameSubset.ttf")
+	var blocks := UIPanel.log_blocks([reveal, pickup], 168, font, 15)
+	t.assert_eq(blocks.size(), 2, "the log lays the two messages out as two blocks")
+	var trace_block := _plain(blocks[0])
+	var heal_block := _plain(blocks[1])
+	t.assert_true(trace_block.contains("再向北找妈妈") and not trace_block.contains("路书与补给"), "the trace block finishes on its own")
+	t.assert_true(heal_block.contains("恢复") and heal_block.contains("点体力") and not heal_block.contains("危险"), "the pickup block is only the heal")
+	main.free()
+	SaveManager.clear_save()
+
+
 static func _measures(t: Node) -> void:
 	var font: Font = load("res://assets/fonts/NotoSansSC-GameSubset.ttf")
 	var cases := [
 		["恢复 4 点体力，这眼泉水只能取用一次。", "4 点体力"],
+		["妈妈帮你包扎，恢复 4 点体力，并指出右侧通往营地的旧路。", "4 点体力"],
 		["这次走了 226 步，沿古道回去。", "226 步"],
 		["用时 12 分 34 秒，这次走了 8 步。", "12 分"],
 		["喝下水囊：恢复 6 点体力", "6 点体力"],
@@ -301,16 +337,21 @@ static func _measures(t: Node) -> void:
 
 static func _discovery_counts(t: Node) -> void:
 	var words := ["", "一", "两", "三", "四"]
+	var card := JourneyCard.new()
+	t.add_child(card)
 	for count in [1, 2, 3, 4]:
 		var journey := FirstJourney.new()
 		if count >= 1:
 			journey.mural_found = true
+			journey.fragments[1] = true
 		if count >= 2:
 			journey.beacon_found = true
 		if count >= 3:
 			journey.caravan_found = true
+			journey.fragments[2] = true
 		if count >= 4:
 			journey.stele_found = true
+			journey.fragments[3] = true
 		var line := journey.discovery_line()
 		var names := ["石窟壁画", "烽燧驼铃", "商队遗驼", "残碑留言"]
 		var listed := 0
@@ -318,7 +359,29 @@ static func _discovery_counts(t: Node) -> void:
 			if line.contains(name):
 				listed += 1
 		t.assert_eq(listed, count, "the discovery list has %d names" % count)
-		t.assert_true(line.contains("这%s片画" % words[count]), "finding %d things names that many pictures" % count)
+		# Beacon has no fragment. One, two, three, four discoveries show 1, 1, 2, 3 pictures.
+		var expected: int = [0, 1, 1, 2, 3][count]
+		var pictures := 0
+		for bit in journey.fragment_mask():
+			if bit:
+				pictures += 1
+		t.assert_eq(pictures, expected, "beacon does not add a fourth picture")
+		t.assert_true(line.contains("这%s片画" % words[pictures]), "finding %d things names %d pictures" % [count, pictures])
+		t.assert_eq(JourneyBranches.picture_count(journey), pictures, "picture count matches the mask")
+		card.open_card({
+			"title": "与妈妈平安会合",
+			"body": line,
+			"sheet": AssetRegistry.fragment_sheet_path(),
+			"fragment_mask": journey.fragment_mask(),
+		})
+		var shown := 0
+		for rect in card.fragment_rects:
+			if rect.visible:
+				shown += 1
+		t.assert_eq(shown, pictures, "%d discoveries show %d thumbnails" % [count, pictures])
+		if count == 4:
+			t.assert_true(line.contains("烽燧驼铃") and not line.contains("四片画"), "the beacon is listed and is not a fourth picture")
+	card.free()
 
 
 static func _plain(text: String) -> String:

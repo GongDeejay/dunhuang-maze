@@ -101,11 +101,15 @@ func _apply_art(card: Dictionary) -> void:
 		var tex: Texture2D = load(sheet)
 		fragment_row.visible = true
 		for i in 3:
+			var found: bool = bool(mask[i])
+			fragment_rects[i].visible = found
+			if not found:
+				continue
 			var atlas := AtlasTexture.new()
 			atlas.atlas = tex
 			atlas.region = AssetRegistry.FRAGMENT_SHEET_REGIONS[i]
 			fragment_rects[i].texture = atlas
-			fragment_rects[i].modulate = Color.WHITE if mask[i] else AssetRegistry.FRAGMENT_DIM
+			fragment_rects[i].modulate = Color.WHITE
 		single_art.visible = false
 		caption.visible = true
 		caption.text = str(card.get("image_caption", "非文物原图"))

@@ -5,6 +5,14 @@ const MeasureText = preload("res://scripts/presentation/measure_text.gd")
 
 const HUD_FONT = preload("res://assets/fonts/NotoSansSC-GameSubset.ttf")
 
+
+static func log_blocks(messages: Array, width: float, font: Font, font_size: int) -> PackedStringArray:
+	var blocks := PackedStringArray()
+	var usable := maxf(width, 40.0)
+	for msg in messages:
+		blocks.append(MeasureText.wrapped_text(MeasureText.bind_units(str(msg)), usable, font, font_size))
+	return blocks
+
 var panel_bg := Color(0.12, 0.10, 0.08)
 var text_primary := Color(0.9, 0.85, 0.75)
 var text_secondary := Color(0.65, 0.6, 0.52)
@@ -194,17 +202,19 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		"Q 返回主界面", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, text_dim)
 	y += 22.0 * s
 
-	# Combat log
+	# Combat log. Each entry wraps in its own block so a long line cannot run into the next.
 	if combat_log.size() > 0:
 		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 			"战斗日志", HORIZONTAL_ALIGNMENT_LEFT, -1, small_fs, text_secondary)
 		y += 6.0 * s
-		for i in range(combat_log.size() - 1, -1, -1):
-			y += line_h
+		var log_width := int(panel_w - pad * 2.0)
+		var blocks := log_blocks(combat_log, log_width, HUD_FONT, tiny_fs)
+		for i in range(blocks.size() - 1, -1, -1):
 			if y > vp_h - 20:
 				break
-			owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-				MeasureText.bind_units(str(combat_log[i])), HORIZONTAL_ALIGNMENT_LEFT, int(panel_w - pad * 2.0), tiny_fs, Color(0.8, 0.75, 0.66))
+			var lines := blocks[i].split("\n")
+			owner.draw_multiline_string(HUD_FONT, Vector2(lx, y + tiny_fs), blocks[i], HORIZONTAL_ALIGNMENT_LEFT, log_width, tiny_fs, -1, Color(0.8, 0.75, 0.66))
+			y += lines.size() * line_h + 8.0 * s
 
 func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: Inventory, selected_slot: int, scale: float = 1.0) -> float:
 	var label_fs := int(round(16.0 * scale))

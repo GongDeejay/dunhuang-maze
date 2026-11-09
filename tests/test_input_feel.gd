@@ -17,6 +17,7 @@ static func run(t: Node) -> void:
 	_test_hazard_hold_stop(t)
 	_test_wall_hold_bumps_once(t)
 	_test_one_second_hold(t)
+	_test_bump_frames(t)
 	_test_wall_cooldown_does_not_stall_hold(t)
 	_test_cave_one_second_hold(t)
 
@@ -427,6 +428,35 @@ static func _terrain_row(kinds: Array) -> MazeGenerator:
 			maze.grid[0][x] |= MazeGenerator.E
 			maze.grid[0][x + 1] |= MazeGenerator.W
 	return maze
+
+
+static func _test_bump_frames(t: Node) -> void:
+	var controller = _maze(t)
+	controller.player.pos = Vector2i(0, 0)
+	_press(controller, KEY_W, true)
+	var samples: Array[Vector2] = [controller.player.bump_offset]
+	var elapsed := 0.0
+	while elapsed < 0.12 - 0.0001:
+		controller._process(0.02)
+		elapsed += 0.02
+		samples.append(controller.player.bump_offset)
+	t.assert_true(samples[0].y < -0.9 and samples[0].y > -1.2, "the first frame shoves about a third of the way, y=%s" % samples[0].y)
+	t.assert_true(absf(samples[3].y + 3.0) < 0.05, "at 0.06s the shove is 3px up, y=%s" % samples[3].y)
+	t.assert_eq(samples[samples.size() - 1], Vector2.ZERO, "at 0.12s the shove has returned")
+	var strip := Image.create(samples.size() * 28, 36, false, Image.FORMAT_RGBA8)
+	strip.fill(Color(0.12, 0.09, 0.07))
+	for i in samples.size():
+		var center := Vector2i(14 + i * 28, 18) + Vector2i(int(round(samples[i].x)), int(round(samples[i].y)))
+		for dy in range(-3, 4):
+			for dx in range(-3, 4):
+				var px: int = center.x + dx
+				var py: int = center.y + dy
+				if px >= 0 and py >= 0 and px < strip.get_width() and py < strip.get_height():
+					strip.set_pixel(px, py, Color(0.95, 0.82, 0.35))
+	strip.save_png("/opt/cursor/artifacts/wall-bump-frames.png")
+	print("BUMP frames %d peak_y %.2f" % [samples.size(), samples[3].y])
+	_release(controller)
+	controller.free()
 
 
 static func _test_one_second_hold(t: Node) -> void:

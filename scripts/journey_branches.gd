@@ -90,6 +90,14 @@ static func footprint_alpha(time_sec: float, pulsing: bool) -> float:
 	return PULSE_BASE + PULSE_AMP * sin(time_sec * TAU / PULSE_PERIOD)
 
 
+static func picture_count(journey) -> int:
+	var count := 0
+	for bit in journey.fragment_mask():
+		if bit:
+			count += 1
+	return count
+
+
 static func discovery_line(journey) -> String:
 	var found: Array[String] = []
 	if journey.mural_found:
@@ -116,8 +124,11 @@ static func discovery_line(journey) -> String:
 			skipped.append("残碑")
 		if not skipped.is_empty():
 			line += "没走到的" + "、".join(skipped) + "，可以留待下次。"
-	if found.size() >= 1 and found.size() < COUNT_WORDS.size():
-		line += "\n妈妈说：这%s片画，就是我一路走来的样子。" % COUNT_WORDS[found.size()]
+	# 烽燧驼铃 is a discovery, but the settlement sheet has no picture for it.
+	# The sentence counts only the fragment pictures that the card can show.
+	var pictures := picture_count(journey)
+	if pictures >= 1 and pictures < COUNT_WORDS.size():
+		line += "\n妈妈说：这%s片画，就是我一路走来的样子。" % COUNT_WORDS[pictures]
 	if journey.caravan_found and int(journey.water_skin) > 0:
 		line += "\n水囊没喝完，留给了妈妈。"
 	return line

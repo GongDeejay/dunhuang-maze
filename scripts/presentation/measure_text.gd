@@ -35,13 +35,25 @@ static func bind_units(text: String) -> String:
 			if i < count and text.unicode_at(i) != 0x0A:
 				out += WORD_JOINER
 			continue
-		out += number + WORD_JOINER + NO_BREAK_SPACE + WORD_JOINER + unit
+		# Glue every character, including the visible space, so a label cannot
+		# break "4" from "点体力" or split the unit itself.
+		out += _glue(number + NO_BREAK_SPACE + unit)
 		i = gap + unit.length()
+	return out
+
+
+static func _glue(text: String) -> String:
+	var out := ""
+	for i in text.length():
+		if i > 0:
+			out += WORD_JOINER
+		out += text.substr(i, 1)
 	return out
 
 
 static func wrapped_text(text: String, width: float, font: Font, font_size: int) -> String:
 	var paragraph := TextParagraph.new()
+	paragraph.break_flags = TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE | TextServer.BREAK_MANDATORY
 	paragraph.direction = TextServer.DIRECTION_LTR
 	paragraph.add_string(text, font, font_size)
 	paragraph.width = width
