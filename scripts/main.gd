@@ -1,5 +1,7 @@
 extends Node2D
 
+const MeasureText = preload("res://scripts/presentation/measure_text.gd")
+
 @export var cell_size := 40
 @export var wall_thickness := 4
 
@@ -43,6 +45,10 @@ var first_item_tip_shown: bool = false
 var first_family_tip_shown: bool = false
 var guide_assist_active: bool = false
 var moves_since_progress: int = 0
+var level_elapsed := 0.0
+var _cliff_hint_shown := false
+var _bump_anim := -1.0
+var _bump_anim_dir := -1
 var low_hp_pulse: float = 0.0
 const JourneyBranchesScript = preload("res://scripts/journey_branches.gd")
 const WallFeedbackScript = preload("res://scripts/wall_feedback.gd")
@@ -319,6 +325,9 @@ func _new_game(level_idx: int = -1) -> void:
 	_close_cave_chapter()
 	attack_cooldown = 0.0
 	attack_buffer.clear()
+	level_elapsed = 0.0
+	_cliff_hint_shown = false
+	_bump_anim = -1.0
 	hazard_gate.clear()
 	input_handler.held.clear()
 	if journey_card: journey_card.visible = false
@@ -554,14 +563,14 @@ func _on_story_dismissed() -> void:
 func _on_level_completed() -> void:
 	if mogao_journey:
 		advance_after_story = true
-		_show_story({"title": "平安走出莫高窟", "body": "你们平安走出窟前栈道。哥哥将沿安全路线与妈妈会合。\n还有弟弟。三危山的风里，或许能听见他的声音。", "button": "继续 · 前往三危山"})
+		_show_story({"title": "平安走出莫高窟", "body": "你们平安走出窟前栈道。哥哥将沿安全路线与妈妈会合。\n这次走了 %d 步\n%s\n还有弟弟。三危山的风里，或许能听见他的声音。" % [move_count, MeasureText.format_duration(level_elapsed)], "button": "继续 · 前往三危山"})
 		return
 	if not first_journey: return
 	advance_after_story = true
 	var discovery := first_journey.discovery_line()
 	_show_story({
 		"title": "与妈妈平安会合",
-		"body": "你们沿着古道来到营地，终于能安心歇一口气。\n这次走了 %d 步，%s\n妈妈先留在安全的营地。下一站：莫高窟，寻找哥哥。" % [move_count, discovery],
+		"body": "你们沿着古道来到营地，终于能安心歇一口气。\n这次走了 %d 步\n%s\n%s\n妈妈先留在安全的营地。下一站：莫高窟，寻找哥哥。" % [move_count, MeasureText.format_duration(level_elapsed), discovery],
 		"button": "继续 · 寻找哥哥",
 		"sheet": AssetRegistry.fragment_sheet_path(),
 		"fragment_mask": first_journey.fragment_mask(),
@@ -959,6 +968,15 @@ func _drink_water_skin(automatic: bool) -> void:
 	_update_mobile_ui()
 
 
+func _maybe_cliff_hint(dir: int) -> void:
+	if _cliff_hint_shown or first_journey == null or dir != MazeGenerator.N:
+		return
+	if player.pos.y != 11 or player.pos.x < 6 or player.pos.x > 8:
+		return
+	_cliff_hint_shown = true
+	_add_log(JourneyBranches.CLIFF_HINT)
+
+
 func _sync_held_bump() -> void:
 	var held_dir := input_handler.held.current()
 	if held_dir == _held_bump_dir:
@@ -983,19 +1001,12 @@ func _bump_player(dir: int) -> void:
 	_bump_wall_key = wall_key
 	_bump_wall_at = now
 	wall_bumps += 1
+	_maybe_cliff_hint(dir)
 	AudioManager.play_wall_hit()
-	if bump_tween != null and bump_tween.is_valid():
-		bump_tween.kill()
-	player.bump_offset = Vector2.ZERO
+	_bump_anim = 0.0
+	_bump_anim_dir = dir
 	_bumping = true
-	bump_tween = create_tween()
-	bump_tween.tween_property(player, "bump_offset", WallFeedbackScript.offset(dir), WallFeedbackScript.OUT_SECONDS)
-	bump_tween.tween_property(player, "bump_offset", Vector2.ZERO, WallFeedbackScript.BACK_SECONDS)
-	bump_tween.finished.connect(func():
-		_bumping = false
-		if is_instance_valid(player):
-			player.bump_offset = Vector2.ZERO
-		_request_redraw())
+	player.bump_offset = WallFeedbackScript.offset(dir) * 0.35
 	_request_redraw()
 
 
@@ -1064,6 +1075,8 @@ func _mark_visited(pos: Vector2i) -> void:
 			_add_log(card.body)
 			mobile_controls.maze_touch_active = false
 			_open_roadbook()
+		elif card.get("kind", "") == "hint":
+			_add_log(str(card.get("body", "")))
 		else: _show_story(card)
 	elif mogao_journey:
 		var had_scarf := mogao_journey.scarf_found
@@ -1106,6 +1119,8 @@ func _get_buff_display() -> String:
 	return "Buff: " + " ".join(parts)
 
 func _process(delta: float) -> void:
+	if ui_panel != null and first_journey != null:
+		ui_panel.prepare_water_skin(first_journey.water_skin > 0)
 	if third_chapter != null or cave_chapter != null: return
 	var was_revealing := _gate_revealing()
 	if was_revealing and game.can_move():
@@ -1136,6 +1151,7 @@ func _process(delta: float) -> void:
 		exit_visible = !exit_visible
 		dirty = true
 	if game.can_move() and not _modal_open() and not was_revealing:
+		level_elapsed += delta
 		attack_cooldown = maxf(0.0, attack_cooldown - delta)
 		if _input_guarded():
 			input_handler.held.set_blocked(true)
@@ -1162,7 +1178,21 @@ func _process(delta: float) -> void:
 		if _branch_visual_tick >= 0.1:
 			_branch_visual_tick = 0.0
 			dirty = true
-	if _bumping:
+	if _bump_anim >= 0.0 and is_instance_valid(player):
+		_bump_anim += delta
+		var out_t := WallFeedbackScript.OUT_SECONDS
+		var back_t := WallFeedbackScript.BACK_SECONDS
+		if _bump_anim >= out_t + back_t:
+			player.bump_offset = Vector2.ZERO
+			_bump_anim = -1.0
+			_bumping = false
+		elif _bump_anim <= out_t:
+			player.bump_offset = WallFeedbackScript.offset(_bump_anim_dir) * (_bump_anim / out_t)
+		else:
+			var back := (_bump_anim - out_t) / back_t
+			player.bump_offset = WallFeedbackScript.offset(_bump_anim_dir) * (1.0 - back)
+		dirty = true
+	elif _bumping:
 		dirty = true
 	if dirty:
 		_request_redraw()
@@ -1263,6 +1293,7 @@ func _draw_context() -> Dictionary:
 		"journey_objective": first_journey.objective() if first_journey else (mogao_journey.objective() if mogao_journey else ""),
 		"water_skin_line": first_journey.water_skin_hud() if first_journey else "",
 		"water_skin_filled": first_journey != null and first_journey.water_skin > 0,
+		"survey_ranges": first_journey.roadbook_ranges() if first_journey else [],
 		"first_journey": first_journey != null or mogao_journey != null,
 		"mogao_focus": mogao_journey != null and mogao_journey.encounter_focus(player.pos),
 		"gate_revealing": _gate_revealing(),

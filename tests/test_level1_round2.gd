@@ -1,6 +1,7 @@
 extends RefCounted
 
 const Branches = preload("res://scripts/journey_branches.gd")
+const MeasureText = preload("res://scripts/presentation/measure_text.gd")
 const MainScript = preload("res://scripts/main.gd")
 const WallFeedbackScript = preload("res://scripts/wall_feedback.gd")
 
@@ -18,6 +19,9 @@ static func run(t: Node) -> void:
 	_bump_rules(t)
 	_mobile(t)
 	_play(t)
+	_measures(t)
+	_clock(t)
+	_beacon_hint(t)
 	DataLoader.set_difficulty("normal")
 
 
@@ -175,6 +179,8 @@ static func _play(t: Node) -> void:
 	var blocked := _blocked_dirs(maze, main.player.pos)
 	t.assert_true(blocked.size() >= 2, "start cell has two walls")
 	main._try_move(blocked[0])
+	main._process(0.04)
+	t.assert_true(main.player.bump_offset.length() > 1.0, "a wall bump shifts the sprite by about 3px")
 	t.assert_eq(main.player.pos, Vector2i(0, 0), "wall bump does not move")
 	t.assert_eq(main.player.hp, 30, "wall bump does not cost hp")
 	t.assert_eq(main.move_count, 4, "wall bump does not count a step")
@@ -256,14 +262,186 @@ static func _skin(t: Node, main, journey: FirstJourney) -> void:
 	t.assert_eq(panel.water_skin_icon_key(), "water_skin_empty", "an empty skin uses waterskin_empty.png")
 	var empty := panel.water_skin_texture()
 	t.assert_eq(Vector2i(empty.get_width(), empty.get_height()), Vector2i(16, 16), "waterskin_empty.png is 16x16")
+	var empty_image := empty.get_image()
+	var tinted := 0
+	for py in empty_image.get_height():
+		for px in empty_image.get_width():
+			var pixel := empty_image.get_pixel(px, py)
+			if pixel.a > 0.4 and pixel.g < 0.95:
+				tinted += 1
+	t.assert_true(tinted > 8, "the empty waterskin is not a white square")
 	journey.water_skin = 1
 	t.assert_true(journey.discovery_line().contains("水囊没喝完，留给了妈妈。"), "settlement mentions a leftover skin")
+	_discovery_counts(t)
 	var paused := InputHandler.new()
 	var ctx := {"paused": true}
 	var held := InputEventKey.new()
 	held.pressed = true
 	held.keycode = KEY_H
 	t.assert_eq(paused.handle(held, ctx).type, GameAction.Type.NONE, "pause ignores H")
+
+
+static func _measures(t: Node) -> void:
+	var font: Font = load("res://assets/fonts/NotoSansSC-GameSubset.ttf")
+	var cases := [
+		["恢复 4 点体力，这眼泉水只能取用一次。", "4 点体力"],
+		["这次走了 226 步，沿古道回去。", "226 步"],
+		["用时 12 分 34 秒，这次走了 8 步。", "12 分"],
+		["喝下水囊：恢复 6 点体力", "6 点体力"],
+		["你攻击沙蝎造成 12 伤害", "12 伤害"],
+	]
+	for row in cases:
+		var sample: String = row[0]
+		var token: String = row[1]
+		var width := font.get_string_size(token, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 6.0
+		var wrapped := MeasureText.wrapped_text(MeasureText.bind_units(sample), width, font, 18)
+		t.assert_true(wrapped.contains("\n"), "narrow width wraps the sentence around %s" % token)
+		t.assert_true(not _break_follows_digit(wrapped), "a number is not followed by a line break in %s" % sample)
+
+
+static func _discovery_counts(t: Node) -> void:
+	var words := ["", "一", "两", "三", "四"]
+	for count in [1, 2, 3, 4]:
+		var journey := FirstJourney.new()
+		if count >= 1:
+			journey.mural_found = true
+		if count >= 2:
+			journey.beacon_found = true
+		if count >= 3:
+			journey.caravan_found = true
+		if count >= 4:
+			journey.stele_found = true
+		var line := journey.discovery_line()
+		var names := ["石窟壁画", "烽燧驼铃", "商队遗驼", "残碑留言"]
+		var listed := 0
+		for name in names:
+			if line.contains(name):
+				listed += 1
+		t.assert_eq(listed, count, "the discovery list has %d names" % count)
+		t.assert_true(line.contains("这%s片画" % words[count]), "finding %d things names that many pictures" % count)
+
+
+static func _plain(text: String) -> String:
+	return text.replace(MeasureText.WORD_JOINER, "").replace(MeasureText.NO_BREAK_SPACE, " ")
+
+
+static func _break_follows_digit(wrapped: String) -> bool:
+	var plain := wrapped.replace(MeasureText.WORD_JOINER, "")
+	var i := 0
+	while i < plain.length():
+		var code := plain.unicode_at(i)
+		if code >= 0x30 and code <= 0x39:
+			var j := i + 1
+			while j < plain.length():
+				var gap := plain.unicode_at(j)
+				if gap != 0x20 and gap != 0xA0 and gap != 0x2060:
+					break
+				j += 1
+			if j < plain.length() and plain.unicode_at(j) == 0x0A:
+				return true
+		i += 1
+	return false
+
+
+static func _clock(t: Node) -> void:
+	SaveManager.clear_save()
+	var main := MainScript.new()
+	t.add_child(main)
+	main.game.start_game()
+	main.level_elapsed = 0.0
+	main._process(2.0)
+	t.assert_true(main.level_elapsed >= 1.9 and main.level_elapsed <= 2.2, "level time counts while playing")
+	var stamped: float = main.level_elapsed
+	main.game.toggle_pause()
+	main._process(3.0)
+	t.assert_eq(main.level_elapsed, stamped, "pause does not count")
+	main.game.toggle_pause()
+	main.journey_card.visible = true
+	main._process(4.0)
+	t.assert_eq(main.level_elapsed, stamped, "a story card does not count")
+	main.journey_card.visible = false
+	main.route_notebook.visible = true
+	main._process(2.0)
+	t.assert_eq(main.level_elapsed, stamped, "the roadbook does not count")
+	main.route_notebook.visible = false
+	main._process(1.0)
+	t.assert_true(main.level_elapsed > stamped, "time resumes after the popup closes")
+	t.assert_eq(MeasureText.format_duration(12.0 * 60.0 + 34.0), "用时 12 分 34 秒", "duration reads as minutes and seconds")
+	main.move_count = 226
+	main.level_elapsed = 12.0 * 60.0 + 34.0
+	main.first_journey = FirstJourney.new()
+	main._on_level_completed()
+	var level_one := _plain(main.journey_card.body_label.text)
+	t.assert_true(level_one.contains("这次走了 226 步"), "level 1 settlement names the steps")
+	t.assert_true(level_one.contains("用时 12 分 34 秒"), "level 1 settlement names the time")
+	main.free()
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	chapter.level_elapsed = 0.0
+	chapter._process(1.5)
+	t.assert_true(chapter.level_elapsed >= 1.4, "cave time counts while playing")
+	var cave_stamp: float = chapter.level_elapsed
+	chapter.show_card("note", "记", "看一眼", "继续")
+	chapter._process(3.0)
+	t.assert_eq(chapter.level_elapsed, cave_stamp, "a cave card does not count")
+	chapter.close_card()
+	chapter._process(0.5)
+	t.assert_true(chapter.level_elapsed > cave_stamp, "cave time resumes")
+	chapter.level_elapsed = 75.0
+	chapter.model.moves = 18
+	chapter.model.room = 2
+	chapter.model.rescued = true
+	chapter.model.player = chapter.model.exit_cell
+	chapter.interact()
+	var level_two := _plain(chapter.card_body.text)
+	t.assert_true(level_two.contains("这次走了 18 步"), "level 2 settlement names the steps")
+	t.assert_true(level_two.contains("用时 1 分 15 秒"), "level 2 settlement names the time")
+	chapter.free()
+
+
+static func _beacon_hint(t: Node) -> void:
+	SaveManager.clear_save()
+	var main := MainScript.new()
+	t.add_child(main)
+	var maze := MazeGenerator.new(FirstJourney.SIZE.x, FirstJourney.SIZE.y)
+	var journey := FirstJourney.new()
+	journey.build(maze)
+	journey.map_seed = 7
+	main.maze = maze
+	main.first_journey = journey
+	main.game.start_game()
+	t.assert_true(journey.roadbook_ranges().is_empty(), "the minimap stays clear before the beacon")
+	t.assert_true(main._draw_context()["survey_ranges"].is_empty(), "the side map has no circles yet")
+	main.player.pos = FirstJourney.BEACON
+	main._mark_visited(FirstJourney.BEACON)
+	t.assert_true(not main.route_notebook.visible, "lighting the beacon does not open the roadbook")
+	t.assert_true(not main.journey_card.visible, "lighting the beacon does not open a card")
+	t.assert_eq(str(main.combat_log[main.combat_log.size() - 1]), JourneyBranches.BEACON_HINT, "the hint is the bottom line")
+	var book: Array = journey.roadbook_ranges()
+	var shown: Array = main._draw_context()["survey_ranges"]
+	t.assert_eq(shown.size(), 2, "both circles appear after the beacon")
+	for i in 2:
+		t.assert_eq(shown[i]["cell"], book[i]["cell"], "minimap and roadbook share the center")
+		t.assert_eq(str(shown[i]["kind"]), "area", "unfound marks are circles")
+		var rect := UIPanel.survey_circle_rect(shown[i]["cell"], float(shown[i]["radius"]), Vector2(40, 180), 5.0)
+		t.assert_eq(rect.size, Vector2(20, 20), "the circle keeps its full radius")
+	var maze_rect := Rect2(40, 180, 17 * 5, 13 * 5)
+	var edge := UIPanel.survey_circle_rect(Vector2i(0, 13), 2.0, maze_rect.position, 5.0)
+	t.assert_eq(edge.size, Vector2(20, 20), "an edge circle is not cropped")
+	t.assert_true(not maze_rect.encloses(edge), "the caravan circle may extend past the map bitmap")
+	journey.caravan_found = true
+	var found: Array = main._draw_context()["survey_ranges"]
+	t.assert_eq(str(found[0]["kind"]), "found", "finding the caravan turns its minimap mark into a point")
+	t.assert_eq(str(found[1]["kind"]), "area", "the stele circle remains")
+	main.player.pos = Vector2i(7, 11)
+	main._try_move(MazeGenerator.N)
+	t.assert_eq(str(main.combat_log[main.combat_log.size() - 1]), JourneyBranches.CLIFF_HINT, "the south cliff explains the way up")
+	var logs_before: int = main.combat_log.size()
+	main._bump_wall_at = -1.0
+	main._held_bump_key = ""
+	main._try_move(MazeGenerator.N)
+	t.assert_eq(main.combat_log.size(), logs_before, "the cliff hint does not repeat")
+	main.free()
 
 
 static func _blocked_dirs(maze: MazeGenerator, pos: Vector2i) -> Array[int]:

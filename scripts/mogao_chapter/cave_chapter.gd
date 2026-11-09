@@ -1,5 +1,7 @@
 class_name MogaoChapter
 extends Control
+
+const MeasureText = preload("res://scripts/presentation/measure_text.gd")
 ## Self-contained second chapter: route-making, pressure, then light and observation.
 signal menu_requested
 signal completed
@@ -33,6 +35,7 @@ var pause_button: Button
 var arrows: Array[Button] = []
 var cranks: Array[Button] = []
 var overlay: ColorRect
+var level_elapsed := 0.0
 var panel: PanelContainer
 var card_title: Label
 var card_body: Label
@@ -283,7 +286,7 @@ func turn(index: int = -1) -> void:
 func interact() -> void:
 	if stopped or mode != "playing" or not model.busy.is_empty(): return
 	if model.room == 2 and model.rescued and model.player == model.exit_cell:
-		show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。", "前往三危山", "再看看洞窟")
+		show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n这次走了 %d 步\n%s\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。" % [model.moves, MeasureText.format_duration(level_elapsed)], "前往三危山", "再看看洞窟")
 	elif model.travel():
 		rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
 		rebuild_cranks(); layout(); refresh(); AudioManager.play_level_start()
@@ -330,7 +333,7 @@ func show_card(next_mode: String, title: String, body: String, first: String, se
 	# A popup invalidates the step that was waiting for the animation to finish.
 	move_buffer.clear()
 	input_handler.held.set_blocked(true)
-	card_title.text = title; card_body.text = body
+	card_title.text = MeasureText.bind_units(title); card_body.text = MeasureText.bind_units(body)
 	primary.text = first; secondary.text = second; tertiary.text = third
 	secondary.visible = not second.is_empty(); tertiary.visible = not third.is_empty()
 	card_scroll.scroll_vertical = 0; overlay.show(); layout(); refresh()
@@ -424,10 +427,16 @@ func _collect_step_repeat(delta: float) -> void:
 		input_handler.held.set_blocked(true)
 		return
 	input_handler.held.set_blocked(false)
-	if model.busy != "step":
-		return
-	for direction in input_handler.held.pull(delta):
-		move_buffer.remember(int(direction))
+	var repeats := input_handler.held.pull(delta)
+	for direction in repeats:
+		if model.busy == "step":
+			model.advance(1000.0)
+		if model.busy.is_empty():
+			move(_direction_vector(int(direction)))
+		else:
+			move_buffer.remember(int(direction))
+	if repeats.is_empty():
+		model.advance(delta)
 
 
 func _settle_buffered_step(previous: String) -> void:
@@ -438,15 +447,19 @@ func _settle_buffered_step(previous: String) -> void:
 	if previous != "step" or not model.busy.is_empty():
 		return
 	var direction := int(move_buffer.take())
-	if direction < 0:
-		direction = int(input_handler.held.current())
 	if direction >= 0:
 		move(_direction_vector(direction))
 
 var mirror_stuck := 0.0
-var mirror_anchor := ""
+var mirror_coverage := -1
 var mirror_note := ""
 var mirror_note_time := 0.0
+
+
+func _beam_coverage(traced: Dictionary) -> int:
+	var cells: Array = traced.get("cells", [])
+	var mirrors: Array = traced.get("mirrors", [])
+	return cells.size() * 8 + mirrors.size()
 
 
 func _beside_fixed_mirror() -> bool:
@@ -463,16 +476,20 @@ func _tick_mirror_feedback(delta: float) -> void:
 		return
 	if model.back_flash > 0.0:
 		model.back_flash = maxf(0.0, model.back_flash - delta)
-	if model.paused or not model.busy.is_empty():
+	if model.paused:
+		return
+	if not model.busy.is_empty():
+		if not model.lotus_lit():
+			mirror_stuck += delta
 		return
 	var traced: Dictionary = MirrorBeam.trace(model.mirror_cfg(), 0, Vector2i(-999, -999))
-	var mark := "%s|%s" % [traced.get("stop_cell", Vector2i.ZERO), traced.get("stop_kind", "")]
-	if mark != mirror_anchor:
-		var kind := str(traced.get("stop_kind", ""))
-		mirror_anchor = mark
+	var coverage := _beam_coverage(traced)
+	var kind := str(traced.get("stop_kind", ""))
+	if coverage > mirror_coverage:
+		mirror_coverage = coverage
 		mirror_stuck = 0.0
 		if kind == "back" or kind == "reverse":
-			model.back_flash = 0.25
+			model.back_flash = 0.45
 			model.back_flash_cell = traced.get("stop_cell", Vector2i(-1, -1))
 			AudioManager.play_mirror_back()
 			mirror_note = "光停在镜背上了" if kind == "back" else "光逆着红箭头，折不过去"
@@ -482,10 +499,8 @@ func _tick_mirror_feedback(delta: float) -> void:
 		else:
 			mirror_note = "光又往前走了一段"
 			mirror_note_time = 2.0
-		return
-	if model.lotus_lit():
-		return
-	mirror_stuck += delta
+	elif not model.lotus_lit():
+		mirror_stuck += delta
 	if mirror_note_time > 0.0:
 		mirror_note_time = maxf(0.0, mirror_note_time - delta)
 		if mirror_note_time == 0.0:
@@ -500,13 +515,14 @@ func _tick_mirror_feedback(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	if stopped: return
+	if mode == "playing" and not model.paused and not overlay.visible:
+		level_elapsed += delta
 	frame += 1
 	_tick_mirror_feedback(delta)
-	_collect_step_repeat(delta)
 	var previous := model.busy
 	var was_lit := model.lit()
 	var previous_deer := model.deer_time
-	model.advance(delta)
+	_collect_step_repeat(delta)
 	if previous != model.busy:
 		if model.rescued and not rescued_presented:
 			rescued_presented = true

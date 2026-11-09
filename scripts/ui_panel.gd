@@ -1,6 +1,10 @@
 class_name UIPanel
 extends RefCounted
 
+const MeasureText = preload("res://scripts/presentation/measure_text.gd")
+
+const HUD_FONT = preload("res://assets/fonts/NotoSansSC-GameSubset.ttf")
+
 var panel_bg := Color(0.12, 0.10, 0.08)
 var text_primary := Color(0.9, 0.85, 0.75)
 var text_secondary := Color(0.65, 0.6, 0.52)
@@ -14,6 +18,8 @@ var heart_bar := HeartBar.new()
 var journey_objective := ""
 var water_skin_line := ""
 var water_skin_filled := true
+var survey_ranges: Array = []
+var _skin_textures: Dictionary = {}
 
 func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		player, maze, maze_w: int, maze_h: int, exit_pos: Vector2i,
@@ -126,7 +132,8 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 		var dot_color := Color(0.3, 0.85, 0.45) if it.item_type == "key" else Color(0.95, 0.85, 0.25)
 		var dp := Vector2(mx + it.pos.x * cell_px, y + it.pos.y * cell_px)
 		owner.draw_rect(Rect2(dp + Vector2(0.5, 0.5), Vector2(cell_px - 1, cell_px - 1)), dot_color)
-	y += mh + 12.0 * s
+	var survey_bottom := _draw_survey_ranges(owner, Vector2(mx, y), float(cell_px))
+	y = maxf(y + mh, survey_bottom) + 12.0 * s
 
 	if guide_dir >= 0:
 		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
@@ -137,15 +144,15 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 	y = _draw_inventory(owner, lx, y, panel_w - pad * 2.0, inventory, selected_slot, s)
 	if water_skin_line != "":
 		var icon_px := 32.0 * s
-		y += 6.0 * s
+		var row_top := y + 10.0 * s
 		var icon := water_skin_texture()
 		var text_x := lx
 		if icon != null:
-			owner.draw_texture_rect(icon, Rect2(lx, y, icon_px, icon_px), false)
+			owner.draw_texture_rect(icon, Rect2(lx, row_top, icon_px, icon_px), false)
 			text_x += icon_px + 8.0 * s
-		owner.draw_string(ThemeDB.fallback_font, Vector2(text_x, y + icon_px * 0.72),
+		owner.draw_string(ThemeDB.fallback_font, Vector2(text_x, row_top + icon_px * 0.72),
 			water_skin_line, HORIZONTAL_ALIGNMENT_LEFT, int(panel_w - pad * 2.0 - (text_x - lx)), small_fs, Color("d7e4c4"))
-		y += icon_px + 8.0 * s
+		y = row_top + icon_px + line_h
 
 	# Optional legends share columns; reserve room for controls and live messages.
 	var legend_h := (maxi(DataLoader.terrain_data.size(), DataLoader.monster_data.size()) + 2) * line_h
@@ -197,7 +204,7 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 			if y > vp_h - 20:
 				break
 			owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
-				combat_log[i], HORIZONTAL_ALIGNMENT_LEFT, int(panel_w - pad * 2.0), tiny_fs, Color(0.8, 0.75, 0.66))
+				MeasureText.bind_units(str(combat_log[i])), HORIZONTAL_ALIGNMENT_LEFT, int(panel_w - pad * 2.0), tiny_fs, Color(0.8, 0.75, 0.66))
 
 func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: Inventory, selected_slot: int, scale: float = 1.0) -> float:
 	var label_fs := int(round(16.0 * scale))
@@ -235,15 +242,62 @@ func _draw_inventory(owner: Node2D, lx: float, y: float, w: float, inventory: In
 	y += 8
 	return y
 
+static func survey_circle_rect(cell: Vector2i, radius: float, origin: Vector2, cell_px: float) -> Rect2:
+	var center := origin + (Vector2(cell) + Vector2(0.5, 0.5)) * cell_px
+	var rad := radius * cell_px
+	return Rect2(center - Vector2(rad, rad), Vector2(rad, rad) * 2.0)
+
+
+func _draw_survey_ranges(owner: Node2D, origin: Vector2, cell_px: float) -> float:
+	var lowest := origin.y
+	for area in survey_ranges:
+		var cell: Vector2i = area["cell"]
+		var kind := str(area.get("kind", "area"))
+		var center := origin + (Vector2(cell) + Vector2(0.5, 0.5)) * cell_px
+		var label := str(area.get("label", ""))
+		if kind == "found":
+			var dot := maxf(2.0, cell_px * 0.55)
+			owner.draw_circle(center, dot, Color("8fd0c8"))
+			owner.draw_string(HUD_FONT, center + Vector2(dot + 1.0, 4.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("f4e2c4"))
+			lowest = maxf(lowest, center.y + 8.0)
+			continue
+		var radius := float(area.get("radius", 2.0)) * cell_px
+		var pts := PackedVector2Array()
+		for i in 24:
+			var angle := TAU * float(i) / 24.0
+			pts.append(center + Vector2(cos(angle), sin(angle)) * radius)
+		owner.draw_colored_polygon(pts, Color(0.93, 0.78, 0.48, 0.20))
+		pts.append(pts[0])
+		owner.draw_polyline(pts, Color(0.93, 0.78, 0.48, 0.9), 1.5, true)
+		owner.draw_string(HUD_FONT, center + Vector2(-6.0, 4.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("f4e2c4"))
+		lowest = maxf(lowest, center.y + radius)
+	return lowest
+
+
 func water_skin_icon_key() -> String:
 	return "water_skin" if water_skin_filled else "water_skin_empty"
 
 
-func water_skin_texture() -> Texture2D:
-	var path := AssetRegistry.extra_item_path(water_skin_icon_key())
+func prepare_water_skin(filled: bool) -> void:
+	water_skin_filled = filled
+	var key := water_skin_icon_key()
+	if _skin_textures.has(key):
+		return
+	var path := AssetRegistry.extra_item_path(key)
 	if path.is_empty() or not ResourceLoader.exists(path):
-		return null
-	return load(path)
+		return
+	var loaded = load(path)
+	if loaded == null:
+		return
+	var image: Image = loaded.get_image()
+	if image == null:
+		return
+	_skin_textures[key] = ImageTexture.create_from_image(image)
+
+
+func water_skin_texture() -> Texture2D:
+	prepare_water_skin(water_skin_filled)
+	return _skin_textures.get(water_skin_icon_key())
 
 
 func get_inventory_slot_at(global_pos: Vector2) -> int:
@@ -262,6 +316,8 @@ func _dir_label(dir: int) -> String:
 	return "?"
 
 func draw_overlay(owner: Node2D, vp: Vector2, title: String, sub: String, hint: String, title_color: Color) -> void:
+	sub = MeasureText.bind_units(sub)
+	hint = MeasureText.bind_units(hint)
 	owner.draw_rect(Rect2(0, 0, vp.x, vp.y), Color(0, 0, 0, 0.6))
 	owner.draw_rect(Rect2(vp.x / 2 - 180, vp.y / 2 - 60, 360, 120), Color(0.1, 0.08, 0.06, 0.9))
 	owner.draw_string(ThemeDB.fallback_font, Vector2(vp.x / 2 - 70, vp.y / 2 - 20),

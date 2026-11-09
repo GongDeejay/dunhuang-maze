@@ -41,11 +41,12 @@ func _process(_delta: float) -> void:
 		return
 	for mirror in CaveModel.MIRROR_DEFS:
 		var sprite: Sprite2D = mirror_sprites[mirror["id"]]
-		var dim := 1.0
+		var tint := Color(1, 1, 1, 1)
 		if host.model.back_flash > 0.0 and host.model.back_flash_cell == mirror["cell"]:
-			dim = 0.5
+			var blink := 0.5 + 0.5 * absf(sin(host.model.back_flash * 28.0))
+			tint = Color(1.0, 0.96, 0.72).lerp(Color(1.55, 1.35, 0.7), blink)
 		_place(sprite, mirror["cell"], Painter.mirror_texture(host.model.mirror_rot_of(mirror["id"]), _struck(mirror["cell"])))
-		sprite.modulate = Color(dim, dim, dim, 1)
+		sprite.modulate = tint
 	_place(lotus, CaveModel.MIRROR_LOTUS, Painter.lotus_texture(host.model.lotus_lit()))
 	queue_redraw()
 	preview_layer.queue_redraw()

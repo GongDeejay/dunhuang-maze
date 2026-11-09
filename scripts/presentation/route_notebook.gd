@@ -1,5 +1,7 @@
 class_name RouteNotebook
 extends CanvasLayer
+
+const MeasureText = preload("res://scripts/presentation/measure_text.gd")
 signal dismissed
 signal traced
 var panel: PanelContainer
@@ -71,7 +73,7 @@ func open(points: Array[Vector2i], studied: bool) -> void:
 	sketch.points = points
 	sketch.studied = studied
 	sketch.gate_button.text = "石门 ✓" if studied else "石门 ◇"
-	copy.text = TravelLore.text("roadbook", "reveal" if studied else "prompt")
+	copy.text = MeasureText.bind_units(TravelLore.text("roadbook", "reveal" if studied else "prompt"))
 	visible = true
 	consumed = epoch
 	scroll.scroll_vertical = 0

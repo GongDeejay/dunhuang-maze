@@ -1,5 +1,7 @@
 class_name ThirdHUD
 extends Control
+
+const MeasureText = preload("res://scripts/presentation/measure_text.gd")
 ## Full-resolution UI stays separate from the reduced-resolution 3D viewport.
 signal action(name: String)
 var title: Label
@@ -152,8 +154,8 @@ func ui_hit(pos: Vector2) -> bool:
 	return overlay.visible
 
 func show_card(card_title: String, text: String, first: String, second: String = "", with_photo: bool = false, settings: bool = false) -> void:
-	heading.text = card_title
-	copy.text = text
+	heading.text = MeasureText.bind_units(card_title)
+	copy.text = MeasureText.bind_units(text)
 	primary.text = first
 	secondary.text = second
 	secondary.visible = not second.is_empty()

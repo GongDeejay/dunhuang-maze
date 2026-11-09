@@ -677,7 +677,7 @@ func test_web_font_payload():
 				_collect_json_chars(parsed, game_chars)
 	_collect_string_chars(FileAccess.get_file_as_string("res://project.godot"), game_chars)
 	var seen := ""
-	var watch := "卒压囊己座残烽燧登碑言铃队驼龛遗壁画"
+	var watch := "卒压囊座残烽燧登碑言铃队驼龛遗壁画"
 	for i in watch.length():
 		var watch_code: int = watch.unicode_at(i)
 		if not game_chars.has(watch_code):
@@ -697,7 +697,7 @@ func test_web_font_payload():
 			saw_mirror_script = true
 		_collect_string_chars(FileAccess.get_file_as_string(file), mogao_chars)
 	assert_true(saw_mirror_script, "chapter 2 glyph scan includes mirror_*.gd")
-	var mogao_watch := "镜洞窟灯折光还要转"
+	var mogao_watch := "镜洞窟灯折光还要转这面镜"
 	var mogao_missed := ""
 	for i in mogao_watch.length():
 		var mogao_code: int = mogao_watch.unicode_at(i)
@@ -705,6 +705,20 @@ func test_web_font_payload():
 			mogao_missed += char(mogao_code)
 	assert_true(mogao_missed.is_empty(), "chapter 2 scan missed glyphs: %s" % mogao_missed)
 	_assert_font_covers(mogao_font, mogao_chars, "mogao subset")
+	var beacon_line := "烽燧照见远处：小地图上圈出了驼队与残碑"
+	var cliff_line := "崖坎太陡，绕到东边上去"
+	var beacon_missed := ""
+	for i in beacon_line.length():
+		var beacon_code: int = beacon_line.unicode_at(i)
+		if not game_chars.has(beacon_code) or not game_font.has_char(beacon_code):
+			beacon_missed += char(beacon_code)
+	assert_true(beacon_missed.is_empty(), "beacon hint is covered by the game subset: %s" % beacon_missed)
+	var cliff_missed := ""
+	for i in cliff_line.length():
+		var cliff_code: int = cliff_line.unicode_at(i)
+		if not game_chars.has(cliff_code) or not game_font.has_char(cliff_code):
+			cliff_missed += char(cliff_code)
+	assert_true(cliff_missed.is_empty(), "cliff hint is covered by the game subset: %s" % cliff_missed)
 	var third_watch := "三危山弟弟"
 	var third_missed := ""
 	for i in third_watch.length():

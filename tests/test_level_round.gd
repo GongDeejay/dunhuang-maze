@@ -154,7 +154,8 @@ static func _rewards(t: Node) -> void:
 	host.free()
 	var player := _player()
 	var beacon := journey.enter(FirstJourney.BEACON, maze, player)
-	t.assert_true(beacon.get("body", "").contains("妈妈的驼铃"), "beacon gives mother's bell")
+	t.assert_eq(str(beacon.get("kind", "")), "hint", "beacon does not open a card")
+	t.assert_eq(str(beacon.get("body", "")), JourneyBranches.BEACON_HINT, "beacon hint names the roadbook and minimap")
 	t.assert_eq(player.reveal_bonus, 1, "beacon grants one vision")
 	t.assert_eq(journey.silhouette_time, FirstJourney.SILHOUETTE_SECONDS, "silhouette lasts three seconds")
 	t.assert_true(bool(maze.landmarks[FirstJourney.FAMILY].get("silhouette", false)), "family silhouette is armed")
@@ -261,6 +262,15 @@ static func _mirror_room(t: Node) -> void:
 	t.assert_eq(str(previews[0]["id"]), "T", "preview belongs to the teaching mirror")
 	t.assert_eq(int(previews[0]["k"]), CaveModel.turns_from_start("T"), "the teaching preview counts the remaining turns")
 	t.assert_eq(previews[0]["from"], _def_cell("T"), "the preview label follows the teaching mirror")
+	var struck: Dictionary = Painter.struck_turn(solved)
+	t.assert_true(struck.get("ok", false), "the lit mirror carries the turn count")
+	t.assert_eq(struck["from"], _def_cell("T"), "the opening label sits on teaching mirror T")
+	t.assert_eq("这面镜还要转%d下" % int(struck["k"]), "这面镜还要转%d下" % CaveModel.turns_from_start("T"), "the label names the remaining turns")
+	solved.mirror_rots["T"] = _def_rot("T", "solution_rot")
+	var next_struck: Dictionary = Painter.struck_turn(solved)
+	t.assert_eq(next_struck.get("from", Vector2i.ZERO), _def_cell("A"), "the label moves when the light reaches A")
+	solved.mirror_rots["T"] = _def_rot("T", "start_rot")
+	_mirror_stall(t)
 	_preview_label_clears_mirror(t, previews[0])
 	t.assert_eq(blocked.player, CaveModel.MIRROR_ENTRY, "the mirror cave starts on the entry cell")
 	t.assert_eq(CaveModel.MIRROR_ENTRY, Vector2i(4, 8), "entry moved one cell right of the door")
@@ -336,6 +346,26 @@ static func _preview_label_clears_mirror(t: Node, seg: Dictionary) -> void:
 		var incoming := mirror + Vector2(-180, 0)
 		t.assert_true(not Painter.segment_hits_rect(incoming, mirror, label.grow(stroke)), "turn count stays off the incoming beam at unit %s" % unit)
 		t.assert_true(label.get_center().distance_to(mirror) < label.get_center().distance_to(far), "turn count sits by the lit mirror")
+
+
+static func _mirror_stall(t: Node) -> void:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	chapter.model.load_room(CaveModel.MIRROR_ROOM)
+	chapter._tick_mirror_feedback(0.01)
+	chapter.model.mirror_rots["B"] = 0
+	chapter._tick_mirror_feedback(40.0)
+	t.assert_eq(chapter.hint.text, "铜镜背面不照光。", "spinning a mirror the light has not reached still reaches 40 seconds")
+	chapter.model.mirror_rots["B"] = 2
+	chapter._tick_mirror_feedback(40.0)
+	t.assert_eq(chapter.hint.text, "光只会顺着红箭头拐出去。", "spinning without progress still reaches 80 seconds")
+	var stuck: float = chapter.mirror_stuck
+	chapter.model.mirror_rots["T"] = _def_rot("T", "solution_rot")
+	chapter._tick_mirror_feedback(0.05)
+	t.assert_true(chapter.mirror_stuck < stuck, "the light moving farther resets the stall timer")
+	t.assert_true(chapter.model.back_flash > 0.0, "the newly lit mirror flashes")
+	t.assert_eq(chapter.model.back_flash_cell, _def_cell("A"), "the flash follows the mirror the light now hits")
+	chapter.free()
 
 
 static func _turn_times(t: Node, model: CaveNetwork, id: String) -> void:

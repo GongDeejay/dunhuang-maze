@@ -1,5 +1,7 @@
 class_name JourneyCard
 extends CanvasLayer
+
+const MeasureText = preload("res://scripts/presentation/measure_text.gd")
 ## Readable, dismissible story beats. Main suspends gameplay while this is open.
 
 signal dismissed
@@ -83,8 +85,8 @@ func _ready() -> void:
 
 func open_card(card: Dictionary) -> void:
 	if card.is_empty(): return
-	title_label.text = card.title
-	body_label.text = card.body
+	title_label.text = MeasureText.bind_units(str(card.title))
+	body_label.text = MeasureText.bind_units(str(card.body))
 	continue_button.text = card.get("button", "继续")
 	_apply_art(card)
 	visible = true

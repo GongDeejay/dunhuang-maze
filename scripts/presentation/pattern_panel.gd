@@ -1,6 +1,8 @@
 class_name PatternPanel
 extends CanvasLayer
 
+const MeasureText = preload("res://scripts/presentation/measure_text.gd")
+
 signal dismissed
 signal unlocked
 var puzzle: PatternPuzzle
@@ -190,7 +192,7 @@ func _layout() -> void:
 	for button in [same, different]: button.custom_minimum_size.y = 164
 
 func _render() -> void:
-	message.text = puzzle.message
+	message.text = MeasureText.bind_units(puzzle.message)
 	answers.visible = puzzle.phase == "inspect"
 	leave.text = "返回栈道" if puzzle.completed() else "先离开 · 也能绕路"
 	reference_label.text = "已揭秘 · 近路已经打开" if puzzle.completed() else RabbitLore.text("reference_label")

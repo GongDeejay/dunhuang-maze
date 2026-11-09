@@ -29,12 +29,7 @@ static func draw_previews(canvas: CanvasItem, host) -> void:
 		var finish: Vector2 = host.point(seg["to"])
 		var width := maxf(3.0, host.unit * 0.06)
 		_draw_dashed(canvas, start, finish, Color(0.98, 0.86, 0.45, 0.8), width)
-		var text := "还要转%d下" % int(seg["k"])
-		var font_size := 16
-		var text_size := MogaoChapter.FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-		var label := preview_label_rect(origin, dir, host.unit, text_size)
-		var baseline := label.position.y + MogaoChapter.FONT.get_ascent(font_size)
-		canvas.draw_string(MogaoChapter.FONT, Vector2(label.position.x, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color("f5dba8"))
+	_draw_turn_label(canvas, host)
 
 
 static func mirror_texture(rot: int, lit: bool) -> Texture2D:
@@ -49,6 +44,46 @@ static func draw_direction_mark(_canvas: CanvasItem, _center: Vector2, _rot: int
 	# Reserved for a future code-drawn exit arrow. The PNG already shows one.
 	if DRAW_CODE_ARROW:
 		pass
+
+
+static func struck_turn(model) -> Dictionary:
+	var empty := {"ok": false}
+	if model.room != CaveModel.MIRROR_ROOM:
+		return empty
+	var traced: Dictionary = Beam.trace(model.mirror_cfg(), 0, Vector2i(-999, -999))
+	if str(traced.get("stop_kind", "")) not in ["back", "reverse"]:
+		return empty
+	var stop: Vector2i = traced.get("stop_cell", Vector2i(-1, -1))
+	for mirror in CaveModel.MIRROR_DEFS:
+		if mirror["cell"] != stop or not bool(mirror["rotatable"]):
+			continue
+		var spec: Dictionary = mirror.duplicate(true)
+		spec["rot"] = model.mirror_rot_of(str(mirror["id"]))
+		spec["show_preview"] = true
+		return Beam.preview_for(model.mirror_cfg(), spec)
+	return empty
+
+
+static func snug_label_rect(mirror: Vector2, unit: float, text_size: Vector2, blocked: Array) -> Rect2:
+	var sprite := mirror_sprite_rect(mirror, unit)
+	var gap := maxf(3.0, unit * 0.08)
+	var options: Array[Rect2] = [
+		Rect2(Vector2(sprite.end.x + gap, sprite.get_center().y - text_size.y * 0.5), text_size),
+		Rect2(Vector2(sprite.position.x - gap - text_size.x, sprite.get_center().y - text_size.y * 0.5), text_size),
+		Rect2(Vector2(sprite.get_center().x - text_size.x * 0.5, sprite.position.y - gap - text_size.y), text_size),
+		Rect2(Vector2(sprite.get_center().x - text_size.x * 0.5, sprite.end.y + gap), text_size),
+	]
+	for rect in options:
+		if rect.intersects(sprite):
+			continue
+		var clear := true
+		for area in blocked:
+			if rect.intersects(area):
+				clear = false
+				break
+		if clear:
+			return rect
+	return options[0]
 
 
 static func mirror_sprite_rect(mirror: Vector2, unit: float) -> Rect2:
@@ -75,6 +110,24 @@ static func segment_hits_rect(a: Vector2, b: Vector2, rect: Rect2) -> bool:
 		if Geometry2D.segment_intersects_segment(a, b, corners[i], corners[(i + 1) % 4]) != null:
 			return true
 	return false
+
+
+static func _draw_turn_label(canvas: CanvasItem, host) -> void:
+	var info: Dictionary = struck_turn(host.model)
+	if not info.get("ok", false):
+		return
+	var text := "这面镜还要转%d下" % int(info["k"])
+	var font_size := 16
+	var text_size := MogaoChapter.FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	var mirror: Vector2 = host.point(info["from"])
+	var unit: float = host.unit
+	var blocked: Array = [
+		Rect2(host.point(CaveModel.MIRROR_LAMP) - Vector2(unit, unit * 1.1), Vector2(unit * 2.0, unit * 2.0)),
+		Rect2(host.point(CaveModel.MIRROR_LOTUS) - Vector2(unit * 0.8, unit * 0.9), Vector2(unit * 1.6, unit * 1.8)),
+	]
+	var label := snug_label_rect(mirror, unit, text_size, blocked)
+	var baseline := label.position.y + MogaoChapter.FONT.get_ascent(font_size)
+	canvas.draw_string(MogaoChapter.FONT, Vector2(label.position.x, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color("f5dba8"))
 
 
 static func _draw_beam(canvas: CanvasItem, host, cells: Array) -> void:

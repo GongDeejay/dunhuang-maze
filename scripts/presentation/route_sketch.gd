@@ -70,10 +70,13 @@ func _draw_ranges() -> void:
 		for i in 28:
 			var angle := TAU * float(i) / 28.0
 			pts.append(center + Vector2(cos(angle) * rx, sin(angle) * ry))
-		draw_colored_polygon(pts, Color(0.62, 0.38, 0.18, 0.34))
+		draw_colored_polygon(pts, Color(0.72, 0.55, 0.28, 0.16))
 		pts.append(pts[0])
-		draw_polyline(pts, Color("6b3d22"), 2.0, true)
-		draw_string(LABEL_FONT, center + Vector2(-rx * 0.55, 5), str(area["label"]), HORIZONTAL_ALIGNMENT_LEFT, int(rx * 1.4), 15, Color("493b2b"))
+		draw_polyline(pts, Color(0.45, 0.28, 0.12, 0.9), 2.0, true)
+		var label_at := center + Vector2(-rx * 0.35, 5)
+		if str(area["label"]) == "碑":
+			label_at = center + Vector2(rx + 6.0, 4.0)
+		draw_string(LABEL_FONT, label_at, str(area["label"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("493b2b"))
 
 
 func _paper() -> StyleBoxFlat:

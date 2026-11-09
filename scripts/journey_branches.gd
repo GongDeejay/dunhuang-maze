@@ -6,6 +6,9 @@ extends RefCounted
 const PULSE_BASE := 0.84
 const PULSE_AMP := 0.12
 const PULSE_PERIOD := 1.7
+const BEACON_HINT := "烽燧照见远处：小地图上圈出了驼队与残碑"
+const CLIFF_HINT := "崖坎太陡，绕到东边上去"
+const COUNT_WORDS: PackedStringArray = ["", "一", "两", "三", "四"]
 
 
 static func carve(journey, maze: MazeGenerator) -> void:
@@ -113,8 +116,8 @@ static func discovery_line(journey) -> String:
 			skipped.append("残碑")
 		if not skipped.is_empty():
 			line += "没走到的" + "、".join(skipped) + "，可以留待下次。"
-	if journey.fragments.size() >= int(journey.FRAGMENTS_TOTAL):
-		line += "\n妈妈说：这三片画，就是我一路走来的样子。"
+	if found.size() >= 1 and found.size() < COUNT_WORDS.size():
+		line += "\n妈妈说：这%s片画，就是我一路走来的样子。" % COUNT_WORDS[found.size()]
 	if journey.caravan_found and int(journey.water_skin) > 0:
 		line += "\n水囊没喝完，留给了妈妈。"
 	return line
@@ -132,14 +135,8 @@ static func _beacon(journey, maze: MazeGenerator, player: PlayerController) -> D
 	maze.landmarks[journey.FAMILY] = mark
 	if maze.landmarks.has(journey.BEACON):
 		maze.landmarks[journey.BEACON]["lit"] = true
-	var gained := grant_vision(journey, player, int(journey.BEACON_REVEAL))
-	var vision := "本关视野 +%d。" % gained if gained > 0 else "视野已经不能再提高了。"
-	return {
-		"title": "烽燧望台",
-		"body": "这是妈妈的驼铃。登台远望，她的方向会亮起剪影，路线仍要自己走。\n" + vision,
-		"button": "望向妈妈的方向",
-		"image": AssetRegistry.extra_item_path("bell"),
-	}
+	grant_vision(journey, player, int(journey.BEACON_REVEAL))
+	return {"body": BEACON_HINT, "kind": "hint"}
 
 
 static func _caravan(journey, maze: MazeGenerator, _player: PlayerController) -> Dictionary:

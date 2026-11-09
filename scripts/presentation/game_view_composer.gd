@@ -1,5 +1,7 @@
 class_name GameViewComposer
 extends RefCounted
+
+const MeasureText = preload("res://scripts/presentation/measure_text.gd")
 ## 统一游戏画面绘制：布局 → HUD + Follow/Fit 地图
 
 var maze_renderer: MazeRenderer
@@ -49,6 +51,7 @@ func draw(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -> void:
 func _draw_desktop(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -> void:
 	ui_panel.water_skin_line = str(ctx.get("water_skin_line", ""))
 	ui_panel.water_skin_filled = bool(ctx.get("water_skin_filled", false))
+	ui_panel.survey_ranges = ctx.get("survey_ranges", [])
 	maze_renderer.draw_pc_view(
 		canvas, layout.maze_rect, layout.hud_rect, layout.ui_scale,
 		ctx.maze, ctx.maze_width, ctx.maze_height,
@@ -123,7 +126,7 @@ func _draw_dynamic(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -
 
 func _draw_log_strip(canvas: CanvasItem, rect: Rect2, combat_log: Array, ui_scale: float = 1.0) -> void:
 	canvas.draw_rect(rect, Color(0.08, 0.07, 0.06, 0.92))
-	var msg: String = combat_log[combat_log.size() - 1]
+	var msg := MeasureText.bind_units(str(combat_log[combat_log.size() - 1]))
 	var density := clampf(rect.size.x / 390.0, 1.0, 2.0)
 	var fs := int(clampf(rect.size.y * 0.30, 16.0 * density, 20.0 * density))
 	canvas.draw_multiline_string(ThemeDB.fallback_font, rect.position + Vector2(12.0 * density, fs + 6.0 * density),

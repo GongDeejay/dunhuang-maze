@@ -16,6 +16,9 @@ static func run(t: Node) -> void:
 	_test_cave_buffer(t)
 	_test_hazard_hold_stop(t)
 	_test_wall_hold_bumps_once(t)
+	_test_one_second_hold(t)
+	_test_wall_cooldown_does_not_stall_hold(t)
+	_test_cave_one_second_hold(t)
 
 
 static func _test_hold_rhythm(t: Node) -> void:
@@ -264,10 +267,9 @@ static func _test_cave_buffer(t: Node) -> void:
 	_cave(chapter, KEY_LEFT, true, false)
 	t.assert_eq(chapter.model.busy, "step", "cave press starts one step immediately")
 	chapter._process(0.14)
-	t.assert_eq(chapter.model.moves, 0, "cave animation still lasts the full step")
-	chapter._process(CaveModel.STEP_SECONDS)
+	t.assert_eq(chapter.model.moves, 1, "a held cave step keeps the 0.14 second rhythm")
 	t.assert_eq(chapter.model.player, Vector2i(2, 6), "held cave key finishes the first step")
-	t.assert_eq(chapter.model.busy, "step", "held cave key queues exactly one more step")
+	t.assert_eq(chapter.model.busy, "step", "held cave key starts the next step")
 	t.assert_eq(chapter.model.destination, Vector2i(1, 6), "the queued cave step continues in the held direction")
 	for echo in range(3):
 		_cave(chapter, KEY_LEFT, true, true)
@@ -425,6 +427,75 @@ static func _terrain_row(kinds: Array) -> MazeGenerator:
 			maze.grid[0][x] |= MazeGenerator.E
 			maze.grid[0][x + 1] |= MazeGenerator.W
 	return maze
+
+
+static func _test_one_second_hold(t: Node) -> void:
+	for trial in 5:
+		var controller = _maze(t)
+		controller.player.pos = Vector2i(0, 2)
+		_press(controller, KEY_D, true)
+		var elapsed := 0.0
+		while elapsed < 1.0 - 0.0001:
+			if int(elapsed * 20.0) % 4 == 0:
+				_key(controller, KEY_D, true, false)
+			controller._process(0.05)
+			elapsed += 0.05
+		var walked: int = controller.player.pos.x
+		print("HOLD level1 trial %d cells %d" % [trial + 1, walked])
+		t.assert_true(walked >= 7 and walked <= 8, "level 1 trial %d holds 1s for 7-8 cells, got %d" % [trial + 1, walked])
+		_release(controller)
+		controller.free()
+
+
+static func _test_wall_cooldown_does_not_stall_hold(t: Node) -> void:
+	var controller = _maze(t)
+	controller.player.pos = Vector2i(0, 0)
+	_press(controller, KEY_W, true)
+	t.assert_true(controller.wall_bumps >= 1, "the north wall records a bump")
+	_release(controller)
+	controller.player.pos = Vector2i(0, 2)
+	_press(controller, KEY_D, true)
+	var elapsed := 0.0
+	while elapsed < 1.0 - 0.0001:
+		controller._process(0.05)
+		elapsed += 0.05
+	t.assert_true(controller.player.pos.x >= 7 and controller.player.pos.x <= 8, "the 0.25s bump cooldown does not eat the hold clock, got x=%d" % controller.player.pos.x)
+	_release(controller)
+	controller.free()
+
+
+static func _test_cave_one_second_hold(t: Node) -> void:
+	SaveManager.clear_save()
+	var host = MainScript.new()
+	t.add_child(host)
+	host.game.start_game()
+	host._new_game(1)
+	var chapter: MogaoChapter = host.cave_chapter
+	for trial in 5:
+		var walked := _cave_hold_seconds(chapter, 1.0)
+		print("HOLD level2 trial %d cells %d" % [trial + 1, walked])
+		t.assert_true(walked >= 7 and walked <= 8, "level 2 trial %d holds 1s for 7-8 cells, got %d" % [trial + 1, walked])
+	host.free()
+	SaveManager.clear_save()
+
+
+static func _cave_hold_seconds(chapter: MogaoChapter, seconds: float) -> int:
+	_reset_cave(chapter, Vector2i(0, 6))
+	for x in 16:
+		chapter.model.land[Vector2i(x, 6)] = true
+	chapter.model.player = Vector2i(0, 6)
+	chapter.model.destination = chapter.model.player
+	chapter.model.moves = 0
+	chapter.model.busy = ""
+	_cave(chapter, KEY_RIGHT, true, false)
+	var elapsed := 0.0
+	while elapsed < seconds - 0.0001:
+		if int(elapsed * 20.0) % 4 == 0:
+			_cave(chapter, KEY_RIGHT, true, false)
+		chapter._process(0.05)
+		elapsed += 0.05
+	_cave(chapter, KEY_RIGHT, false, false)
+	return chapter.model.moves
 
 
 static func _maze(t: Node):
