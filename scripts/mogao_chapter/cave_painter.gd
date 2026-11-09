@@ -41,7 +41,7 @@ func paint(c: Control) -> void:
 	for cell in m.land: tile(c, cell, false)
 	if m.room == CaveModel.MIRROR_ROOM:
 		_mirror_floor(c)
-	if m.room in [1, 3]:
+	if m.room == 1:
 		for gate in m.gates(): tile(c, gate, false)
 	if m.room == 2:
 		# A faint silhouette explains the missing light without making the whole screen dark.
@@ -69,12 +69,13 @@ func paint(c: Control) -> void:
 	if m.room == 1: pressure(c)
 	if m.room == 2: light_room(c)
 	if m.room == 3:
-		relay(c); crate(c)
+		planks(c)
 	if m.room == 4: light_bridge(c)
 	if m is CaveNetwork:
 		if m.room == 5: hub(c)
 		for d in m.doors():
-			portal(c, c.point(d.cell), d.open)
+			if not (m.room == 3 and d.cell == m.goal):
+				portal(c, c.point(d.cell), d.open)
 			var p: Vector2 = c.point(d.cell) - Vector2(0, u * .94)
 			if d.cell.y == int(m.extent.y) - 1: p = c.point(d.cell) + Vector2(0, u * .48)
 			var label: String = d.label
@@ -185,21 +186,22 @@ func crate(c: Control) -> void:
 	c.draw_line(rect.position + Vector2(3, 3), rect.end - Vector2(3, 3), Color("735330"), 3, true)
 	c.draw_line(Vector2(rect.end.x - 3, rect.position.y + 3), Vector2(rect.position.x + 3, rect.end.y - 3), Color("735330"), 3, true)
 
-func relay(c: Control) -> void:
-	var m: CaveModel = c.model; var u: float = c.unit
-	for i in 2:
-		var p: Vector2 = c.point(m.plates()[i]); var g: Vector2 = c.point(m.gates()[i])
-		var color := Color("ffe1a1") if m.gate_open(i) else Color("9c886a")
-		c.draw_polyline(PackedVector2Array([p, Vector2(g.x, p.y), g]), color, 3, true)
-		c.draw_circle(p, u * .3, Color("6f8877") if m.plate_active(i) else Color("756747"))
-		c.draw_arc(p, u * .27, 0, TAU, 24, color, 2, true)
-		for x in [-.42, .42]: c.draw_line(g + Vector2(x * u, u * .25), g + Vector2(x * u, -u * .5), Color("98764e"), 5, true)
-		var h: float = u * .7 * (1 - c.gate_visual[i])
-		if h > .5: c.draw_rect(Rect2(g + Vector2(-u * .35, -u * .45), Vector2(u * .70, h)), Color("8c6944"))
-		if i == 0:
-			var latch_pos := g + Vector2(u * .6, -u * .35)
-			c.draw_arc(latch_pos, u * .15, 0, TAU, 16, color, 3, true)
-			if m.latch: c.draw_polyline(PackedVector2Array([latch_pos + Vector2(-u * .1, 0), latch_pos + Vector2(0, u * .08), latch_pos + Vector2(u * .18, -u * .17)]), Color("ffe1a1"), 3, true)
+func planks(c: Control) -> void:
+	var m: CaveModel = c.model
+	var u: float = c.unit
+	for y in int(m.extent.y):
+		for x in int(m.extent.x):
+			var cell := Vector2i(x, y)
+			if m.land.has(cell) or cell == m.goal:
+				continue
+			var p: Vector2 = c.point(cell)
+			c.draw_rect(Rect2(p - Vector2(u * .5, u * .4), Vector2(u, u * .78)), Color("16211f"))
+	var niche: Vector2 = c.point(CaveModel.PLANK_NICHE)
+	c.draw_circle(niche + Vector2(-u * .12, u * .08), maxf(2.0, u * .07), Color("6a5340"))
+	c.draw_circle(niche + Vector2(u * .12, u * .12), maxf(1.5, u * .045), Color("6a5340"))
+	if m.reached:
+		var rail: Vector2 = c.point(CaveModel.PLANK_LANDING)
+		c.draw_line(rail + Vector2(-u * .02, -u * .22), rail + Vector2(u * .2, -u * .02), Color("72d5dc"), maxf(3.0, u * .07), true)
 
 func light_bridge(c: Control) -> void:
 	var m: CaveModel = c.model; var u: float = c.unit

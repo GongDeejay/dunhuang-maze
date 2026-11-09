@@ -37,15 +37,15 @@ static func run(t: Node) -> void:
 	t.assert_true(m.reset_current() and m.box == Vector2i(2, 4), "local reset affects only unsolved current room")
 	walk(t, m, "LLUURDRULUURUU")
 	t.assert_true(m.reached and not m.undo() and not m.reset_current(), "solved room is stable and cannot be reset accidentally")
-	t.assert_true(m.travel() and m.room == 3, "left path reaches relay")
-	walk(t, m, "LLUURDRURRUU"); t.assert_true(m.undo() and not m.latch, "unfinished relay can still undo latch")
-	walk(t, m, "UUDDDLLLURRDRUUULLUUU")
-	t.assert_true(m.reached, "relay completes normally in network")
+	t.assert_true(m.travel() and m.room == 3, "left path reaches the plank cave")
+	walk(t, m, "UULUUL"); t.assert_true(m.undo() and m.plank_count() == 0, "unfinished plank cave can still undo one flip")
+	walk(t, m, "LUURRDDRRUULULU")
+	t.assert_true(m.reached and m.plank_count() == 11, "plank cave completes normally in network")
 	walk(t, m, "DDLL")
 	t.assert_true(m.travel() and m.room == 5 and m.shortcut, "opening rear door creates physical loop back to hub")
 	m = reload(m)
 	t.assert_true(m.shortcut and m.secret and m.solved(1) and m.solved(3), "solved rooms and shortcut persist across reload")
-	t.assert_true(m.travel() and m.room == 3 and m.gate_open() and m.latch, "shortcut returns to solved far bank with doors retained")
+	t.assert_true(m.travel() and m.room == 3 and m.reached and m.walkable(Vector2i(4, 1)), "shortcut returns to the nailed plank cave")
 	walk(t, m, "RRUU"); t.assert_true(m.travel() and m.room == 2, "left route independently reaches deer")
 	t.assert_true(not m.solved(4), "right route not required for left route completion")
 	t.assert_true(m.travel() and m.room == 3, "deep cave can backtrack to arrived route")
@@ -89,3 +89,29 @@ static func run(t: Node) -> void:
 	t.assert_true(legacy.travel() and legacy.room == 5, "legacy save cannot become trapped behind reset pressure doors")
 	legacy.resume_network(99, {"version": 1})
 	t.assert_eq(legacy.room, 0, "invalid room and empty network safely use entrance")
+	var old_room := {"player": [0, 0], "box": [2, 6], "latch": true, "reached": false, "moves": 4}
+	var old := {"version": 3, "shortcut": false, "secret": false, "entry": [0, 0], "rooms": {"3": old_room}}
+	var migrated := CaveNetwork.new()
+	migrated.resume_network(3, old)
+	t.assert_eq(migrated.room, 3, "a version 3 save still opens room 3")
+	t.assert_true(not migrated.reached and migrated.plank_count() == 0 and migrated.box == Vector2i(-9, -9), "an unsolved borrowed-corridor save drops the crate and the latch")
+	t.assert_eq(migrated.player, CaveModel.PLANK_ENTRY, "an unwalkable old position returns to the plank entrance")
+	t.assert_true(migrated.step(Vector2i.UP), "the migrated room can be played under the plank rules")
+	old_room["player"] = [2, 6]
+	old["entry"] = [3, 8]
+	migrated.resume_network(3, old)
+	t.assert_eq(migrated.player, Vector2i(2, 6), "a still-walkable old position is kept")
+	old_room["reached"] = true
+	old_room["player"] = [3, 0]
+	old_room["box"] = [5, 2]
+	old_room["latch"] = true
+	migrated.resume_network(3, old)
+	t.assert_true(migrated.reached and migrated.walkable(Vector2i(2, 2)) and migrated.box == Vector2i(-9, -9), "a solved old room 3 is nailed and ignores the crate")
+	var roundtrip := CaveNetwork.new()
+	roundtrip.load_room(3)
+	walk(t, roundtrip, "UULUU")
+	var copy := reload(roundtrip)
+	t.assert_eq(copy.save_network()["version"], 4, "plank saves use version 4")
+	t.assert_eq(copy.player, roundtrip.player, "plank position survives a save")
+	t.assert_eq(copy.plank_count(), roundtrip.plank_count(), "flipped planks survive a save")
+	t.assert_true(copy.planks_up.has(CaveModel.PLANK_DEMO), "the demo plank survives a save")

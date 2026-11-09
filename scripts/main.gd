@@ -165,6 +165,39 @@ func _ready() -> void:
 	_try_load_save()
 	_refresh_layout()
 	_request_redraw()
+	if _plank_preview_requested():
+		call_deferred("_start_plank_preview")
+
+
+func _plank_preview_requested() -> bool:
+	if OS.get_environment("DUNHUANG_PLANK_PREVIEW") == "1":
+		return true
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--plank" or arg == "plank=1":
+			return true
+	if OS.has_feature("web"):
+		var search := str(JavaScriptBridge.eval("window.location.search", true))
+		return "plank=1" in search or "room=plank" in search
+	return false
+
+
+func _start_plank_preview() -> void:
+	# Debug entrance for the plank-cave preview. It never reads or writes the campaign save.
+	for child in get_children():
+		if child is MonsterEntity or child is ItemEntity:
+			child.queue_free()
+	monsters.clear(); items.clear(); maze = null
+	inventory.clear(); key_tracker.setup(1)
+	game.reset_round(); game.start_game()
+	_close_cave_chapter()
+	cave_chapter = MogaoChapter.new()
+	cave_chapter.model.load_room(3)
+	cave_chapter.menu_requested.connect(func():
+		_close_cave_chapter()
+		game.return_to_menu()
+		_request_redraw())
+	add_child(cave_chapter)
+	_refresh_layout(); queue_redraw()
 
 
 func _notification(what: int) -> void:

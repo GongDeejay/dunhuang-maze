@@ -16,7 +16,7 @@ const ROOM_NAMES := {
 	0: "入窟 · 转桥",
 	1: "侧窟 · 共耳",
 	2: "深窟 · 鹿影",
-	3: "回廊 · 借路",
+	3: "栈道窟 · 翻板",
 	4: "灯窟 · 接桥",
 	5: "中央窟",
 	7: "镜窟 · 折光",
@@ -58,6 +58,7 @@ var painter := Painter.new()
 var mirror_art: Control
 var lamp_halo: Control
 var actor_layer: Control
+var plank_art: Control
 
 func _ready() -> void:
 	rescued_presented = model.rescued
@@ -76,6 +77,7 @@ func _ready() -> void:
 		var d: Vector2i = spec[1]
 		arrows.append(make_button(spec[0], func(): move(d)))
 	make_modal()
+	_add_plank_art()
 	_add_mirror_art()
 	_add_lamp_halo()
 	_add_actor_layer()
@@ -180,6 +182,9 @@ func layout() -> void:
 	if actor_layer:
 		actor_layer.position = Vector2.ZERO
 		actor_layer.size = size
+	if plank_art:
+		plank_art.position = Vector2.ZERO
+		plank_art.size = size
 	overlay.position = Vector2.ZERO
 	overlay.size = get_viewport_rect().size
 	panel.position = Vector2(maxf(8, (size.x - 530) / 2), maxf(8, (size.y - 500) / 2))
@@ -206,7 +211,9 @@ func refresh() -> void:
 	note_button.disabled = locked
 	action_button.text = "转动栈桥" if model.room == 0 else ("观察压盘" if model.room == 1 else ("放上灯座" if model.lamp_held else "提起灯笼"))
 	action_button.disabled = locked or (not model.can_turn() if model.room == 0 else (model.lamp_action().is_empty() if model.room == 2 else false))
-	if model.room == 3: action_button.text = "观察门闩"
+	if model.room == 3 and not model.reached:
+		action_button.text = "看看栈道"
+		action_button.disabled = locked
 	if model.room == 4:
 		action_button.text = ("放上灯座" if model.lamp_held else "提起灯笼") if not model.lamp_action().is_empty() else "转动栈桥"
 		action_button.disabled = locked or (model.lamp_action().is_empty() and not model.can_turn())
@@ -219,7 +226,9 @@ func refresh() -> void:
 	if model.room == CaveModel.MIRROR_ROOM:
 		objective.text = "把灯光折到莲花灯座"
 	else:
-		objective.text = ["蓝围巾在对岸 · 转桥接近它", "三兔共耳 · 找到两扇门共用的机关", "九色鹿回望河面 · 对岸还没有光", "一个木箱 · 先借路，再送到对岸", "先留下光 · 再把桥接向对岸", "左边推箱借路 · 右边提灯接桥"][model.room]
+		objective.text = ["蓝围巾在对岸 · 转桥接近它", "三兔共耳 · 找到两扇门共用的机关", "九色鹿回望河面 · 对岸还没有光", "每块翻板只踩一次", "先留下光 · 再把桥接向对岸", "左边推箱借路 · 右边提灯接桥"][model.room]
+	if model.room == 3:
+		objective.text = "每块翻板只踩一次 · 已踩 %d/11" % model.plank_count()
 	hint.text = "点方向键走到岸边，再转动栈桥" if touch else "方向键 / WASD 移动 · 空格互动 · Z 撤销"
 	if model.room == 0 and model.can_turn(): hint.text = "点转柄，看看桥会通向哪里"
 	if model.room == 0 and model.bridges[0].pose == 1: hint.text = "桥接通了，亲自走过去"
@@ -239,10 +248,6 @@ func refresh() -> void:
 			objective.text = "鹿把人送到了岸边 · 沿足迹寻找哥哥"
 			hint.text = "壁画里的光点，接上了脚下的路"
 		if model.rescued: objective.text = "找到哥哥了 · 一起走向右侧亮着的窟口"
-	if model.room == 3:
-		hint.text = "先压住近处的盘，穿过右侧的门"
-		if model.latch: hint.text = "门闩扣住了！把木箱运过这扇门"
-		if model.gate_open(1): hint.text = "箱子到了远处压盘 · 窟口也打开了"
 	if model.room == 4:
 		hint.text = "把灯留在左岸灯座，看看桥下的石刻"
 		if model.lit(): hint.text = "光照出了南北路标 · 去右岸转柄接桥"
@@ -275,13 +280,17 @@ func refresh() -> void:
 	if not door.is_empty():
 		action_button.text = ("进入" if door.open else "未通") + door.label
 		action_button.disabled = locked or not door.open
-		if not door.open: hint.text = "门闩在回廊另一侧" if model.room == 5 else "此路未通，先走另一边"
+		if not door.open: hint.text = "门栓在栈道窟另一侧" if model.room == 5 else "此路未通，先走另一边"
 	if model.room == 2 and model.rescued and model.player == model.exit_cell:
 		action_button.text = "前往三危山"; action_button.disabled = locked
 	if not model.busy.is_empty():
 		if model.busy == "turn": hint.text = "栈桥正在转动……"
 		elif model.busy == "lamp": hint.text = "灯光正在安定下来……"
 		elif model.busy == "mirror": hint.text = "铜镜正在转动……"
+	if model.room == 3 and model.busy.is_empty() and mode == "playing":
+		var plank_line := _plank_hint_text()
+		if not plank_line.is_empty():
+			hint.text = plank_line
 	settle_text.call_deferred(); queue_redraw()
 
 func move(direction: Vector2i) -> void:
@@ -297,6 +306,7 @@ func interact() -> void:
 		show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n这次走了 %d 步\n%s\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。" % [model.moves, MeasureText.format_duration(level_elapsed)], "前往三危山", "再看看洞窟")
 	elif model.travel():
 		rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
+		_reset_plank_visit()
 		rebuild_cranks(); layout(); refresh(); AudioManager.play_level_start()
 		checkpoint_changed.emit(model.room)
 	elif model.at_secret() and model.reveal_secret():
@@ -316,7 +326,9 @@ func interact() -> void:
 func undo() -> void:
 	if mode != "playing" or stopped: return
 	if model.undo():
-		rescued_presented = model.rescued; refresh(); checkpoint_changed.emit(model.room)
+		rescued_presented = model.rescued
+		_sync_plank_stuck(false)
+		refresh(); checkpoint_changed.emit(model.room)
 
 func show_note() -> void:
 	if mode != "playing" or stopped: return
@@ -328,8 +340,8 @@ func show_note() -> void:
 		return
 	var titles := ["哥哥的蓝围巾", "三兔共耳 · 共用的机关", "九色鹿 · 为渡河照亮对岸"]
 	var bodies := ["围巾留在对岸，哥哥应该刚刚走过这里。\n\n靠近转柄，把栈桥接起来，再亲自走过去。", "三只兔子只有三只耳朵，相邻的兔子共用一耳。\n\n看看地上的铜线：两侧压盘各管一扇门，中间压盘被两扇门共用。让木箱代替你压住它，就能腾出身来过门。\n\n朝箱子走即可推动；推错可撤销。纹样取意于莫高窟第407窟。", "九色鹿救起了河中的落水者。后来，这个人却为赏赐背弃承诺，鹿最终向国王讲明真相。\n\n这一次，你可以给它照亮对岸：提起灯，走到右侧河岸灯座旁放下。鹿会把人送到安全的地方，足迹也会从壁画延伸到路上。\n\n左侧山林灯座能照清故事，不是陷阱。灯不会熄灭。壁画取意于第257窟。"]
-	titles.append_array(["回廊 · 借来的路", "灯窟 · 灯与桥"])
-	bodies.append_array(["一个木箱，可以帮你两次。\n\n先把它推到近处压盘，从右侧门穿过去。门闩会自动扣住，门不再落下。\n\n回头把箱子经右门运到上方压盘，打开窟口。推错可以撤销，不必重新走前面的洞窟。", "桥下的石刻藏在暗处。\n\n先提灯，放到左侧唯一的灯座上，让南北路标显现。再到右侧转柄，把桥转向对岸。\n\n灯必须留在岸边照路；桥上不能提灯或转桥。"])
+	titles.append_array(["栈道窟 · 不走回头路", "灯窟 · 灯与桥"])
+	bodies.append_array(["莫高窟的洞窟开在崖壁上，古人沿着崖面修栈道往来。\n\n这里的木板踩过就会翻起，只能走一次；石台可以反复走。十一块翻板都踩到，窟门的绳栓才会拉开。\n\n小时候弟弟最爱玩“不走回头路”，哥哥总是陪着他。走错了可以撤销，不必重新走前面的洞窟。\n\n翻板为游戏虚构。", "桥下的石刻藏在暗处。\n\n先提灯，放到左侧唯一的灯座上，让南北路标显现。再到右侧转柄，把桥转向对岸。\n\n灯必须留在岸边照路；桥上不能提灯或转桥。"])
 	show_card("note", titles[model.room], model.map_note() + "\n\n本窟线索\n" + bodies[model.room] + "\n\n本关为壁画幻境；机关与引路情节为游戏虚构。", "回到洞窟")
 
 func pause_game() -> void:
@@ -356,6 +368,7 @@ func modal_primary() -> void:
 			stopped = true; completed.emit()
 		"reset":
 			model.reset_current(); rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
+			_reset_plank_visit()
 			rebuild_cranks(); close_card(); layout()
 			checkpoint_changed.emit(model.room)
 		"menu": stopped = true; menu_requested.emit()
@@ -464,6 +477,17 @@ var mirror_stuck := 0.0
 var mirror_coverage := -1
 var mirror_note := ""
 var mirror_note_time := 0.0
+var plank_traps := 0
+var plank_stuck := false
+var plank_stuck_open := false
+var plank_undo_flash := false
+var plank_flip_note := 0.0
+var plank_demo_note := 0.0
+var plank_solved_note := 0.0
+var plank_niche_seen := false
+var plank_stone_seen := false
+var plank_story_shown := false
+var _undo_resting := Color("3f514c")
 
 
 func _beam_coverage(traced: Dictionary) -> int:
@@ -523,17 +547,147 @@ func _tick_mirror_feedback(delta: float) -> void:
 		hint.text = mirror_note
 
 
+func _tick_plank_notes(delta: float) -> void:
+	if model.room != 3 or model.paused or mode != "playing":
+		return
+	var expired := false
+	for which in ["flip", "demo", "solved"]:
+		var left := plank_flip_note if which == "flip" else (plank_demo_note if which == "demo" else plank_solved_note)
+		if left <= 0.0:
+			continue
+		left = maxf(0.0, left - delta)
+		if which == "flip":
+			plank_flip_note = left
+		elif which == "demo":
+			plank_demo_note = left
+		else:
+			plank_solved_note = left
+		if left == 0.0:
+			expired = true
+	if expired and model.busy.is_empty():
+		refresh()
+
+
+func _on_plank_step(previous_flips: Dictionary, previous_reached: bool) -> void:
+	if model.room != 3:
+		plank_stuck = false
+		plank_undo_flash = false
+		return
+	if model.history.size() > 0:
+		var prev_pos: Vector2i = model.history.back()["player"]
+		if prev_pos == CaveModel.PLANK_NICHE:
+			plank_niche_seen = true
+		if model.plank_stone(prev_pos) and prev_pos != CaveModel.PLANK_ENTRY:
+			plank_stone_seen = true
+	if model.planks_up.size() > previous_flips.size():
+		AudioManager.play_plank_flip()
+		if model.planks_up.has(CaveModel.PLANK_DEMO) and not previous_flips.has(CaveModel.PLANK_DEMO):
+			plank_demo_note = 1.6
+			plank_flip_note = 0.0
+		else:
+			plank_flip_note = 1.2
+			plank_demo_note = 0.0
+	if not previous_reached and model.reached:
+		plank_solved_note = 2.6
+		AudioManager.play_rope_gate()
+		if not plank_story_shown:
+			plank_story_shown = true
+			show_card("note", "绳栓拉开了", "绳栓拉开了！木栏上系着一截蓝线，和围巾同色，哥哥刚从这里走过", "继续走")
+	_sync_plank_stuck(true)
+
+
+func _sync_plank_stuck(count_new: bool) -> void:
+	if model.room != 3 or model.reached:
+		plank_stuck = false
+		plank_undo_flash = false
+		return
+	if model.plank_live():
+		plank_stuck = false
+		plank_undo_flash = false
+		return
+	if count_new and not plank_stuck:
+		plank_traps += 1
+	plank_stuck = true
+	plank_stuck_open = model.plank_can_move()
+	plank_undo_flash = true
+
+
+func _reset_plank_visit() -> void:
+	plank_traps = 0
+	plank_stuck = false
+	plank_stuck_open = false
+	plank_undo_flash = false
+	plank_flip_note = 0.0
+	plank_demo_note = 0.0
+	plank_solved_note = 0.0
+	plank_niche_seen = false
+	plank_stone_seen = false
+
+
+func _plank_hint_text() -> String:
+	if plank_stuck:
+		var line := "无路可走了 · 撤销一步，或重置这一窟" if not plank_stuck_open else "剩下的翻板连不成一条路了 · 撤销一步，或重置这一窟"
+		if plank_traps >= 5:
+			line += "\n先绕左，中间下，右边上"
+		elif plank_traps >= 3:
+			line += "\n先绕左"
+		return line
+	if model.reached:
+		if plank_solved_note > 0.0:
+			return "翻板踩遍了 · 绳栓拉开，窟门开了"
+		return "栈道钉牢了，可以自由往返"
+	if model.player == CaveModel.PLANK_DEMO and not model.planks_up.has(CaveModel.PLANK_DEMO):
+		return "这是试板，翻起也不碍事，旁边石阶能绕回来"
+	if plank_demo_note > 0.0:
+		return "看，走过就翻起来了 · 试板不计数"
+	if plank_flip_note > 0.0:
+		return "咔，翻起一块 · %d/11" % model.plank_count()
+	if model.player == CaveModel.PLANK_NICHE and not plank_niche_seen:
+		return "石台上刻着两个小脚印，一大一小"
+	if model.player == CaveModel.PLANK_LANDING and model.plank_count() < CaveModel.PLANK_CELLS.size():
+		return "窟门的绳栓还扣着 · 还差 %d 块翻板" % (CaveModel.PLANK_CELLS.size() - model.plank_count())
+	if model.plank_stone(model.player) and model.player != CaveModel.PLANK_ENTRY and not plank_stone_seen:
+		return "石台可以反复走，翻板只能走一次"
+	return "崖壁栈道：翻板走过就会翻起，踩遍才开门"
+
+
+func _paint_undo_flash() -> void:
+	if undo_button == null:
+		return
+	if not plank_undo_flash or mode != "playing" or model.reached:
+		undo_button.modulate = Color.WHITE
+		return
+	var phase := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * TAU / 600.0)
+	var wave := 0.62 + 0.38 * phase
+	var gold := _undo_resting.lerp(Color("d9a23a"), wave)
+	for state in ["normal", "hover", "pressed"]:
+		var style := StyleBoxFlat.new()
+		style.bg_color = gold
+		style.border_color = Color("ffe1a1")
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(9)
+		undo_button.add_theme_stylebox_override(state, style)
+	undo_button.modulate = Color.WHITE.lerp(Color("ffe7b0"), wave)
+
+
 func _process(delta: float) -> void:
 	if stopped: return
 	if mode == "playing" and not model.paused and not overlay.visible:
 		level_elapsed += delta
 	frame += 1
 	_tick_mirror_feedback(delta)
+	_tick_plank_notes(delta)
 	var previous := model.busy
 	var was_lit := model.lit()
 	var previous_deer := model.deer_time
+	var previous_flips: Dictionary = model.planks_up.duplicate()
+	var previous_reached := model.reached
 	_collect_step_repeat(delta)
-	if previous != model.busy:
+	var plank_settled := previous == "step" and model.busy.is_empty()
+	var plank_changed := model.planks_up.size() != previous_flips.size() or model.reached != previous_reached
+	if previous != model.busy or plank_changed:
+		if plank_settled or plank_changed:
+			_on_plank_step(previous_flips, previous_reached)
 		if model.rescued and not rescued_presented:
 			rescued_presented = true
 			AudioManager.play_pickup()
@@ -549,8 +703,7 @@ func _process(delta: float) -> void:
 		for i in 2:
 			var before: float = gate_visual[i]
 			# 共耳: draw the leaf only when the door stays open after you step off.
-			# 借路回廊 still follows plate weight; that room is waiting on a replacement.
-			var shown_open := model.gate_passable(i) if model.room == 1 else model.gate_open(i)
+			var shown_open := model.gate_passable(i) if model.room == 1 else false
 			gate_visual[i] = move_toward(before, 1.0 if shown_open else 0.0, delta * 3)
 			if before != gate_visual[i]: queue_redraw()
 		light_visual = move_toward(light_visual, 1.0 if model.lit() else 0.0, delta * 2)
@@ -562,6 +715,17 @@ func _process(delta: float) -> void:
 		var available := get_viewport_rect().size
 		var target := Vector2(minf(530, available.x - 16), minf(500, available.y - 16))
 		if panel.size != target: panel.size = target
+	_paint_undo_flash()
+
+func _add_plank_art() -> void:
+	var art := Control.new()
+	art.name = "PlankArt"
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	art.set_script(preload("res://scripts/mogao_chapter/plank_art.gd"))
+	art.host = self
+	add_child(art)
+	plank_art = art
 
 func _add_mirror_art() -> void:
 	var art := Control.new()
@@ -594,6 +758,8 @@ func _add_actor_layer() -> void:
 
 func _order_scene_layers() -> void:
 	var back: Array[Node] = []
+	if plank_art:
+		back.append(plank_art)
 	if lamp_halo:
 		back.append(lamp_halo)
 	if actor_layer:

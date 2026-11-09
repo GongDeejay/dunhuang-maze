@@ -9,14 +9,18 @@ static func route(t: Node, m: CaveModel, text: String) -> void:
 		walk(t, m, [{"U": Vector2i.UP, "D": Vector2i.DOWN, "L": Vector2i.LEFT, "R": Vector2i.RIGHT}[letter]])
 
 static func expanded_rooms(t: Node, m: CaveModel) -> void:
-	t.assert_eq(m.room, 3, "shared ears leads into relay cave")
-	route(t, m, "LLUURDRURRUU")
-	t.assert_true(m.latch and m.gate_open(0), "crossing the first relay door latches it permanently")
+	t.assert_eq(m.room, 3, "shared ears leads into the plank cave")
+	var before_moves := m.moves
+	route(t, m, "UULUUL")
+	t.assert_eq(m.plank_count(), 1, "leaving a counting plank flips it")
+	t.assert_true(m.planks_up.has(CaveModel.PLANK_DEMO) and m.plank_count() == 1, "the demo plank flips and is not counted")
 	m.undo()
-	t.assert_true(not m.latch, "undo atomically restores the door latch")
-	route(t, m, "UUDDDLLLURRDRUUULLUUU")
-	t.assert_true(m.reached and m.box == CaveModel.RELAY_PLATES[1], "same crate transported through latched door to upper plate")
-	t.assert_true(m.next_room() and m.room == 4, "relay leads to light bridge")
+	t.assert_eq(m.plank_count(), 0, "undo lowers the plank flipped by that step")
+	t.assert_true(not m.planks_up.has(Vector2i(2, 4)), "the undone plank lies flat again")
+	route(t, m, "LUURRDDRRUULULU")
+	t.assert_true(m.reached and m.moves - before_moves == 20 and m.plank_count() == 11, "the authored route opens the rope gate in 20 steps")
+	t.assert_true(m.walkable(Vector2i(2, 4)) and m.walkable(Vector2i(4, 1)) and m.walkable(m.goal), "solved planks are nailed and the gate stays open")
+	t.assert_true(m.next_room() and m.room == 4, "plank cave leads to light bridge")
 	m.use_lamp(); m.advance(1)
 	route(t, m, "LLU"); m.use_lamp(); m.advance(1)
 	t.assert_true(m.lit() and not m.walkable(Vector2i(3, 2)), "light alone cannot align the bridge")
@@ -31,7 +35,7 @@ static func expanded_rooms(t: Node, m: CaveModel) -> void:
 static func pressure_graph(t: Node, room_id: int = 1) -> void:
 	# Explore every reachable player/crate arrangement using the actual movement rules.
 	var initial := CaveModel.new(); initial.load_room(room_id)
-	var queue := [[initial.player, initial.box, false]]
+	var queue := [[initial.player, initial.box]]
 	var seen := {str(queue[0]): true}
 	var cursor := 0; var solved := false; var bypass := false
 	while cursor < queue.size():
@@ -39,18 +43,242 @@ static func pressure_graph(t: Node, room_id: int = 1) -> void:
 		for direction in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
 			var m := CaveModel.new(); m.load_room(room_id)
 			m.player = state[0]; m.destination = state[0]; m.box = state[1]
-			m.latch = state[2]
 			if not m.step(direction): continue
 			m.advance(1)
 			if m.reached:
 				solved = true
-				if m.box != (CaveModel.PLATE if room_id == 1 else CaveModel.RELAY_PLATES[1]): bypass = true
+				if m.box != CaveModel.PLATE: bypass = true
 				continue
-			var next := [m.player, m.box, m.latch]; var key := str(next)
+			var next := [m.player, m.box]; var key := str(next)
 			if not seen.has(key):
 				seen[key] = true; queue.append(next)
 	t.assert_true(solved, "exhaustive pressure graph contains a winning route")
 	t.assert_true(not bypass, "neither side plate nor body-only weight bypasses the shared crate solution")
+
+static func _plank_key(pos: Vector2i, flips: Array) -> String:
+	var parts: Array[String] = []
+	for cell in flips:
+		parts.append("%d:%d" % [cell.x, cell.y])
+	parts.sort()
+	return "%d,%d|%s" % [pos.x, pos.y, "|".join(parts)]
+
+static func _plank_apply(m: CaveModel, pos: Vector2i, flips: Array) -> void:
+	m.load_room(3)
+	m.player = pos
+	m.destination = pos
+	m.planks_up.clear()
+	for cell in flips:
+		m.planks_up[cell] = true
+
+static func _dirs() -> Array:
+	return [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+
+static func plank_graph(t: Node) -> void:
+	var expected: Array[Vector2i] = [
+		Vector2i(2, 4), Vector2i(1, 4), Vector2i(1, 3), Vector2i(2, 2), Vector2i(3, 2),
+		Vector2i(3, 4), Vector2i(4, 4), Vector2i(5, 4), Vector2i(5, 3), Vector2i(4, 2), Vector2i(4, 1),
+	]
+	var solved_model := CaveModel.new()
+	solved_model.load_room(3)
+	route(t, solved_model, "UULUULUURRDDRRUULULU")
+	var authored: Array[Vector2i] = []
+	for cell in solved_model.planks_up.keys():
+		if cell in CaveModel.PLANK_CELLS:
+			authored.append(cell)
+	t.assert_eq(authored, expected, "authored route flips the planks in the only order")
+	t.assert_eq(solved_model.moves, 20, "authored route is 20 steps")
+	var stair := CaveModel.new()
+	stair.load_room(3)
+	route(t, stair, "LUUUULUURRDDRRUULULU")
+	t.assert_true(stair.reached and stair.moves == 20, "skipping the demo plank still solves in 20 steps")
+	var m := CaveModel.new()
+	m.load_room(3)
+	var queue: Array = [[m.player, []]]
+	var seen := {_plank_key(m.player, []): true}
+	var dist := {_plank_key(m.player, []): 0}
+	var states: Array = [[m.player, []]]
+	var edges := {}
+	var orders := {}
+	var min_moves := 999
+	var head := 0
+	while head < queue.size():
+		var state: Array = queue[head]
+		head += 1
+		var pos: Vector2i = state[0]
+		var flips: Array = state[1]
+		var key := _plank_key(pos, flips)
+		var depth: int = dist[key]
+		var nexts: Array = []
+		for direction in _dirs():
+			_plank_apply(m, pos, flips)
+			if not m.step(direction):
+				continue
+			m.advance(1)
+			if m.reached:
+				nexts.append("WIN")
+				min_moves = mini(min_moves, depth + 1)
+				var seq: Array[Vector2i] = []
+				for cell in m.planks_up.keys():
+					if cell in CaveModel.PLANK_CELLS:
+						seq.append(cell)
+				orders[str(seq)] = seq
+				continue
+			var next_flips: Array = []
+			for cell in m.planks_up.keys():
+				next_flips.append(cell)
+			var nxt := _plank_key(m.player, next_flips)
+			nexts.append(nxt)
+			if not seen.has(nxt):
+				seen[nxt] = true
+				dist[nxt] = depth + 1
+				var stored: Array = [m.player, next_flips]
+				queue.append(stored)
+				states.append(stored)
+		edges[key] = nexts
+	t.assert_eq(seen.size(), 206, "plank cave has the authored 206 reachable states")
+	t.assert_eq(orders.size(), 1, "only one plank order wins")
+	t.assert_eq(min_moves, 20, "shortest win is 20 steps")
+	t.assert_eq(orders.values()[0], expected, "the winning plank order is fixed")
+	var winning := {}
+	var rev := {}
+	for from_key in edges:
+		for nxt in edges[from_key]:
+			if nxt == "WIN":
+				winning[from_key] = true
+			else:
+				if not rev.has(nxt):
+					rev[nxt] = []
+				rev[nxt].append(from_key)
+	var good := winning.duplicate()
+	var gq: Array = winning.keys()
+	var gi := 0
+	while gi < gq.size():
+		var cur = gq[gi]
+		gi += 1
+		for prev in rev.get(cur, []):
+			if not good.has(prev):
+				good[prev] = true
+				gq.append(prev)
+	var harm := 0
+	var pairs := 0
+	var demo := CaveModel.PLANK_DEMO
+	var frontier := {}
+	var live_mismatch := ""
+	for state in states:
+		var pos: Vector2i = state[0]
+		var flips: Array = state[1]
+		var key := _plank_key(pos, flips)
+		_plank_apply(m, pos, flips)
+		var live := m.plank_live()
+		if live != good.has(key) and live_mismatch.is_empty():
+			live_mismatch = key
+		if good.has(key):
+			for nxt in edges[key]:
+				if nxt != "WIN" and not good.has(nxt):
+					frontier[nxt] = true
+		var alt: Array = []
+		var has_demo := false
+		for cell in flips:
+			if cell == demo:
+				has_demo = true
+			else:
+				alt.append(cell)
+		if not has_demo:
+			alt.append(demo)
+		var alt_key := _plank_key(pos, alt)
+		if seen.has(alt_key):
+			pairs += 1
+			if good.has(key) != good.has(alt_key):
+				harm += 1
+	t.assert_true(live_mismatch.is_empty(), "stuck means the remaining planks cannot be finished: %s" % live_mismatch)
+	t.assert_eq(pairs, 204, "every demo on/off pair that can occur is checked")
+	t.assert_eq(harm, 0, "the demo plank never changes whether the cave can be solved")
+	t.assert_eq(frontier.size(), 14, "fourteen first wrong steps are dead")
+	var walled := 0
+	var open_trap := 0
+	for key in frontier:
+		var parts: PackedStringArray = String(key).split("|")
+		var xy: PackedStringArray = parts[0].split(",")
+		var pos := Vector2i(int(xy[0]), int(xy[1]))
+		var flips: Array = []
+		for i in range(1, parts.size()):
+			if parts[i] == "":
+				continue
+			var pair: PackedStringArray = parts[i].split(":")
+			flips.append(Vector2i(int(pair[0]), int(pair[1])))
+		_plank_apply(m, pos, flips)
+		t.assert_true(not m.plank_live(), "a frontier state is impossible to finish")
+		if m.plank_can_move():
+			open_trap += 1
+		else:
+			walled += 1
+	t.assert_eq(walled, 6, "six first traps have no legal step")
+	t.assert_eq(open_trap, 8, "eight first traps can still walk and are still dead")
+	var straight := CaveModel.new()
+	straight.load_room(3)
+	route(t, straight, "UULUURUUU")
+	t.assert_true(not straight.reached and not straight.plank_live() and straight.plank_can_move(), "running up the middle is a dead end that still has a step")
+	var blocked := CaveModel.new()
+	blocked.load_room(3)
+	route(t, blocked, "UULUULUURL")
+	t.assert_true(not blocked.plank_live() and not blocked.plank_can_move(), "backing onto the west stone leaves no step")
+	var net := CaveNetwork.new()
+	net.load_room(3)
+	net.entry = CaveModel.PLANK_ENTRY
+	route(t, net, "UULUUL")
+	t.assert_true(net.undo() and net.plank_count() == 0, "network undo lowers one plank")
+	route(t, net, "LUURRDDRRUULULU")
+	t.assert_true(net.reached and not net.undo() and not net.reset_current(), "a solved plank cave is nailed and cannot be undone")
+	t.assert_true(net.walkable(Vector2i(1, 4)) and net.walkable(net.goal), "nailed planks and the open gate can be walked")
+	var fresh := CaveNetwork.new()
+	fresh.load_room(3)
+	fresh.entry = CaveModel.PLANK_ENTRY
+	route(t, fresh, "UU")
+	t.assert_true(fresh.planks_up.has(CaveModel.PLANK_DEMO), "stepping off the demo plank flips it")
+	t.assert_true(fresh.reset_current() and fresh.planks_up.is_empty() and fresh.player == CaveModel.PLANK_ENTRY, "reset returns every plank to flat")
+
+static func _play(c: MogaoChapter, text: String) -> void:
+	for letter in text:
+		var direction: Vector2i = {"U": Vector2i.UP, "D": Vector2i.DOWN, "L": Vector2i.LEFT, "R": Vector2i.RIGHT}[letter]
+		c.move(direction)
+		c._process(0.2)
+
+static func _rewind(c: MogaoChapter) -> void:
+	while c.model.history.size() > 0:
+		c.undo()
+
+static func plank_hints(t: Node) -> void:
+	var c := MogaoChapter.new()
+	t.add_child(c)
+	c.model.load_room(3)
+	c.model.entry = CaveModel.PLANK_ENTRY
+	c.rebuild_cranks()
+	_play(c, "U")
+	t.assert_true("试板" in c.hint.text, "standing on the demo plank explains that it is safe")
+	_play(c, "U")
+	t.assert_true("试板不计数" in c.hint.text, "leaving the demo plank shows the safe flip")
+	_rewind(c)
+	_play(c, "UULUURUUU")
+	t.assert_true(c.plank_stuck and c.plank_undo_flash and not c.undo_button.disabled, "a dead route flashes the undo button")
+	t.assert_true("剩下的翻板连不成一条路了" in c.hint.text, "a trap with steps left says the route cannot be finished")
+	var style := c.undo_button.get_theme_stylebox("normal")
+	var got := "null"
+	if style is StyleBoxFlat:
+		got = str((style as StyleBoxFlat).bg_color)
+	t.assert_true(style is StyleBoxFlat and (style as StyleBoxFlat).bg_color.r > 0.45, "the undo button turns gold while the route is dead (%s modulate %s)" % [got, c.undo_button.modulate])
+	_rewind(c)
+	_play(c, "UULUULUURL")
+	t.assert_true("无路可走了" in c.hint.text, "a walled trap says there is no step")
+	t.assert_true(c.plank_traps == 2, "each new dead step counts once")
+	_rewind(c)
+	_play(c, "UULUURUUU")
+	t.assert_true("先绕左" in c.hint.text and not c.hint.text.contains("中间下"), "the third trap adds the first part of the rhyme")
+	_rewind(c)
+	_play(c, "UULUURUUU")
+	_rewind(c)
+	_play(c, "UULUURUUU")
+	t.assert_true("先绕左，中间下，右边上" in c.hint.text, "the fifth trap gives the whole rhyme")
+	c.free()
 
 static func shared_ear_doors(t: Node) -> void:
 	var m := CaveModel.new()
@@ -75,16 +303,7 @@ static func shared_ear_doors(t: Node) -> void:
 	c._process(1.0)
 	t.assert_true(c.model.gate_passable(0) and c.door_leaf_open(0) and c.door_leaf_open(1), "crate on the shared plate draws both doors open")
 	t.assert_true(c.model.step(Vector2i.RIGHT), "the drawn-open door can be entered from beside it")
-	var relay := MogaoChapter.new()
-	t.add_child(relay)
-	relay.model.load_room(3)
-	relay.model.player = CaveModel.RELAY_PLATES[0]
-	relay.model.destination = relay.model.player
-	relay.model.box = Vector2i(2, 6)
-	relay._process(1.0)
-	t.assert_true(not relay.model.gate_passable(0) and relay.gate_visual[0] > 0.9, "borrowed corridor still draws a pressed plate as an open leaf")
 	c.free()
-	relay.free()
 
 static func cave_popup_layer(t: Node) -> void:
 	var c := MogaoChapter.new()
@@ -112,12 +331,13 @@ static func run(t: Node) -> void:
 	shared_ear_doors(t)
 	cave_popup_layer(t)
 	pressure_graph(t)
-	pressure_graph(t, 3)
+	plank_graph(t)
+	plank_hints(t)
 	var dark := CaveModel.new(); dark.load_room(4)
 	route(t, dark, "RRU"); dark.turn(); dark.advance(1)
 	t.assert_true(not dark.walkable(Vector2i(3, 4)), "aligned bridge still requires the lamp to reveal its safe path")
-	dark.load_room(3); dark.latch = true; dark.load_room(3)
-	t.assert_true(not dark.latch, "reset clears latched gate")
+	dark.load_room(3); dark.planks_up[Vector2i(2, 4)] = true; dark.load_room(3)
+	t.assert_true(dark.planks_up.is_empty() and dark.player == CaveModel.PLANK_ENTRY, "reset lays every plank flat at the entrance")
 	var m := CaveModel.new()
 	t.assert_true(not m.turn() and m.history.is_empty(), "unavailable crank and can_turn checks do not create undo entries")
 	walk(t, m, [Vector2i.UP])

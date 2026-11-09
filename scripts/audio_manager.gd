@@ -165,6 +165,18 @@ func play_mirror_back() -> void:
 	play_wall_hit()
 
 
+func play_plank_flip() -> void:
+	if _play_sample("plank_flip"):
+		return
+	_play_tone(210, 0.07, 0.22, 2, 0.35)
+
+
+func play_rope_gate() -> void:
+	if _play_sample("rope_gate"):
+		return
+	_play_tone(160, 0.14, 0.2, 2, 0.4)
+
+
 func play_drink() -> void:
 	_play_sample("drink")
 
