@@ -63,16 +63,23 @@ static func _ranges(t: Node) -> void:
 	var player := _player(20, 20)
 	t.assert_true(journey.roadbook_ranges().is_empty(), "roadbook stays blank before the beacon")
 	journey.enter(FirstJourney.BEACON, maze, player)
+	journey.map_seed = 7
 	var areas: Array = journey.roadbook_ranges()
 	t.assert_eq(areas.size(), 2, "beacon marks two areas")
-	var seen := {}
-	for area in areas:
-		var cell: Vector2i = area["cell"]
-		seen[cell] = true
-		t.assert_true(float(area["radius"]) > 1.0, "marked area is wider than one cell")
-		t.assert_true(not bool(maze.landmarks[cell].get("discovered", false)), "range is not an exact discovered cell")
-	t.assert_true(seen.has(FirstJourney.CARAVAN) and seen.has(FirstJourney.STELE), "areas cover the caravan and the stele")
-	t.assert_true(not seen.has(FirstJourney.FAMILY), "beacon does not pin mother on the roadbook")
+	var again: Array = journey.roadbook_ranges()
+	for i in areas.size():
+		var area: Dictionary = areas[i]
+		var target: Vector2i = area["target"]
+		var center: Vector2i = area["cell"]
+		t.assert_eq(center, again[i]["cell"], "survey offset repeats for the same map seed")
+		t.assert_eq(absi(center.x - target.x) + absi(center.y - target.y) > 0, true, "circle center is not the target cell")
+		t.assert_true(maxi(absi(center.x - target.x), absi(center.y - target.y)) == 1, "center is offset by one cell")
+		t.assert_eq(float(area["radius"]), 2.0, "survey circle radius is two cells")
+		t.assert_true(str(area["label"]) in ["驼", "碑"], "circles are labeled 驼 and 碑")
+	journey.caravan_found = true
+	var found: Array = journey.roadbook_ranges()
+	t.assert_eq(str(found[0]["kind"]), "found", "finding the caravan replaces the circle")
+	t.assert_eq(found[0]["cell"], FirstJourney.CARAVAN, "the found mark sits on the caravan")
 	t.assert_true(not bool(maze.landmarks[FirstJourney.FAMILY].get("discovered", false)), "mother is not marked discovered")
 	var sketch := Vector2(520, 230)
 	var span := RouteSketch.range_span(2.2, sketch)

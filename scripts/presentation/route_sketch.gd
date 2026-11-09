@@ -36,10 +36,12 @@ static func range_span(radius: float, sketch_size: Vector2) -> Vector2:
 func _draw_ranges() -> void:
 	for area in ranges:
 		var cell: Vector2i = area["cell"]
+		if str(area.get("kind", "area")) == "found":
+			draw_circle(map_point(cell), 7, Color("487c78"))
+			draw_string(LABEL_FONT, map_point(cell) + Vector2(10, 4), str(area["label"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("493b2b"))
+			continue
 		var center := map_point(cell)
-		var span := range_span(float(area["radius"]), size)
-		center.x = clampf(center.x, span.x * 0.5 + 12.0, size.x - span.x * 0.5 - 12.0)
-		center.y = clampf(center.y, span.y * 0.5 + 12.0, size.y - span.y * 0.5 - 12.0)
+		var span := range_span(float(area.get("radius", 2.0)), size)
 		var rx := span.x * 0.5
 		var ry := span.y * 0.5
 		var pts := PackedVector2Array()

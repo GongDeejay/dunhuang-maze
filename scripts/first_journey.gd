@@ -56,6 +56,7 @@ var short_route: Array[Vector2i] = []
 var beacon_found := false
 var caravan_found := false
 var water_skin := 0
+var map_seed := 1
 var stele_found := false
 var bell_clue := false
 var camp_clue := false
@@ -191,13 +192,35 @@ func water_skin_hud() -> String:
 	return "水囊 已空"
 
 
+func survey_offset(salt: int) -> Vector2i:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(map_seed) + salt * 17
+	var neighbors: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
+	]
+	return neighbors[rng.randi_range(0, neighbors.size() - 1)]
+
+
 func roadbook_ranges() -> Array:
 	if not beacon_found:
 		return []
 	return [
-		{"cell": CARAVAN, "label": "驼队一带", "radius": 1.5},
-		{"cell": STELE, "label": "残碑一带", "radius": 1.5},
+		_survey_mark(CARAVAN, "驼", 11, caravan_found),
+		_survey_mark(STELE, "碑", 29, stele_found),
 	]
+
+
+func _survey_mark(target: Vector2i, label: String, salt: int, found: bool) -> Dictionary:
+	if found:
+		return {"cell": target, "label": label, "kind": "found"}
+	return {
+		"cell": target + survey_offset(salt),
+		"target": target,
+		"label": label,
+		"kind": "area",
+		"radius": 2.0,
+	}
 
 
 func fragment_mask() -> Array:

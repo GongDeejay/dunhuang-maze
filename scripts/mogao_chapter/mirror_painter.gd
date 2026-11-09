@@ -6,15 +6,29 @@ const Beam = preload("res://scripts/mogao_chapter/mirror_beam.gd")
 const DRAW_CODE_ARROW := false
 
 
-static func draw(canvas: CanvasItem, host) -> void:
+static func draw_beams(canvas: CanvasItem, host) -> void:
 	var model = host.model
 	if model.room != CaveModel.MIRROR_ROOM:
 		return
 	var trace: Dictionary = model.beam_trace()
 	_draw_beam(canvas, host, trace.get("cells", []))
+	var kind := str(trace.get("stop_kind", ""))
+	if kind == "back" or kind == "reverse":
+		var end: Vector2 = host.point(trace.get("stop_cell", Vector2i.ZERO))
+		canvas.draw_circle(end, maxf(4.0, host.unit * 0.08), Color(0.35, 0.28, 0.16, 0.9))
+
+
+static func draw_previews(canvas: CanvasItem, host) -> void:
+	var model = host.model
+	if model.room != CaveModel.MIRROR_ROOM:
+		return
 	for seg in model.mirror_previews():
-		_draw_dashed(canvas, host.point(seg["from"]), host.point(seg["to"]), Color(0.98, 0.86, 0.45, 0.55))
-	# Sprites are Sprite2D children. This canvas only draws the beam and the one-step preview.
+		var origin: Vector2 = host.point(seg["from"])
+		var dir: Vector2 = Vector2(seg["dir"])
+		var start: Vector2 = origin + dir * host.unit * 0.55
+		var finish: Vector2 = host.point(seg["to"])
+		_draw_dashed(canvas, start, finish, Color(0.98, 0.86, 0.45, 0.8), maxf(3.0, host.unit * 0.06))
+		canvas.draw_string(MogaoChapter.FONT, finish + Vector2(6, -6), "×%d" % int(seg["k"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("f5dba8"))
 
 
 static func mirror_texture(rot: int, lit: bool) -> Texture2D:
@@ -38,7 +52,7 @@ static func _draw_beam(canvas: CanvasItem, host, cells: Array) -> void:
 		canvas.draw_line(host.point(cells[i]), host.point(cells[i + 1]), Color(1.0, 0.82, 0.35, 0.95), maxf(3.0, host.unit * 0.08), false)
 
 
-static func _draw_dashed(canvas: CanvasItem, a: Vector2, b: Vector2, color: Color) -> void:
+static func _draw_dashed(canvas: CanvasItem, a: Vector2, b: Vector2, color: Color, width: float = 3.0) -> void:
 	var delta := b - a
 	var length := delta.length()
 	if length < 1.0:
@@ -49,7 +63,7 @@ static func _draw_dashed(canvas: CanvasItem, a: Vector2, b: Vector2, color: Colo
 	var t := 0.0
 	while t < length:
 		var t2 := minf(t + dash, length)
-		canvas.draw_line(a + dir * t, a + dir * t2, color, 3.0, false)
+		canvas.draw_line(a + dir * t, a + dir * t2, color, width, false)
 		t += dash + gap
 
 

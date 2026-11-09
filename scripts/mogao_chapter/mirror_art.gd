@@ -4,23 +4,28 @@ extends Control
 
 const Painter = preload("res://scripts/mogao_chapter/mirror_painter.gd")
 var host: Control
-var fixed_mirror: Sprite2D
-var turn_mirror: Sprite2D
 var lotus: Sprite2D
+var mirror_sprites: Dictionary = {}
+var preview_layer: Node2D
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	fixed_mirror = _make_sprite()
-	turn_mirror = _make_sprite()
+	for mirror in CaveModel.MIRROR_DEFS:
+		mirror_sprites[mirror["id"]] = _make_sprite()
 	lotus = _make_sprite()
+	preview_layer = Node2D.new()
+	preview_layer.z_index = 8
+	add_child(preview_layer)
+	preview_layer.draw.connect(_draw_preview)
 
 
 func _make_sprite() -> Sprite2D:
 	var sprite := Sprite2D.new()
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.centered = true
+	sprite.z_index = 1
 	add_child(sprite)
 	return sprite
 
@@ -30,20 +35,32 @@ func _process(_delta: float) -> void:
 		return
 	var show: bool = host.model.room == CaveModel.MIRROR_ROOM
 	if not show:
-		fixed_mirror.visible = false
-		turn_mirror.visible = false
+		for id in mirror_sprites:
+			mirror_sprites[id].visible = false
 		lotus.visible = false
 		return
-	_place(fixed_mirror, CaveModel.MIRROR_FIXED_CELL, Painter.mirror_texture(CaveModel.MIRROR_FIXED_ROT, _struck(CaveModel.MIRROR_FIXED_CELL)))
-	_place(turn_mirror, CaveModel.MIRROR_TURN_CELL, Painter.mirror_texture(host.model.mirror_rot, _struck(CaveModel.MIRROR_TURN_CELL)))
+	for mirror in CaveModel.MIRROR_DEFS:
+		var sprite: Sprite2D = mirror_sprites[mirror["id"]]
+		var dim := 1.0
+		if host.model.back_flash > 0.0 and host.model.back_flash_cell == mirror["cell"]:
+			dim = 0.5
+		_place(sprite, mirror["cell"], Painter.mirror_texture(host.model.mirror_rot_of(mirror["id"]), _struck(mirror["cell"])))
+		sprite.modulate = Color(dim, dim, dim, 1)
 	_place(lotus, CaveModel.MIRROR_LOTUS, Painter.lotus_texture(host.model.lotus_lit()))
 	queue_redraw()
+	preview_layer.queue_redraw()
 
 
 func _draw() -> void:
 	if host == null or not is_instance_valid(host):
 		return
-	Painter.draw(self, host)
+	Painter.draw_beams(self, host)
+
+
+func _draw_preview() -> void:
+	if host == null or not is_instance_valid(host):
+		return
+	Painter.draw_previews(preview_layer, host)
 
 
 func _struck(cell: Vector2i) -> bool:

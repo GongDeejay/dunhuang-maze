@@ -229,17 +229,22 @@ func refresh() -> void:
 		if model.lit(): hint.text = "光照出了南北路标 · 去右岸转柄接桥"
 		if model.lit() and model.bridges[0].pose == 1: hint.text = "灯留在岸边，沿亮起的桥走过去"
 	if model.room == CaveModel.MIRROR_ROOM:
-		hint.text = "右边的铜镜可以转。虚线只预告再转一下后的下一段，不是整条路。"
+		objective.text = "把灯光折到莲花灯座"
+		hint.text = "灯在西南角。铜镜亮金的一面才折光。"
 		if model.can_turn_mirror():
-			hint.text = "站在教学镜旁边。虚线变成实线，就是这一转把光送出去的方向。"
+			hint.text = "可以转动这面铜镜"
+		if _beside_fixed_mirror():
+			hint.text = "这面铜镜嵌在石里，转不动"
 		if model.lotus_lit():
-			objective.text = "莲花亮了 · 沿光桥走向哥哥"
-			hint.text = "光从镜子正面折了过去，北面的路亮了"
+			objective.text = "莲花亮了 · 窟门的光帘散开"
+			hint.text = "光一路折到莲花，北面窟门开了"
 	if model.reached:
 		hint.text = "机关保持开启，可自由折返"
 	if model.room == 5:
-		action_button.text = "查看窟图"; action_button.disabled = locked
 		hint.text = "左右都可走，洞口按互动"
+		if model.player == CaveModel.MIRROR_MAP_CELL:
+			action_button.text = "查看窟图"
+			action_button.disabled = locked
 		if not model.arrival.is_empty(): hint.text = model.arrival
 		if model.at_secret():
 			action_button.text = "查看小画" if model.secret else "触碰节点"
@@ -275,13 +280,15 @@ func interact() -> void:
 	elif model.at_secret() and model.reveal_secret():
 		checkpoint_changed.emit(model.room)
 		show_card("note", "藏在共用节点后的小画", "石龛轻轻打开，里面夹着一张哥哥的小画：三只兔子围成圈，旁边却画着四个牵手的小人。\n\n“少一个都不算合影。爸爸，等我们找齐，再拍一张。”\n\n你把小画夹进旅行手记。这里没有钥匙，也不影响前进。\n\n机关与小画均为游戏虚构。", "收好小画")
-	elif model.room == 5: show_note()
+	elif model.room == 5 and model.player == CaveModel.MIRROR_MAP_CELL: show_note()
 	elif model.room == 0: turn()
 	elif model.room in [1, 3]: show_note()
 	elif model.room == 4 and model.lamp_action().is_empty(): turn()
 	elif model.room == CaveModel.MIRROR_ROOM:
 		if model.turn_mirror():
 			refresh()
+		elif _beside_fixed_mirror():
+			hint.text = "这面铜镜嵌在石里，转不动"
 	elif model.use_lamp(): refresh()
 
 func undo() -> void:
@@ -292,7 +299,7 @@ func undo() -> void:
 func show_note() -> void:
 	if mode != "playing" or stopped: return
 	if model.room == CaveModel.MIRROR_ROOM:
-		show_card("note", "镜窟 · 铜镜折光", model.map_note() + "\n\n本窟线索\n灯固定在北面，光沿直线走。铜镜只有正面反光：和箭头一致的方向才能折过去，打到镜背就停住。\n左边那面是固定的，右边这面可以转。站在教学镜旁边时，淡色虚线只画出再转一下之后的下一段。\n把光引到莲花灯座上，北面的路才会亮，通向哥哥所在的鹿影窟。\n转错可以撤销。\n\n本关为壁画幻境；机关为游戏虚构。", "回到洞窟")
+		show_card("note", "镜窟 · 铜镜折光", "灯固定在西南角，光沿直线走。\n铜镜亮金的一面是正面：光照上来，会顺着红箭头拐出去；打到深青绿的背面，或逆着箭头照来，光就停住。\n带石座的那面嵌在石里，转不动；另外三面站在旁边就能转。转错可以撤销。\n把光引到莲花灯座上，北面窟门的光帘才会散开，通向鹿影窟。\n\n本关为壁画幻境；机关为游戏虚构。", "回到洞窟")
 		return
 	if model.room == 5:
 		show_card("note", "六窟相连 · 旅行窟图", model.map_note(), "回到洞窟")
@@ -425,9 +432,65 @@ func _settle_buffered_step(previous: String) -> void:
 	if direction >= 0:
 		move(_direction_vector(direction))
 
+var mirror_stuck := 0.0
+var mirror_anchor := ""
+var mirror_note := ""
+var mirror_note_time := 0.0
+
+
+func _beside_fixed_mirror() -> bool:
+	if model.room != CaveModel.MIRROR_ROOM:
+		return false
+	for mirror in CaveModel.MIRROR_DEFS:
+		if not bool(mirror["rotatable"]) and model.distance(model.player, mirror["cell"]) <= 1:
+			return true
+	return false
+
+
+func _tick_mirror_feedback(delta: float) -> void:
+	if model.room != CaveModel.MIRROR_ROOM or mode != "playing":
+		return
+	if model.back_flash > 0.0:
+		model.back_flash = maxf(0.0, model.back_flash - delta)
+	if model.paused or not model.busy.is_empty():
+		return
+	var traced: Dictionary = MirrorBeam.trace(model.mirror_cfg(), 0, Vector2i(-999, -999))
+	var mark := "%s|%s" % [traced.get("stop_cell", Vector2i.ZERO), traced.get("stop_kind", "")]
+	if mark != mirror_anchor:
+		var kind := str(traced.get("stop_kind", ""))
+		mirror_anchor = mark
+		mirror_stuck = 0.0
+		if kind == "back" or kind == "reverse":
+			model.back_flash = 0.25
+			model.back_flash_cell = traced.get("stop_cell", Vector2i(-1, -1))
+			AudioManager.play_mirror_back()
+			mirror_note = "光停在镜背上了" if kind == "back" else "光逆着红箭头，折不过去"
+			mirror_note_time = 2.5
+		elif kind == "lotus":
+			mirror_note = ""
+		else:
+			mirror_note = "光又往前走了一段"
+			mirror_note_time = 2.0
+		return
+	if model.lotus_lit():
+		return
+	mirror_stuck += delta
+	if mirror_note_time > 0.0:
+		mirror_note_time = maxf(0.0, mirror_note_time - delta)
+		if mirror_note_time == 0.0:
+			mirror_note = ""
+	if mirror_stuck >= 80.0:
+		hint.text = "光只会顺着红箭头拐出去。"
+	elif mirror_stuck >= 40.0:
+		hint.text = "铜镜背面不照光。"
+	elif mirror_note_time > 0.0 and mirror_note != "":
+		hint.text = mirror_note
+
+
 func _process(delta: float) -> void:
 	if stopped: return
 	frame += 1
+	_tick_mirror_feedback(delta)
 	_collect_step_repeat(delta)
 	var previous := model.busy
 	var was_lit := model.lit()

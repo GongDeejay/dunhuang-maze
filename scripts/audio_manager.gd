@@ -149,6 +149,12 @@ func wall_hit_fallback() -> Dictionary:
 	return {"freq": 70.0, "duration": 0.09, "volume": 0.25, "decay_at": 0.12}
 
 
+func play_mirror_back() -> void:
+	if _play_sample("mirror_back"):
+		return
+	_play_tone(90.0, 0.08, 0.25, 0, 0.12)
+
+
 func play_wall_hit() -> void:
 	if wall_hit_source() != "":
 		_play_sample("wall_hit")

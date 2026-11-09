@@ -32,8 +32,8 @@ func doors() -> Array:
 		5: return [door(Vector2i(3, 6), 0, Vector2i(2, 0), "入窟"), door(Vector2i(0, 3), 1, Vector2i(3, 6), "共耳窟"), door(Vector2i(6, 3), 4, Vector2i(3, 7), "灯窟"), door(Vector2i(3, 0), 3, Vector2i(1, 2), "回廊捷径", shortcut)]
 		1: return [door(Vector2i(3, 6), 5, Vector2i(0, 3), "中央窟"), door(goal, 3, Vector2i(3, 8), "借路回廊", reached)]
 		3: return [door(Vector2i(3, 8), 1, Vector2i(3, 0), "共耳窟"), door(goal, 2, Vector2i(1, 7), "鹿影窟", reached), door(Vector2i(1, 2), 5, Vector2i(3, 0), "回廊捷径", reached)]
-		4: return [door(Vector2i(3, 7), 5, Vector2i(6, 3), "中央窟"), door(goal, 7, Vector2i(3, 6), "镜窟", reached)]
-		7: return [door(Vector2i(3, 6), 4, Vector2i(3, 0), "灯窟"), door(goal, 2, Vector2i(5, 7), "鹿影窟", reached)]
+		4: return [door(Vector2i(3, 7), 5, Vector2i(6, 3), "中央窟"), door(goal, 7, Vector2i(3, 8), "镜窟", reached)]
+		7: return [door(Vector2i(3, 8), 4, Vector2i(3, 0), "灯窟"), door(goal, 2, Vector2i(5, 7), "鹿影窟", reached)]
 		2: return [door(Vector2i(1, 7), 3, Vector2i(3, 0), "借路回廊", solved(3)), door(Vector2i(5, 7), 7, Vector2i(3, 0), "镜窟", solved(7))]
 	return []
 
@@ -91,7 +91,7 @@ func remember_room() -> void:
 	if not busy.is_empty(): return
 	var poses: Array = []
 	for b in bridges: poses.append(b.pose)
-	rooms[str(room)] = {"player": [player.x, player.y], "box": [box.x, box.y], "lamp": [lamp.x, lamp.y], "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "reached": reached, "scarf": scarf, "latch": latch, "poses": poses, "moves": moves, "turns": turns, "mirror_rot": mirror_rot}
+	rooms[str(room)] = {"player": [player.x, player.y], "box": [box.x, box.y], "lamp": [lamp.x, lamp.y], "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "reached": reached, "scarf": scarf, "latch": latch, "poses": poses, "moves": moves, "turns": turns, "mirror_rots": mirror_rots.duplicate(true)}
 
 func restore_room(s: Dictionary) -> void:
 	player = cell_value(s.get("player"), player)
@@ -106,7 +106,12 @@ func restore_room(s: Dictionary) -> void:
 		for i in mini(poses.size(), bridges.size()): bridges[i].pose = clampi(int(poses[i]), 0, 1)
 	moves = maxi(0, int(s.get("moves", 0))); turns = maxi(0, int(s.get("turns", 0)))
 	if room == MIRROR_ROOM:
-		mirror_rot = clampi(int(s.get("mirror_rot", MIRROR_START_ROT)), 0, MIRROR_STATES - 1)
+		if s.has("mirror_rots") and s["mirror_rots"] is Dictionary:
+			mirror_rots = (s["mirror_rots"] as Dictionary).duplicate(true)
+		elif s.has("mirror_rot"):
+			_reset_mirror_rots()
+			if bool(s.get("reached", false)):
+				mirror_rots = {"T": 3, "A": 2, "F": 1, "B": 0}
 	if not walkable(player) or player == box: player = entry
 	destination = player; box_destination = box
 	history.clear()
@@ -118,13 +123,13 @@ static func cell_value(value: Variant, fallback: Vector2i) -> Vector2i:
 
 func save_network() -> Dictionary:
 	remember_room()
-	return {"version": 2, "rooms": rooms.duplicate(true), "shortcut": shortcut, "secret": secret, "entry": [entry.x, entry.y]}
+	return {"version": 3, "rooms": rooms.duplicate(true), "shortcut": shortcut, "secret": secret, "entry": [entry.x, entry.y]}
 
 func resume_network(id: int, data: Dictionary) -> void:
 	load_room(id); entry = player
 	rooms.clear(); shortcut = false; secret = false
 	var version := int(data.get("version", 0))
-	if (version != 1 and version != 2) or not data.get("rooms", {}) is Dictionary:
+	if (version != 1 and version != 2 and version != 3) or not data.get("rooms", {}) is Dictionary:
 		migrate_linear_save(room)
 		return
 	var saved_rooms: Dictionary = data.get("rooms", {})

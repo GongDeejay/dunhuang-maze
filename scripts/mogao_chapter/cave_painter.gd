@@ -88,6 +88,8 @@ func paint(c: Control) -> void:
 	var player: Vector2 = c.point(m.visual_player())
 	if m.room == 2 and m.rescued: actor(c, player + Vector2(-u * .35, -u * .12), c.BROTHER, .7)
 	actor(c, player, c.DAD, 1)
+	if m.lamp_held:
+		_lamp_halo(c, player, u)
 	if m.scarf and not m.rescued:
 		c.draw_line(player + Vector2(u * .05, -u * .32), player + Vector2(u * .16, -u * .08), Color("72d5dc"), maxf(3, u * .07), true)
 	if m.room in [2, 4] and m.lamp_held: lantern(c, player + Vector2(u * .3, -u * .22), u * .14, .7)
@@ -222,8 +224,10 @@ func light_room(c: Control) -> void:
 func _mirror_floor(c: Control) -> void:
 	var m: CaveModel = c.model
 	var u: float = c.unit
-	for cell in [CaveModel.MIRROR_FIXED_CELL, CaveModel.MIRROR_TURN_CELL, CaveModel.MIRROR_LAMP, CaveModel.MIRROR_LOTUS]:
-		tile(c, cell, false)
+	for mirror in CaveModel.MIRROR_DEFS:
+		tile(c, mirror["cell"], false)
+	tile(c, CaveModel.MIRROR_LAMP, false)
+	tile(c, CaveModel.MIRROR_LOTUS, false)
 	for cell in CaveModel.MIRROR_LIT_PATH:
 		if m.lotus_lit():
 			tile(c, cell, true)
@@ -231,3 +235,13 @@ func _mirror_floor(c: Control) -> void:
 			var p: Vector2 = c.point(cell)
 			c.draw_line(p + Vector2(-u * .35, u * .25), p + Vector2(u * .35, u * .25), Color("485149"), 1, true)
 	lantern(c, c.point(CaveModel.MIRROR_LAMP) + Vector2(0, -u * 0.15), u * 0.14, 0.55)
+
+
+func _lamp_halo(c: Control, center: Vector2, u: float) -> void:
+	var path := AssetRegistry.mogao_sprite_path("lamp_halo")
+	if ResourceLoader.exists(path):
+		var tex: Texture2D = load(path)
+		c.draw_texture_rect(tex, Rect2(center - Vector2.ONE * u * 0.55, Vector2.ONE * u * 1.1), false, Color(1, 0.9, 0.55, 0.85))
+		return
+	c.draw_arc(center, u * 0.42, 0, TAU, 28, Color(1, 0.82, 0.4, 0.55), maxf(3.0, u * 0.08), true)
+	c.draw_arc(center, u * 0.55, 0, TAU, 28, Color(1, 0.7, 0.3, 0.28), maxf(2.0, u * 0.05), true)

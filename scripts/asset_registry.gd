@@ -79,6 +79,7 @@ const EXTRA_ITEM_FILES := {
 const MOGAO_SPRITE_FILES := {
 	"lotus_stand": "lotus_stand.png",
 	"lotus_stand_lit": "lotus_stand_lit.png",
+	"lamp_halo": "lamp_halo.png",
 	"mirror_ne": "mirror_ne.png",
 	"mirror_ne_lit": "mirror_ne_lit.png",
 	"mirror_se": "mirror_se.png",

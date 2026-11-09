@@ -7,23 +7,22 @@ const TURN_SECONDS := .7
 const ORDER := [0, 1, 3, 4, 2] # Stable room ids also serve as version-compatible checkpoints.
 const ROOMS := [0, 1, 2, 3, 4, 5, 7]
 const MIRROR_ROOM := 7
-const MIRROR_EXTENT := Vector2(7, 7)
-const MIRROR_FIXED_CELL := Vector2i(3, 3)
-const MIRROR_TURN_CELL := Vector2i(5, 3)
-const MIRROR_FIXED_ROT := 0 # ne：北来的光折向东
-const MIRROR_START_ROT := 2 # sw，顺时针一次到 nw
+const MIRROR_EXTENT := Vector2(7, 9)
 const MIRROR_STATES := 4
-const MIRROR_MAX_BOUNCES := 2
-const MIRROR_LAMP := Vector2i(3, 1)
-const MIRROR_LAMP_DIR := Vector2i.DOWN
-const MIRROR_LOTUS := Vector2i(5, 1)
-const MIRROR_ENTRY := Vector2i(3, 6)
+const MIRROR_MAX_BOUNCES := 4
+const MIRROR_LAMP := Vector2i(0, 7)
+const MIRROR_LAMP_DIR := Vector2i.RIGHT
+const MIRROR_LOTUS := Vector2i(3, 5)
+const MIRROR_ENTRY := Vector2i(3, 8)
 const MIRROR_GOAL := Vector2i(3, 0)
-const MIRROR_LIT_PATH: Array[Vector2i] = [Vector2i(6, 2), Vector2i(6, 1), Vector2i(6, 0), Vector2i(5, 0), Vector2i(4, 0)]
-## 虚线预览开关：每面镜子的 show_preview。教学镜默认开，其余默认关。
+const MIRROR_MAP_CELL := Vector2i(3, 1)
+const MIRROR_LIT_PATH: Array[Vector2i] = [Vector2i(3, 0)]
+## 虚线只开在教学镜 T。A、B 可转，F 固定。朝向 0ne 1se 2sw 3nw。
 const MIRROR_DEFS := [
-	{"id": "fixed", "cell": Vector2i(3, 3), "rotatable": false, "teaching": false, "show_preview": false},
-	{"id": "teaching", "cell": Vector2i(5, 3), "rotatable": true, "teaching": true, "show_preview": true},
+	{"id": "T", "cell": Vector2i(5, 7), "rotatable": true, "teaching": true, "show_preview": true, "start_rot": 1},
+	{"id": "A", "cell": Vector2i(5, 2), "rotatable": true, "teaching": false, "show_preview": false, "start_rot": 0},
+	{"id": "F", "cell": Vector2i(1, 2), "rotatable": false, "teaching": false, "show_preview": false, "start_rot": 1},
+	{"id": "B", "cell": Vector2i(1, 5), "rotatable": true, "teaching": false, "show_preview": false, "start_rot": 3},
 ]
 var connected := false
 const RELAY_PLATES := [Vector2i(3, 5), Vector2i(5, 2)]
@@ -63,7 +62,10 @@ var lamp_destination := Vector2i.ZERO
 var deer_seen := false
 var deer_time := -1.0
 var history: Array = []
-var mirror_rot := MIRROR_START_ROT
+var mirror_rots := {}
+var turning_mirror := ""
+var back_flash := 0.0
+var back_flash_cell := Vector2i(-1, -1)
 
 func _init() -> void:
 	load_room(0)
@@ -84,7 +86,7 @@ func load_room(index: int) -> void:
 	land.clear(); bridges.clear(); cranks.clear(); visits.clear()
 	history.clear(); box = Vector2i(-9, -9); lamp = Vector2i(3, 6); lamp_held = false; deer_seen = false; deer_time = -1
 	busy = ""; progress = 0; turning = -1; paused = false; reached = false
-	mirror_rot = MIRROR_START_ROT
+	_reset_mirror_rots()
 	if room == 0:
 		extent = Vector2(5, 7)
 		fill(Rect2i(1, 0, 3, 2)); fill(Rect2i(1, 5, 3, 2))
@@ -111,12 +113,14 @@ func load_room(index: int) -> void:
 		player = Vector2i(3, 5); goal = Vector2i(-9, -9)
 	elif room == MIRROR_ROOM:
 		extent = MIRROR_EXTENT
-		fill(Rect2i(2, 6, 3, 1))
-		fill(Rect2i(1, 5, 6, 1))
-		fill(Rect2i(1, 4, 6, 1))
-		land[Vector2i(6, 3)] = true
-		land[Vector2i(4, 3)] = true
-		land[MIRROR_GOAL] = true
+		for x in range(2, 7):
+			land[Vector2i(x, 8)] = true
+		for y in range(1, 8):
+			land[Vector2i(6, y)] = true
+		for x in range(0, 7):
+			land[Vector2i(x, 1)] = true
+		for y in range(2, 7):
+			land[Vector2i(0, y)] = true
 		player = MIRROR_ENTRY
 		goal = MIRROR_GOAL
 	else:
@@ -139,7 +143,7 @@ func bridge_cells(index: int) -> Array:
 
 func walkable(cell: Vector2i) -> bool:
 	if room == MIRROR_ROOM:
-		if cell == MIRROR_FIXED_CELL or cell == MIRROR_TURN_CELL or cell == MIRROR_LAMP or cell == MIRROR_LOTUS:
+		if _mirror_at(cell) != null or cell == MIRROR_LAMP or cell == MIRROR_LOTUS:
 			return false
 		if land.has(cell):
 			return true
@@ -181,7 +185,7 @@ func lit() -> bool:
 	return bank_lit() and deer_time >= DEER_SECONDS
 
 func remember() -> void:
-	history.append({"player": player, "box": box, "lamp": lamp, "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "scarf": scarf, "reached": reached, "bridges": bridges.duplicate(true), "visits": visits.duplicate(), "moves": moves, "turns": turns, "mirror_rot": mirror_rot})
+	history.append({"player": player, "box": box, "lamp": lamp, "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "scarf": scarf, "reached": reached, "bridges": bridges.duplicate(true), "visits": visits.duplicate(), "moves": moves, "turns": turns, "mirror_rots": mirror_rots.duplicate(true)})
 	history[-1]["latch"] = latch
 
 func undo() -> bool:
@@ -191,7 +195,12 @@ func undo() -> bool:
 	lamp = s.lamp; lamp_held = s.held; deer_seen = s.deer; rescued = s.rescued
 	deer_time = s.deer_time
 	latch = s.latch
-	mirror_rot = int(s.get("mirror_rot", mirror_rot))
+	if s.has("mirror_rots") and s["mirror_rots"] is Dictionary:
+		mirror_rots = (s["mirror_rots"] as Dictionary).duplicate(true)
+	elif s.has("mirror_rot"):
+		_reset_mirror_rots()
+		if bool(s.get("reached", reached)):
+			mirror_rots = {"T": 3, "A": 2, "F": 1, "B": 0}
 	scarf = s.scarf; reached = s.reached; bridges = s.bridges; visits = s.visits
 	moves = s.moves; turns = s.turns; progress = 0; turning = -1
 	return true
@@ -267,8 +276,10 @@ func advance(delta: float) -> void:
 		bridges[turning].pose = 1 - bridges[turning].pose
 		turns += 1
 	elif busy == "mirror":
-		mirror_rot = posmod(mirror_rot + 1, MIRROR_STATES)
+		if mirror_rots.has(turning_mirror):
+			mirror_rots[turning_mirror] = posmod(int(mirror_rots[turning_mirror]) + 1, MIRROR_STATES)
 		turns += 1
+		_note_beam_stop()
 	elif busy == "lamp":
 		lamp_held = lamp_destination == Vector2i(-1, -1)
 		if lamp_held and deer_time < DEER_SECONDS: deer_time = -1
@@ -303,37 +314,78 @@ func visual_player() -> Vector2:
 func visual_box() -> Vector2:
 	return Vector2(box).lerp(Vector2(box_destination), smoothstep(0, 1, progress)) if busy == "step" else Vector2(box)
 
+func _reset_mirror_rots() -> void:
+	mirror_rots = {}
+	for mirror in MIRROR_DEFS:
+		mirror_rots[mirror["id"]] = int(mirror["start_rot"])
+
+
+func _mirror_at(cell: Vector2i):
+	for mirror in MIRROR_DEFS:
+		if mirror["cell"] == cell:
+			return mirror
+	return null
+
+
+func mirror_def(id: String) -> Dictionary:
+	for mirror in MIRROR_DEFS:
+		if mirror["id"] == id:
+			return mirror
+	return {}
+
+
+func mirror_rot_of(id: String) -> int:
+	return int(mirror_rots.get(id, mirror_def(id).get("start_rot", 0)))
+
+
+func rotatable_neighbors() -> Array:
+	var found: Array = []
+	if not land.has(player):
+		return found
+	for mirror in MIRROR_DEFS:
+		if bool(mirror["rotatable"]) and distance(player, mirror["cell"]) <= 1:
+			found.append(mirror)
+	return found
+
+
 func mirror_cfg() -> Dictionary:
+	var mirrors: Array = []
+	for mirror in MIRROR_DEFS:
+		mirrors.append({"id": mirror["id"], "cell": mirror["cell"], "rot": mirror_rot_of(mirror["id"])})
 	return {
 		"extent": extent,
 		"lamp": MIRROR_LAMP,
 		"dir": MIRROR_LAMP_DIR,
-		"fixed": MIRROR_FIXED_CELL,
-		"fixed_rot": MIRROR_FIXED_ROT,
-		"turn": MIRROR_TURN_CELL,
 		"lotus": MIRROR_LOTUS,
 		"bounces": MIRROR_MAX_BOUNCES,
+		"mirrors": mirrors,
 	}
 
+
 func beam_trace() -> Dictionary:
-	return MirrorBeam.trace(mirror_cfg(), mirror_rot, player)
+	return MirrorBeam.trace(mirror_cfg(), 0, player)
+
 
 func lotus_lit() -> bool:
 	return room == MIRROR_ROOM and bool(beam_trace().get("hit", false))
 
+
 func can_turn_mirror() -> bool:
 	if room != MIRROR_ROOM or paused or reached or not busy.is_empty():
 		return false
-	return land.has(player) and distance(player, MIRROR_TURN_CELL) <= 1
+	return rotatable_neighbors().size() == 1
+
 
 func turn_mirror() -> bool:
 	if not can_turn_mirror():
 		return false
+	turning_mirror = rotatable_neighbors()[0]["id"]
 	remember()
 	busy = "mirror"
 	progress = 0
 	turning = -1
 	return true
+
 
 func mirror_previews() -> Array:
 	var result: Array = []
@@ -342,11 +394,17 @@ func mirror_previews() -> Array:
 	for mirror in MIRROR_DEFS:
 		if not MirrorBeam.preview_allowed(mirror):
 			continue
-		var cell: Vector2i = mirror["cell"]
-		if distance(player, cell) > 1:
-			continue
-		var nxt := MirrorBeam.preview_cell(mirror_cfg(), mirror_rot, player, cell)
-		if nxt.x < -10:
-			continue
-		result.append({"from": cell, "to": nxt, "id": mirror["id"]})
+		var spec: Dictionary = mirror.duplicate(true)
+		spec["rot"] = mirror_rot_of(mirror["id"])
+		var preview: Dictionary = MirrorBeam.preview_for(mirror_cfg(), spec)
+		if preview.get("ok", false):
+			result.append(preview)
 	return result
+
+
+func _note_beam_stop() -> void:
+	var traced := MirrorBeam.trace(mirror_cfg(), 0, Vector2i(-999, -999))
+	var kind := str(traced.get("stop_kind", ""))
+	if kind == "back" or kind == "reverse":
+		back_flash = 0.25
+		back_flash_cell = traced.get("stop_cell", Vector2i(-1, -1))

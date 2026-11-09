@@ -350,6 +350,7 @@ func _new_game(level_idx: int = -1) -> void:
 	maze = MazeGenerator.new(maze_width, maze_height)
 	if current_level_index == 0:
 		first_journey = FirstJourney.new()
+		first_journey.map_seed = randi()
 		first_journey.build(maze)
 	elif current_level_index == 1:
 		mogao_journey = MogaoJourney.new()

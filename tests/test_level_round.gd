@@ -221,8 +221,10 @@ static func _mirror_faces(t: Node) -> void:
 	t.assert_eq(Beam.reflect(Vector2i.RIGHT, 2), Vector2i.ZERO, "sw blocks a west-coming beam")
 	t.assert_eq(Beam.reflect(Vector2i.RIGHT, 3), Vector2i.UP, "nw reflects west to north")
 	t.assert_eq(Beam.reflect(Vector2i.DOWN, 3), Vector2i.ZERO, "nw blocks the bright-face reverse from the north")
-	t.assert_true(Beam.preview_allowed(CaveModel.MIRROR_DEFS[1]), "teaching mirror preview is on")
-	t.assert_true(not Beam.preview_allowed(CaveModel.MIRROR_DEFS[0]), "other mirrors default preview off")
+	t.assert_true(Beam.preview_allowed(CaveModel.MIRROR_DEFS[0]), "teaching mirror preview is on")
+	t.assert_true(not Beam.preview_allowed(CaveModel.MIRROR_DEFS[1]), "rotatable A keeps preview off")
+	t.assert_true(not Beam.preview_allowed(CaveModel.MIRROR_DEFS[2]), "fixed mirror keeps preview off")
+	t.assert_true(not Beam.preview_allowed(CaveModel.MIRROR_DEFS[3]), "rotatable B keeps preview off")
 	var extra := {"id": "extra", "rotatable": true, "teaching": false, "show_preview": false}
 	t.assert_true(not Beam.preview_allowed(extra), "a mirror can keep its own preview off")
 	extra["show_preview"] = true
@@ -233,61 +235,71 @@ static func _mirror_room(t: Node) -> void:
 	var blocked := CaveNetwork.new()
 	blocked.load_room(CaveModel.MIRROR_ROOM)
 	var dark: Dictionary = blocked.beam_trace()
-	t.assert_true(dark["cells"].has(CaveModel.MIRROR_TURN_CELL), "a back-facing mirror still receives the beam")
-	t.assert_true(not dark["cells"].has(Vector2i(5, 2)) and not dark["hit"], "the beam stops on the mirror back")
-	t.assert_true(not blocked.walkable(Vector2i(6, 2)), "the north bridge stays closed until the front face is used")
-	blocked.player = Vector2i(4, 3)
-	blocked.destination = blocked.player
-	blocked.mirror_rot = 3
-	var shaded: Dictionary = blocked.beam_trace()
-	t.assert_true(shaded["cells"].has(Vector2i(4, 3)) and not shaded["cells"].has(CaveModel.MIRROR_TURN_CELL), "a person standing in the beam blocks it")
+	t.assert_eq(str(dark["stop_kind"]), "back", "teaching mirror starts with its back to the lamp")
+	t.assert_eq(dark["stop_cell"], Vector2i(5, 7), "the opening beam stops on the teaching mirror")
+	t.assert_true(not dark["hit"], "the lotus stays dark until every mirror faces the beam")
 	var solved := CaveNetwork.new()
 	solved.load_room(CaveModel.MIRROR_ROOM)
-	Puzzle.route(t, solved, "UURRRU")
 	var previews: Array = solved.mirror_previews()
 	t.assert_eq(previews.size(), 1, "only the teaching mirror previews")
-	t.assert_eq(previews[0]["id"], "teaching", "preview belongs to the teaching mirror")
-	t.assert_eq(CaveModel.distance(previews[0]["from"], previews[0]["to"]), 1, "preview is a single segment")
-	t.assert_true(previews[0]["to"] != CaveModel.MIRROR_LOTUS, "preview does not draw the rest of the path")
-	var before: Vector2i = previews[0]["to"]
-	t.assert_true(solved.turn_mirror(), "adjacent crank turns the mirror")
-	solved.advance(1)
-	var lit: Dictionary = solved.beam_trace()
-	var index: int = lit["cells"].find(CaveModel.MIRROR_TURN_CELL)
-	t.assert_eq(lit["cells"][index + 1], before, "the preview segment becomes the solid beam")
-	t.assert_true(lit["cells"].size() > index + 2 and lit["hit"], "the solid beam continues to the lotus")
-	t.assert_eq(lit["cells"][lit["cells"].find(CaveModel.MIRROR_FIXED_CELL) + 1] - CaveModel.MIRROR_FIXED_CELL, Vector2i.RIGHT, "fixed mirror exits east, matching ne")
-	t.assert_eq(lit["cells"][index + 1] - CaveModel.MIRROR_TURN_CELL, Vector2i.UP, "teaching mirror exits north, matching nw")
-	t.assert_true(solved.mirror_previews().is_empty(), "the next turn would leave the front, so no reverse preview")
-	var rot := solved.mirror_rot
-	t.assert_true(solved.undo() and solved.mirror_rot != rot, "undo restores the mirror")
-	solved.turn_mirror()
-	solved.advance(1)
-	Puzzle.route(t, solved, "UUULLL")
-	t.assert_true(solved.reached and solved.lotus_lit() and not solved.undo(), "solved mirror cave cannot be undone into a trap")
-	var best := _mirror_search(t)
-	print("MEASURE mirror min_steps=%d" % best)
-	t.assert_true(best > 0 and best <= 14, "mirror cave has a solution within 14 actions")
+	t.assert_eq(str(previews[0]["id"]), "T", "preview belongs to the teaching mirror")
+	t.assert_eq(int(previews[0]["k"]), 2, "the teaching preview asks for two turns")
+	var only_b := CaveNetwork.new()
+	only_b.load_room(CaveModel.MIRROR_ROOM)
+	only_b.mirror_rots["B"] = 0
+	t.assert_true(not only_b.lotus_lit(), "turning only B leaves the beam on an earlier mirror")
+	t.assert_true(CaveModel.distance(previews[0]["from"], previews[0]["to"]) >= 1, "preview leaves the mirror edge")
+	_solve_mirrors(t, solved)
+	t.assert_true(solved.lotus_lit() and solved.mirror_previews().is_empty(), "a solved teaching mirror hides the preview")
+	t.assert_true(solved.reached and not solved.undo(), "solved mirror cave cannot be undone into a trap")
+	var search := _mirror_search(t)
+	print("MEASURE mirror min_actions=%d min_turns=%d" % [search["actions"], search["turns"]])
+	t.assert_eq(search["turns"], 5, "the official layout needs five mirror turns")
+	t.assert_eq(search["actions"], 33, "bfs finds the 33-action solution")
+	t.assert_eq(search["solutions"], 1, "only one facing triple lights the lotus")
 	var saved := CaveNetwork.new()
 	saved.load_room(CaveModel.MIRROR_ROOM)
-	saved.mirror_rot = 3
+	saved.mirror_rots = {"T": 3, "A": 2, "F": 1, "B": 0}
 	saved.player = CaveModel.MIRROR_GOAL
 	saved.destination = saved.player
 	saved.reached = true
 	var copy := CaveNetwork.new()
 	copy.resume_network(CaveModel.MIRROR_ROOM, JSON.parse_string(JSON.stringify(saved.save_network())))
-	t.assert_true(copy.room == CaveModel.MIRROR_ROOM and copy.mirror_rot == 3 and copy.reached and copy.lotus_lit(), "mirror state survives a version 2 save")
+	t.assert_true(copy.room == CaveModel.MIRROR_ROOM and copy.reached and copy.lotus_lit(), "mirror state survives a version 3 save")
+	var legacy := CaveNetwork.new()
+	legacy.resume_network(CaveModel.MIRROR_ROOM, {"version": 2, "rooms": {"7": {"mirror_rot": 2, "reached": true, "player": [3, 0]}}, "entry": [3, 8]})
+	t.assert_true(legacy.reached and legacy.lotus_lit(), "a solved version 2 save migrates onto the solution facings")
 
 
-static func _mirror_search(t: Node) -> int:
-	var queue: Array = [{"p": CaveModel.MIRROR_ENTRY, "r": CaveModel.MIRROR_START_ROT, "s": 0}]
-	var seen := {_key(queue[0]["p"], queue[0]["r"]): true}
-	var best := -1
+static func _solve_mirrors(t: Node, model: CaveNetwork) -> void:
+	Puzzle.route(t, model, "RR")
+	t.assert_true(model.turn_mirror(), "south of the teaching mirror can turn it")
+	model.advance(1)
+	t.assert_true(model.turn_mirror(), "the teaching mirror turns a second time")
+	model.advance(1)
+	Puzzle.route(t, model, "RUUUUUU")
+	t.assert_true(model.turn_mirror(), "A turns from the east wall")
+	model.advance(1)
+	t.assert_true(model.turn_mirror(), "A turns a second time")
+	model.advance(1)
+	Puzzle.route(t, model, "ULLLLLLDDDD")
+	t.assert_true(model.turn_mirror(), "B turns from the west wall")
+	model.advance(1)
+	Puzzle.route(t, model, "UUUURRRU")
+
+
+static func _mirror_search(t: Node) -> Dictionary:
+	var start := "1,0,3"
+	var queue: Array = [{"p": CaveModel.MIRROR_ENTRY, "r": start, "s": 0, "turns": 0}]
+	var seen := {"%s|%s" % [CaveModel.MIRROR_ENTRY, start]: true}
+	var best_actions := -1
+	var best_turns := -1
+	var lit := 0
 	var cursor := 0
 	while cursor < queue.size():
 		var state: Dictionary = queue[cursor]
 		cursor += 1
-		if int(state["s"]) > 24:
+		if best_actions >= 0 and int(state["s"]) > best_actions:
 			continue
 		for direction in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
 			var step := _mirror_at(state)
@@ -297,23 +309,32 @@ static func _mirror_search(t: Node) -> int:
 			if step.reached:
 				t.assert_true(step.lotus_lit(), "reaching the goal requires the lotus")
 				var cost := int(state["s"]) + 1
-				if best < 0 or cost < best:
-					best = cost
+				if best_actions < 0 or cost < best_actions:
+					best_actions = cost
+					best_turns = int(state["turns"])
 				continue
-			var key := _key(step.player, step.mirror_rot)
+			var key := "%s|%s" % [step.player, _rot_key(step)]
 			if seen.has(key):
 				continue
 			seen[key] = true
-			queue.append({"p": step.player, "r": step.mirror_rot, "s": int(state["s"]) + 1})
+			queue.append({"p": step.player, "r": _rot_key(step), "s": int(state["s"]) + 1, "turns": int(state["turns"])})
 		var turn := _mirror_at(state)
 		if turn.can_turn_mirror() and turn.turn_mirror():
 			turn.advance(1)
-			var turned := _key(turn.player, turn.mirror_rot)
+			var turned := "%s|%s" % [turn.player, _rot_key(turn)]
 			if not seen.has(turned):
 				seen[turned] = true
-				queue.append({"p": turn.player, "r": turn.mirror_rot, "s": int(state["s"]) + 1})
-	t.assert_true(seen.has(_key(CaveModel.MIRROR_ENTRY, CaveModel.MIRROR_START_ROT)), "the entrance never gets sealed")
-	return best
+				queue.append({"p": turn.player, "r": _rot_key(turn), "s": int(state["s"]) + 1, "turns": int(state["turns"]) + 1})
+	for ta in range(4):
+		for aa in range(4):
+			for ba in range(4):
+				var probe := CaveNetwork.new()
+				probe.load_room(CaveModel.MIRROR_ROOM)
+				probe.mirror_rots = {"T": ta, "A": aa, "F": 1, "B": ba}
+				if probe.lotus_lit():
+					lit += 1
+	t.assert_true(seen.has("%s|%s" % [CaveModel.MIRROR_ENTRY, start]), "the entrance never gets sealed")
+	return {"actions": best_actions, "turns": best_turns, "solutions": lit}
 
 
 static func _mirror_at(state: Dictionary) -> CaveNetwork:
@@ -321,12 +342,13 @@ static func _mirror_at(state: Dictionary) -> CaveNetwork:
 	model.load_room(CaveModel.MIRROR_ROOM)
 	model.player = state["p"]
 	model.destination = state["p"]
-	model.mirror_rot = state["r"]
+	var parts: PackedStringArray = str(state["r"]).split(",")
+	model.mirror_rots = {"T": int(parts[0]), "A": int(parts[1]), "F": 1, "B": int(parts[2])}
 	return model
 
 
-static func _key(cell: Vector2i, rot: int) -> String:
-	return "%d,%d,%d" % [cell.x, cell.y, rot]
+static func _rot_key(model: CaveNetwork) -> String:
+	return "%d,%d,%d" % [model.mirror_rot_of("T"), model.mirror_rot_of("A"), model.mirror_rot_of("B")]
 
 
 static func _input(t: Node) -> void:
