@@ -100,17 +100,44 @@ static func cave_popup_layer(t: Node) -> void:
 		t.assert_true(layer.layer >= 40, "room %s note draws above the cave sprites" % room_id)
 		t.assert_true(c.mirror_art.get_parent() != layer and c.lamp_halo.get_parent() != layer, "sprites stay off the popup layer")
 	c.show_note()
-	t.assert_eq(c.card_title.text, "镜窟 · 铜镜折光", "reopening the solved mirror cave shows the refraction note")
+	t.assert_eq(c.card_title.text.replace("\n", ""), "镜窟 · 铜镜折光", "reopening the solved mirror cave shows the refraction note")
 	t.assert_true(c.mirror_art.preview_layer.z_index > 0, "mirror preview still stacks above the mirror sprites")
 	t.assert_true((c.overlay.get_parent() as CanvasLayer).layer > c.mirror_art.preview_layer.z_index, "popup layer is above the preview")
 	c.show_card("finish", "走出莫高窟", "这次走了 6 步\n用时 6 分 14 秒", "前往三危山", "再看看洞窟")
 	t.assert_true(c.overlay.visible and c.overlay.get_parent() is CanvasLayer, "settlement uses the same top layer")
 	c.free()
 
+static func mirror_turn_queue(t: Node) -> void:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	t.assert_eq(_mirror_presses(chapter, 2), 2, "two presses during the spin turn the mirror twice")
+	t.assert_eq(chapter.model.busy, "", "the queued turn finishes")
+	t.assert_eq(_mirror_presses(chapter, 3), 2, "a third press during the first spin does not add a third turn")
+	t.assert_eq(chapter.model.busy, "", "three presses still finish after two turns")
+	chapter.free()
+
+
+static func _mirror_presses(chapter: MogaoChapter, count: int) -> int:
+	chapter.model.load_room(CaveModel.MIRROR_ROOM)
+	chapter.model.player = Vector2i(5, 8)
+	chapter.model.destination = chapter.model.player
+	chapter.mirror_turn_queued = false
+	chapter.mode = "playing"
+	chapter.model.paused = false
+	chapter.rebuild_cranks()
+	var start := int(chapter.model.mirror_rot_of("T"))
+	for _i in count:
+		chapter.interact()
+	for _step in 3:
+		chapter._process(0.8)
+	return int(chapter.model.mirror_rot_of("T")) - start
+
+
 static func run(t: Node) -> void:
 	print("\n[TEST] Mogao three distinct cave mechanisms")
 	shared_ear_doors(t)
 	cave_popup_layer(t)
+	mirror_turn_queue(t)
 	pressure_graph(t)
 	pressure_graph(t, 3)
 	var dark := CaveModel.new(); dark.load_room(4)

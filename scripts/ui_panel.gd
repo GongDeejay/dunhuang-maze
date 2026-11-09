@@ -10,7 +10,7 @@ static func log_blocks(messages: Array, width: float, font: Font, font_size: int
 	var blocks := PackedStringArray()
 	var usable := maxf(width, 40.0)
 	for msg in messages:
-		blocks.append(MeasureText.wrapped_text(MeasureText.bind_units(str(msg)), usable, font, font_size))
+		blocks.append(MeasureText.layout_text(str(msg), usable, font, font_size))
 	return blocks
 
 var panel_bg := Color(0.12, 0.10, 0.08)

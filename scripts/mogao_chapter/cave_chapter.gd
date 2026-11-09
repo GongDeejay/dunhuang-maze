@@ -37,6 +37,9 @@ var cranks: Array[Button] = []
 var modal_layer: CanvasLayer
 var overlay: ColorRect
 var level_elapsed := 0.0
+var mirror_turn_queued := false
+var _card_title_source := ""
+var _card_body_source := ""
 var panel: PanelContainer
 var card_title: Label
 var card_body: Label
@@ -168,7 +171,7 @@ func layout() -> void:
 		note_button.position = Vector2(size.x - 108, 170); note_button.size = Vector2(92, 48)
 	# Two lines at the enlarged system text scale still leave a bottom margin.
 	hint.position = Vector2(16, size.y - 56); hint.size = Vector2(area.size.x if short else size.x - 32, 52)
-	for i in cranks.size():
+	for i in mini(cranks.size(), model.cranks.size()):
 		cranks[i].position = point(model.cranks[i].cell) - Vector2(24, 28)
 		cranks[i].size = Vector2(48, 48); cranks[i].visual_scale = clampf(unit / 70, .6, 1)
 	if mirror_art:
@@ -184,7 +187,25 @@ func layout() -> void:
 	overlay.size = get_viewport_rect().size
 	panel.position = Vector2(maxf(8, (size.x - 530) / 2), maxf(8, (size.y - 500) / 2))
 	panel.size = Vector2(minf(530, size.x - 16), minf(500, size.y - 16))
+	_fit_card_copy()
 	settle_text.call_deferred(); queue_redraw()
+
+func card_text_width() -> float:
+	return maxf(40.0, panel.size.x - 36.0)
+
+
+func _fit_card_copy() -> void:
+	if card_body == null or panel == null:
+		return
+	var font := card_body.get_theme_font("font")
+	if font == null:
+		font = FONT
+	var width := card_text_width()
+	card_title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	card_body.autowrap_mode = TextServer.AUTOWRAP_OFF
+	card_title.text = MeasureText.layout_text(_card_title_source, width, font, 23)
+	card_body.text = MeasureText.layout_text(_card_body_source, width, font, 18)
+
 
 func settle_text() -> void:
 	for node in [heading, objective, hint]: node.size.y = 0
@@ -199,7 +220,7 @@ func point(cell: Vector2) -> Vector2:
 func refresh() -> void:
 	var locked := stopped or mode != "playing" or not model.busy.is_empty()
 	for arrow in arrows: arrow.disabled = locked
-	for i in cranks.size():
+	for i in mini(cranks.size(), model.cranks.size()):
 		cranks[i].disabled = locked or not model.can_turn(i)
 		cranks[i].angle = model.angle(model.cranks[i].bridge); cranks[i].queue_redraw()
 	undo_button.disabled = locked or model.history.is_empty() or model.reached or model.rescued
@@ -292,7 +313,11 @@ func turn(index: int = -1) -> void:
 	if mode == "playing" and not stopped and model.turn(index): refresh()
 
 func interact() -> void:
-	if stopped or mode != "playing" or not model.busy.is_empty(): return
+	if stopped or mode != "playing": return
+	if model.room == CaveModel.MIRROR_ROOM and model.busy == "mirror":
+		mirror_turn_queued = true
+		return
+	if not model.busy.is_empty(): return
 	if model.room == 2 and model.rescued and model.player == model.exit_cell:
 		show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n这次走了 %d 步\n%s\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。" % [model.moves, MeasureText.format_duration(level_elapsed)], "前往三危山", "再看看洞窟")
 	elif model.travel():
@@ -340,8 +365,10 @@ func show_card(next_mode: String, title: String, body: String, first: String, se
 	mode = next_mode; model.paused = true
 	# A popup invalidates the step that was waiting for the animation to finish.
 	move_buffer.clear()
+	mirror_turn_queued = false
 	input_handler.held.set_blocked(true)
-	card_title.text = MeasureText.bind_units(title); card_body.text = MeasureText.bind_units(body)
+	_card_title_source = title
+	_card_body_source = body
 	primary.text = first; secondary.text = second; tertiary.text = third
 	secondary.visible = not second.is_empty(); tertiary.visible = not third.is_empty()
 	card_scroll.scroll_vertical = 0; overlay.show(); layout(); refresh()
@@ -533,6 +560,10 @@ func _process(delta: float) -> void:
 	var was_lit := model.lit()
 	var previous_deer := model.deer_time
 	_collect_step_repeat(delta)
+	if previous == "mirror" and model.busy.is_empty() and mirror_turn_queued:
+		mirror_turn_queued = false
+		if model.turn_mirror():
+			refresh()
 	if previous != model.busy:
 		if model.rescued and not rescued_presented:
 			rescued_presented = true

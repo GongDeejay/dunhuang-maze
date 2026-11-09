@@ -26,6 +26,8 @@ var stick_center := Vector2.ZERO
 var stick_radius := 58.0
 var stick_vector := Vector2.ZERO
 var touch := false
+var _card_title_source := ""
+var _card_body_source := ""
 var danger := 0.0
 
 func _ready() -> void:
@@ -65,7 +67,7 @@ func _ready() -> void:
 	heading = Label.new()
 	heading.add_theme_font_size_override("font_size", 26)
 	heading.add_theme_color_override("font_color", Color("f4d89a"))
-	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	heading.autowrap_mode = TextServer.AUTOWRAP_OFF
 	body.add_child(heading)
 	photo = TextureRect.new()
 	photo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -76,7 +78,7 @@ func _ready() -> void:
 	copy = Label.new()
 	copy.add_theme_font_size_override("font_size", 19)
 	copy.add_theme_color_override("font_color", Color("f4ebd8"))
-	copy.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	copy.autowrap_mode = TextServer.AUTOWRAP_OFF
 	body.add_child(copy)
 	sensitivity_label = Label.new()
 	sensitivity_label.text = "观察灵敏度"
@@ -143,6 +145,7 @@ func layout() -> void:
 		hint.size = Vector2(size.x - 370, 0)
 	overlay.size = size
 	var width := minf(620, size.x)
+	_fit_card_copy(width)
 	content_margin.position = Vector2((size.x - width) * 0.5, 0)
 	content_margin.size = Vector2(width, size.y)
 	photo.custom_minimum_size.y = clampf(size.y * 0.32, 100, 270)
@@ -153,9 +156,25 @@ func ui_hit(pos: Vector2) -> bool:
 		if button.get_global_rect().has_point(pos): return true
 	return overlay.visible
 
+func card_text_width() -> float:
+	return maxf(40.0, minf(620.0, size.x) - 40.0)
+
+
+func _fit_card_copy(column_width: float = -1.0) -> void:
+	if copy == null:
+		return
+	var font := copy.get_theme_font("font")
+	if font == null:
+		return
+	var width := column_width - 40.0 if column_width > 0.0 else card_text_width()
+	heading.text = MeasureText.layout_text(_card_title_source, maxf(40.0, width), font, 26)
+	copy.text = MeasureText.layout_text(_card_body_source, maxf(40.0, width), font, 19)
+
+
 func show_card(card_title: String, text: String, first: String, second: String = "", with_photo: bool = false, settings: bool = false) -> void:
-	heading.text = MeasureText.bind_units(card_title)
-	copy.text = MeasureText.bind_units(text)
+	_card_title_source = card_title
+	_card_body_source = text
+	_fit_card_copy()
 	primary.text = first
 	secondary.text = second
 	secondary.visible = not second.is_empty()
