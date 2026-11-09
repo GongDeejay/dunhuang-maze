@@ -60,6 +60,8 @@ var bump_tween: Tween
 var _bumping := false
 var _bump_wall_key := ""
 var _bump_wall_at := -1.0
+var _held_bump_dir := -2
+var _held_bump_key := ""
 var journey_card: JourneyCard
 var advance_after_story := false
 var third_chapter: ThirdChapter
@@ -260,6 +262,7 @@ func _input(event: InputEvent) -> void:
 	_track_held_input(event)
 	# Track presses while a card is open so the close frame cannot replay them.
 	input_handler.handle_direction(event, _keyboard_move_allowed())
+	_sync_held_bump()
 	if _modal_open(): return
 	if _input_guarded():
 		get_viewport().set_input_as_handled()
@@ -956,11 +959,27 @@ func _drink_water_skin(automatic: bool) -> void:
 	_update_mobile_ui()
 
 
+func _sync_held_bump() -> void:
+	var held_dir := input_handler.held.current()
+	if held_dir == _held_bump_dir:
+		return
+	_held_bump_dir = held_dir
+	_held_bump_key = ""
+	_bump_wall_key = ""
+	_bump_wall_at = -1.0
+
+
 func _bump_player(dir: int) -> void:
+	_sync_held_bump()
 	var now := Time.get_ticks_msec() / 1000.0
 	var wall_key: String = WallFeedbackScript.wall_key(player.pos, dir)
+	# A sustained press counts once. The 0.25s cooldown must not fire again.
+	if input_handler.held.current() == dir and _held_bump_key == wall_key:
+		return
 	if not WallFeedbackScript.allow(player.is_hurt, _bump_wall_key, _bump_wall_at, wall_key, now):
 		return
+	if input_handler.held.current() == dir:
+		_held_bump_key = wall_key
 	_bump_wall_key = wall_key
 	_bump_wall_at = now
 	wall_bumps += 1

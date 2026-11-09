@@ -14,6 +14,8 @@ static func run(t: Node) -> void:
 	_test_attack_buffer(t)
 	_test_cave_buffer(t)
 	_test_hazard_hold_stop(t)
+	_test_repeat_does_not_reset_clock(t)
+	_test_wall_hold_bumps_once(t)
 
 
 static func _test_hold_rhythm(t: Node) -> void:
@@ -239,6 +241,41 @@ static func _test_cave_buffer(t: Node) -> void:
 	t.assert_eq(chapter.model.busy, "", "cave movement stays idle after a discarded buffer")
 	controller.free()
 	SaveManager.clear_save()
+
+
+static func _test_repeat_does_not_reset_clock(t: Node) -> void:
+	var controller = _maze(t)
+	controller.player.pos = Vector2i(0, 2)
+	_press(controller, KEY_D, true)
+	t.assert_eq(controller.player.pos, Vector2i(1, 2), "the press itself is the first cell")
+	controller._process(0.5)
+	t.assert_eq(controller.player.pos, Vector2i(4, 2), "0.5 seconds of holding walks four cells")
+	var elapsed := 0.5
+	while elapsed < 0.9 - 0.0001:
+		_key(controller, KEY_D, true, false)
+		controller._process(0.05)
+		elapsed += 0.05
+	t.assert_eq(controller.player.pos, Vector2i(7, 2), "0.9 seconds still walks seven cells when repeats are not echoes")
+	_release(controller)
+	controller.free()
+
+
+static func _test_wall_hold_bumps_once(t: Node) -> void:
+	var controller = _maze(t)
+	controller.player.pos = Vector2i(9, 4)
+	_press(controller, KEY_D, true)
+	t.assert_eq(controller.wall_bumps, 1, "the first press into a wall bumps once")
+	controller._process(0.3)
+	t.assert_eq(controller.wall_bumps, 1, "the 0.25 second cooldown does not bump again")
+	controller._process(1.0)
+	t.assert_eq(controller.wall_bumps, 1, "holding the same wall counts one bump")
+	_release(controller)
+	_press(controller, KEY_D, true)
+	t.assert_eq(controller.wall_bumps, 2, "releasing and pressing the wall bumps again")
+	_press(controller, KEY_S, true)
+	t.assert_eq(controller.wall_bumps, 3, "changing direction bumps the new wall")
+	_release(controller)
+	controller.free()
 
 
 static func _test_hazard_hold_stop(t: Node) -> void:
