@@ -140,7 +140,7 @@ func lantern(c: Control, p: Vector2, radius: float, strength: float, canvas: Can
 	for i in range(4, 0, -1): draw.draw_circle(p, radius * i * 1.8, Color(1, .67, .27, strength * .035))
 	draw.draw_line(p + Vector2(0, radius), p + Vector2(0, radius * 1.8), Color("735338"), 3, true)
 	draw.draw_style_box(lamp_style(), Rect2(p - Vector2.ONE * radius, Vector2.ONE * radius * 2))
-	draw.draw_arc(p - Vector2(0, radius), radius * .7, PI, TAU, 12, Color("d6b276"), 2, true)
+	draw.draw_line(p - Vector2(0, radius), p - Vector2(0, radius * 1.7), Color("d6b276"), 2, true)
 	draw.draw_line(p - Vector2(0, radius), p + Vector2(0, radius), Color("ffeab3"), 2, true)
 
 func lamp_style() -> StyleBoxFlat:
