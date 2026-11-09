@@ -52,6 +52,17 @@ func handle(
 	return GameAction.new()
 
 
+func handle_feature(event: InputEvent, ctx: Dictionary) -> GameAction:
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return GameAction.new()
+	if not ctx.get("mirror_cave", false):
+		return GameAction.new()
+	var key: int = event.physical_keycode if event.physical_keycode else event.keycode
+	if key == KEY_SPACE or key == KEY_E:
+		return GameAction.interact()
+	return GameAction.new()
+
+
 func _handle_confirm(event: InputEvent, ctx: Dictionary) -> GameAction:
 	if event.is_action_pressed("ui_accept") or event.is_action_pressed("regenerate") or event.is_action_pressed("move_right"):
 		return GameAction.confirm()

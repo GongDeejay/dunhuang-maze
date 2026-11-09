@@ -6,7 +6,15 @@ var shortcut := false
 var secret := false
 var arrival := ""
 var entry := Vector2i(2, 6)
-const NAMES := ["入窟", "共耳窟", "鹿影窟", "借路回廊", "灯窟", "中央窟"]
+const NAMES := {
+	0: "入窟",
+	1: "共耳窟",
+	2: "鹿影窟",
+	3: "借路回廊",
+	4: "灯窟",
+	5: "中央窟",
+	7: "镜窟",
+}
 
 func _init() -> void:
 	connected = true
@@ -24,8 +32,9 @@ func doors() -> Array:
 		5: return [door(Vector2i(3, 6), 0, Vector2i(2, 0), "入窟"), door(Vector2i(0, 3), 1, Vector2i(3, 6), "共耳窟"), door(Vector2i(6, 3), 4, Vector2i(3, 7), "灯窟"), door(Vector2i(3, 0), 3, Vector2i(1, 2), "回廊捷径", shortcut)]
 		1: return [door(Vector2i(3, 6), 5, Vector2i(0, 3), "中央窟"), door(goal, 3, Vector2i(3, 8), "借路回廊", reached)]
 		3: return [door(Vector2i(3, 8), 1, Vector2i(3, 0), "共耳窟"), door(goal, 2, Vector2i(1, 7), "鹿影窟", reached), door(Vector2i(1, 2), 5, Vector2i(3, 0), "回廊捷径", reached)]
-		4: return [door(Vector2i(3, 7), 5, Vector2i(6, 3), "中央窟"), door(goal, 2, Vector2i(5, 7), "鹿影窟", reached)]
-		2: return [door(Vector2i(1, 7), 3, Vector2i(3, 0), "借路回廊", solved(3)), door(Vector2i(5, 7), 4, Vector2i(3, 0), "灯窟", solved(4))]
+		4: return [door(Vector2i(3, 7), 5, Vector2i(6, 3), "中央窟"), door(goal, 7, Vector2i(3, 6), "镜窟", reached)]
+		7: return [door(Vector2i(3, 6), 4, Vector2i(3, 0), "灯窟"), door(goal, 2, Vector2i(5, 7), "鹿影窟", reached)]
+		2: return [door(Vector2i(1, 7), 3, Vector2i(3, 0), "借路回廊", solved(3)), door(Vector2i(5, 7), 7, Vector2i(3, 0), "镜窟", solved(7))]
 	return []
 
 func current_door() -> Dictionary:
@@ -82,7 +91,7 @@ func remember_room() -> void:
 	if not busy.is_empty(): return
 	var poses: Array = []
 	for b in bridges: poses.append(b.pose)
-	rooms[str(room)] = {"player": [player.x, player.y], "box": [box.x, box.y], "lamp": [lamp.x, lamp.y], "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "reached": reached, "scarf": scarf, "latch": latch, "poses": poses, "moves": moves, "turns": turns}
+	rooms[str(room)] = {"player": [player.x, player.y], "box": [box.x, box.y], "lamp": [lamp.x, lamp.y], "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "reached": reached, "scarf": scarf, "latch": latch, "poses": poses, "moves": moves, "turns": turns, "mirror_rot": mirror_rot}
 
 func restore_room(s: Dictionary) -> void:
 	player = cell_value(s.get("player"), player)
@@ -96,6 +105,8 @@ func restore_room(s: Dictionary) -> void:
 	if poses is Array:
 		for i in mini(poses.size(), bridges.size()): bridges[i].pose = clampi(int(poses[i]), 0, 1)
 	moves = maxi(0, int(s.get("moves", 0))); turns = maxi(0, int(s.get("turns", 0)))
+	if room == MIRROR_ROOM:
+		mirror_rot = clampi(int(s.get("mirror_rot", MIRROR_START_ROT)), 0, MIRROR_STATES - 1)
 	if not walkable(player) or player == box: player = entry
 	destination = player; box_destination = box
 	history.clear()
@@ -107,12 +118,13 @@ static func cell_value(value: Variant, fallback: Vector2i) -> Vector2i:
 
 func save_network() -> Dictionary:
 	remember_room()
-	return {"version": 1, "rooms": rooms.duplicate(true), "shortcut": shortcut, "secret": secret, "entry": [entry.x, entry.y]}
+	return {"version": 2, "rooms": rooms.duplicate(true), "shortcut": shortcut, "secret": secret, "entry": [entry.x, entry.y]}
 
 func resume_network(id: int, data: Dictionary) -> void:
 	load_room(id); entry = player
 	rooms.clear(); shortcut = false; secret = false
-	if int(data.get("version", 0)) != 1 or not data.get("rooms", {}) is Dictionary:
+	var version := int(data.get("version", 0))
+	if (version != 1 and version != 2) or not data.get("rooms", {}) is Dictionary:
 		migrate_linear_save(room)
 		return
 	var saved_rooms: Dictionary = data.get("rooms", {})
@@ -145,7 +157,7 @@ func reset_current() -> bool:
 	return true
 
 func map_note() -> String:
-	var text := "洞窟相连，左右任一路都能找到哥哥。\n\n入窟 ↔ 中央窟\n左路：中央 ↔ 共耳 ↔ 借路 ↔ 鹿影\n右路：中央 ↔ 灯窟 ↔ 鹿影\n回廊捷径：" + ("已通" if shortcut else "从借路回廊背面开启") + "\n\n"
-	for id in [0, 5, 1, 3, 4, 2]:
+	var text := "洞窟相连，左右任一路都能找到哥哥。\n\n入窟 ↔ 中央窟\n左路：中央 ↔ 共耳 ↔ 借路 ↔ 鹿影\n右路：中央 ↔ 灯窟 ↔ 镜窟 ↔ 鹿影\n回廊捷径：" + ("已通" if shortcut else "从借路回廊背面开启") + "\n\n"
+	for id in [0, 5, 1, 3, 4, 7, 2]:
 		text += ("● " if id == room else "○ ") + NAMES[id] + (" · 当前" if id == room else (" · 已通" if solved(id) else (" · 来过" if rooms.has(str(id)) else " · 未探索"))) + "\n"
 	return text + ("\n手记里多了一张小兔合影。" if secret else "\n中央窟有三条铜线，汇向同一个小节点。")

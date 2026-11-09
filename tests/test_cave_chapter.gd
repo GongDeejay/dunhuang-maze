@@ -173,7 +173,7 @@ static func run(t: Node) -> void:
 	controller.cave_chapter.model.reached = true
 	controller.cave_chapter.model.player = controller.cave_chapter.model.goal
 	controller.cave_chapter.interact()
-	t.assert_eq(SaveManager.load_progress().cave_room, 2, "moving into deer cave saves stable room id, not sequence number")
+	t.assert_eq(SaveManager.load_progress().cave_room, 7, "moving into the mirror cave saves its stable room id, not a sequence number")
 	controller._new_game(2)
 	t.assert_true(not SaveManager.load_progress().has("cave_room"), "third chapter removes cave-only checkpoint")
 	controller.free(); SaveManager.clear_save()

@@ -2,6 +2,7 @@ class_name MazeRenderer
 extends RefCounted
 
 const FAMILY_KEY_TO_SPRITE := AssetRegistry.FAMILY_KEY_TO_SPRITE
+const JourneyBranches = preload("res://scripts/journey_branches.gd")
 
 var cell_size: int = 40
 var wall_thickness: int = 4
@@ -10,6 +11,7 @@ var terrain_sprites: Dictionary = {}
 var player_sprite: Texture2D
 var family_sprites: Array[Texture2D] = []
 var family_sprite_map: Dictionary = {}
+var _sprite_cache: Dictionary = {}
 
 func load_sprites() -> void:
 	player_sprite = _load_character_sprite("dj")
@@ -142,8 +144,9 @@ func draw_pc_view(
 	draw_pillars(canvas, maze, maze_width, maze_height, offset, draw_scale)
 	draw_exit(canvas, exit_pos, offset, draw_scale, is_revealed, exit_visible, game_won)
 	for pos in maze.landmarks:
-		if is_revealed.call(pos) or maze.landmarks[pos].get("discovered", false):
-			draw_landmark(canvas, maze.landmarks[pos], offset + Vector2(pos) * cell_size * draw_scale, cell_size * draw_scale)
+		var revealed := bool(is_revealed.call(pos))
+		if landmark_visible(maze.landmarks[pos], revealed):
+			draw_landmark(canvas, maze.landmarks[pos], offset + Vector2(pos) * cell_size * draw_scale, cell_size * draw_scale, revealed)
 	draw_items(canvas, items, offset, draw_scale, is_revealed)
 	draw_monsters(canvas, monsters, offset, draw_scale, is_revealed, player.pos)
 	draw_player(canvas, player, offset, draw_scale)
@@ -287,7 +290,52 @@ func draw_exit(
 		"门", HORIZONTAL_ALIGNMENT_LEFT, -1, int(16 * scale), Color.WHITE,
 	)
 
-func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs: float) -> void:
+func landmark_visible(landmark: Dictionary, revealed: bool) -> bool:
+	return revealed or bool(landmark.get("discovered", false)) or bool(landmark.get("silhouette", false)) or bool(landmark.get("ghost", false))
+
+
+func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs: float, revealed: bool = true) -> void:
+	var tint := Color.WHITE
+	if landmark.get("kind", "") == "footprint":
+		tint.a = JourneyBranches.footprint_alpha(Time.get_ticks_msec() / 1000.0, bool(landmark.get("pulse", false)))
+	elif landmark.get("ghost", false) and not revealed and not landmark.get("discovered", false):
+		tint.a = 0.45
+	if landmark.kind == "beacon":
+		var key := "beacon_lit" if landmark.get("lit", false) else "beacon"
+		_draw_cached(canvas, AssetRegistry.landmark_path(key), Rect2(origin + Vector2(0, -cs), Vector2(cs, cs * 2.0)), tint)
+		if not landmark.get("lit", false):
+			_draw_cached(canvas, AssetRegistry.extra_item_path("bell"), Rect2(origin + Vector2(cs * 0.58, cs * 0.08), Vector2(cs * 0.36, cs * 0.36)), tint)
+		canvas.draw_string(ThemeDB.fallback_font, origin + Vector2(0, cs * 0.42), "燧", HORIZONTAL_ALIGNMENT_CENTER, int(cs), int(cs * 0.32), Color("3f2b11"))
+		return
+	if landmark.kind == "caravan":
+		var key := "caravan_searched" if landmark.get("searched", false) else "caravan"
+		_draw_cached(canvas, AssetRegistry.landmark_path(key), Rect2(origin + Vector2(-cs, 0), Vector2(cs * 2.0, cs)), tint)
+		if not landmark.get("searched", false):
+			_draw_cached(canvas, AssetRegistry.extra_item_path("fragment_2"), Rect2(origin + Vector2(cs * 0.52, cs * 0.08), Vector2(cs * 0.4, cs * 0.4)), tint)
+		return
+	if landmark.kind == "stele":
+		var key := "stele_read" if landmark.get("read", false) else "stele"
+		_draw_cached(canvas, AssetRegistry.landmark_path(key), Rect2(origin + Vector2(cs * 0.18, cs * 0.12), Vector2(cs * 0.64, cs * 0.64)), tint)
+		if not landmark.get("read", false):
+			_draw_cached(canvas, AssetRegistry.extra_item_path("fragment_3"), Rect2(origin + Vector2(cs * 0.5, cs * 0.5), Vector2(cs * 0.4, cs * 0.4)), tint)
+		return
+	if landmark.kind == "footprint":
+		_draw_cached(canvas, AssetRegistry.decal_path(str(landmark.get("dir", "n"))), Rect2(origin, Vector2(cs, cs)), tint)
+		return
+	if landmark.kind == "family_silhouette":
+		if not landmark.get("silhouette", false):
+			return
+		var source: Dictionary = AssetRegistry.family_silhouette_source()
+		var sprite := _cached_texture(str(source.get("path", "")))
+		var slot := AssetRegistry.FAMILY_SILHOUETTE_ORIGIN
+		var slot_size := AssetRegistry.FAMILY_SILHOUETTE_SIZE
+		var modulate := AssetRegistry.FAMILY_SILHOUETTE_DARKEN if source.get("darken", false) else Color.WHITE
+		if sprite:
+			canvas.draw_texture_rect(sprite, Rect2(origin + Vector2(cs * slot.x, cs * slot.y), Vector2(cs * slot_size.x, cs * slot_size.y)), false, modulate)
+		canvas.draw_arc(origin + Vector2(cs * 0.5, cs * 0.5), cs * 0.42, 0, TAU, 16, Color(0.85, 0.72, 0.35, 0.75), maxf(2, cs * 0.06), true)
+		return
+	if landmark.kind == "mural" and not landmark.get("found", false):
+		_draw_cached(canvas, AssetRegistry.extra_item_path("fragment_1"), Rect2(origin + Vector2(cs * 0.52, cs * 0.08), Vector2(cs * 0.4, cs * 0.4)), tint)
 	if landmark.kind == "deer":
 		canvas.draw_texture_rect(TravelLore.DEER, Rect2(origin + Vector2.ONE * cs * 0.08, Vector2.ONE * cs * 0.84), false)
 		return
@@ -337,6 +385,22 @@ func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs
 
 func _draw_pattern_seal(canvas: CanvasItem, center: Vector2, radius: float, _color: Color) -> void:
 	RabbitLore.draw_plate(canvas, Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2))
+
+func _cached_texture(path: String) -> Texture2D:
+	if path.is_empty():
+		return null
+	if _sprite_cache.has(path):
+		return _sprite_cache[path]
+	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+	_sprite_cache[path] = tex
+	return tex
+
+
+func _draw_cached(canvas: CanvasItem, path: String, rect: Rect2, tint: Color) -> void:
+	var tex := _cached_texture(path)
+	if tex:
+		canvas.draw_texture_rect(tex, rect, false, tint)
+
 
 func draw_items(
 	canvas: CanvasItem,

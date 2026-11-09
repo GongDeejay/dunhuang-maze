@@ -18,9 +18,9 @@
 | 文件 | 角色 | JSON key |
 |------|------|----------|
 | `dj.png` | 玩家 | — |
-| `le.png` | 乐僔 | `family_1` |
-| `mac.png` | 马可 | `family_2` |
-| `mcking.png` | 麦克金 | `family_3` |
+| `le.png` | 妈妈 | `family_1` |
+| `mac.png` | 哥哥 | `family_2` |
+| `mcking.png` | 弟弟 | `family_3` |
 
 源稿：`art/1.png`→dj, `art/2.png`→le, `art/3.png`→mac, `art/4.png`→mcking
 
@@ -42,6 +42,23 @@
 | heal | `item/scroll.png` |
 | attack | `item/sword.png` |
 | defense | `item/shield.png` |
+
+## 第一轮关卡图（v1.2）
+
+路径都从 `scripts/asset_registry.gd` 取。铜镜和莲花灯座在第二关用最近邻过滤的子节点绘制。
+
+| 文件 | 尺寸 | 用途 |
+|------|------|------|
+| `landmark/beacon.png` / `beacon_lit.png` | 16×32 | 烽燧常态 / 登台后，底边对齐所在格 |
+| `landmark/mother_silhouette.png` | 16×16 | 烽燧剪影。文件存在时优先用它，Nearest，不再压暗。缺文件时回退压暗的 `player/le.png`。格子内显示为单元格的 64%（40px 格上约 26×26） |
+| `landmark/caravan.png` / `caravan_searched.png` | 32×16 | 商队遗驼 / 取走清水后；远处驼影用同一张图透明度约 0.45 |
+| `landmark/stele.png` / `stele_read.png` | 16×16 | 残碑未读 / 已读 |
+| `item/fragment_1.png` `fragment_2.png` `fragment_3.png` | 16×16 | 壁画残片标记，对应合图左中右 |
+| `item/bell.png` | 16×16 | 妈妈的驼铃 |
+| `lore/mother_fragments.png` | 96×64 | 通关卡合图，未收集的段压暗。非文物原图 |
+| `decal/footprint_n/e/s/w.png` | 16×16 | 支路入口脚印，后缀是前进方向 |
+| `mogao/mirror_ne/se/sw/nw.png` 及 `_lit` | 16×16 | 单面铜镜四朝向与受光态。光束由代码画 |
+| `mogao/lotus_stand.png` / `lotus_stand_lit.png` | 16×16 | 莲花灯座暗 / 亮 |
 
 ## 缺失 / 待补充
 

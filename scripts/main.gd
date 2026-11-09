@@ -47,6 +47,7 @@ var low_hp_pulse: float = 0.0
 var input_handler := InputHandler.new()
 var attack_cooldown := 0.0
 var first_journey: FirstJourney
+var _branch_visual_tick := 0.0
 var journey_card: JourneyCard
 var advance_after_story := false
 var third_chapter: ThirdChapter
@@ -524,8 +525,15 @@ func _on_level_completed() -> void:
 		return
 	if not first_journey: return
 	advance_after_story = true
-	var discovery := "还发现了石窟壁画和补给。" if first_journey.mural_found else "石窟的秘密，可以留待下次探索。"
-	_show_story({"title": "与妈妈平安会合", "body": "你们沿着古道来到营地，终于能安心歇一口气。\n这次走了 %d 步，%s\n妈妈先留在安全的营地。下一站：莫高窟，寻找哥哥。" % [move_count, discovery], "button": "继续 · 寻找哥哥"})
+	var discovery := first_journey.discovery_line()
+	_show_story({
+		"title": "与妈妈平安会合",
+		"body": "你们沿着古道来到营地，终于能安心歇一口气。\n这次走了 %d 步，%s\n妈妈先留在安全的营地。下一站：莫高窟，寻找哥哥。" % [move_count, discovery],
+		"button": "继续 · 寻找哥哥",
+		"sheet": AssetRegistry.fragment_sheet_path(),
+		"fragment_mask": first_journey.fragment_mask(),
+		"image_caption": "非文物原图",
+	})
 
 func _show_tutorial_if_needed() -> void:
 	if first_journey: return
@@ -904,6 +912,7 @@ func _try_move(dir: int) -> bool:
 func _mark_visited(pos: Vector2i) -> void:
 	visited[pos] = true
 	if first_journey:
+		first_journey.sync_visibility(pos, maze)
 		var card := first_journey.enter(pos, maze, player)
 		if card.get("kind", "") == "roadbook":
 			_add_log(card.body)
@@ -989,6 +998,14 @@ func _process(delta: float) -> void:
 			var effect: Dictionary = level_terrain_effects.get(terrain_key, {})
 			monster_delta *= maxf(0.45, 1.0 - float(effect.get("move_speed_bonus", 0.0)))
 		if _move_monsters(monster_delta):
+			dirty = true
+	if first_journey and maze != null and game.can_move() and not _story_open():
+		if first_journey.silhouette_time > 0.0:
+			first_journey.tick_silhouette(delta, maze)
+			dirty = true
+		_branch_visual_tick += delta
+		if _branch_visual_tick >= 0.1:
+			_branch_visual_tick = 0.0
 			dirty = true
 	if dirty:
 		_request_redraw()

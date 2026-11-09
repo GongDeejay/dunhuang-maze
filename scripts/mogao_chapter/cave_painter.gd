@@ -39,6 +39,8 @@ func paint(c: Control) -> void:
 	var pit := Rect2(c.point(Vector2(.5, 1.5)), Vector2((m.extent.x - 2) * u, (m.extent.y - 4) * u * .72))
 	c.draw_rect(pit, Color("202b29"))
 	for cell in m.land: tile(c, cell, false)
+	if m.room == CaveModel.MIRROR_ROOM:
+		_mirror_floor(c)
 	if m.room in [1, 3]:
 		for gate in m.gates(): tile(c, gate, false)
 	if m.room == 2:
@@ -216,3 +218,16 @@ func light_room(c: Control) -> void:
 	if m.lit():
 		var p: Vector2 = c.point(CaveModel.STANDS[1])
 		c.draw_colored_polygon(PackedVector2Array([p, c.point(Vector2(1.8, 1.3)), c.point(Vector2(5.6, 1.3))]), Color(1, .8, .4, .10 * c.light_visual))
+
+func _mirror_floor(c: Control) -> void:
+	var m: CaveModel = c.model
+	var u: float = c.unit
+	for cell in [CaveModel.MIRROR_FIXED_CELL, CaveModel.MIRROR_TURN_CELL, CaveModel.MIRROR_LAMP, CaveModel.MIRROR_LOTUS]:
+		tile(c, cell, false)
+	for cell in CaveModel.MIRROR_LIT_PATH:
+		if m.lotus_lit():
+			tile(c, cell, true)
+		else:
+			var p: Vector2 = c.point(cell)
+			c.draw_line(p + Vector2(-u * .35, u * .25), p + Vector2(u * .35, u * .25), Color("485149"), 1, true)
+	lantern(c, c.point(CaveModel.MIRROR_LAMP) + Vector2(0, -u * 0.15), u * 0.14, 0.55)
