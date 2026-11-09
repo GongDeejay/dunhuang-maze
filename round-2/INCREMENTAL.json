@@ -1,0 +1,22 @@
+{
+  "baseline": "web/.last_deploy_manifest.json",
+  "current": "web/MANIFEST.json",
+  "build_time_utc": "2026-07-07T07:01:49Z",
+  "git_revision": "4019ac3",
+  "changed": [
+    "DEPLOY.md",
+    "MANIFEST.json",
+    "VERSION.txt",
+    "index.html",
+    "index.pck"
+  ],
+  "added": [],
+  "removed": [],
+  "upload": [
+    "DEPLOY.md",
+    "MANIFEST.json",
+    "VERSION.txt",
+    "index.html",
+    "index.pck"
+  ]
+}
