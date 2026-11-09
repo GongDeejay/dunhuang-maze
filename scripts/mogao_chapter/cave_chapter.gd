@@ -181,7 +181,7 @@ func layout() -> void:
 		note_button.position = Vector2(size.x - 108, 170); note_button.size = Vector2(92, 48)
 	# Two lines at the enlarged system text scale still leave a bottom margin.
 	hint.position = Vector2(16, size.y - 56); hint.size = Vector2(area.size.x if short else size.x - 32, 52)
-	for i in cranks.size():
+	for i in mini(cranks.size(), model.cranks.size()):
 		cranks[i].position = point(model.cranks[i].cell) - Vector2(24, 28)
 		cranks[i].size = Vector2(48, 48); cranks[i].visual_scale = clampf(unit / 70, .6, 1)
 	if mirror_art:
