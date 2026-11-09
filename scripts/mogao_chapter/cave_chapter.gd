@@ -206,7 +206,7 @@ func refresh() -> void:
 		action_button.text = "机关已解"
 		action_button.disabled = true
 	if model.room == CaveModel.MIRROR_ROOM:
-		objective.text = "把光从镜子正面折到莲花灯座"
+		objective.text = "把灯光折到莲花灯座"
 	else:
 		objective.text = ["蓝围巾在对岸 · 转桥接近它", "三兔共耳 · 找到两扇门共用的机关", "九色鹿回望河面 · 对岸还没有光", "一个木箱 · 先借路，再送到对岸", "先留下光 · 再把桥接向对岸", "左边推箱借路 · 右边提灯接桥"][model.room]
 	hint.text = "点方向键走到岸边，再转动栈桥" if touch else "方向键 / WASD 移动 · 空格互动 · Z 撤销"
@@ -238,7 +238,10 @@ func refresh() -> void:
 		if model.lit() and model.bridges[0].pose == 1: hint.text = "灯留在岸边，沿亮起的桥走过去"
 	if model.room == CaveModel.MIRROR_ROOM:
 		objective.text = "把灯光折到莲花灯座"
-		hint.text = "灯在西南角。铜镜亮金的一面才折光。"
+		if touch:
+			hint.text = "灯在西南角。铜镜亮金的一面才折光。\n靠近铜镜，点「转动铜镜」"
+		else:
+			hint.text = "灯在西南角。铜镜亮金的一面才折光。\n方向键 / WASD 移动 · 空格转镜 · Z 撤销"
 		if model.can_turn_mirror():
 			hint.text = "可以转动这面铜镜"
 		if _beside_fixed_mirror():

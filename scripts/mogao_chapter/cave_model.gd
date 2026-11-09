@@ -19,10 +19,10 @@ const MIRROR_MAP_CELL := Vector2i(3, 1)
 const MIRROR_LIT_PATH: Array[Vector2i] = [Vector2i(3, 0)]
 ## 虚线只开在教学镜 T。A、B 可转，F 固定。朝向 0ne 1se 2sw 3nw。
 const MIRROR_DEFS := [
-	{"id": "T", "cell": Vector2i(5, 7), "rotatable": true, "teaching": true, "show_preview": true, "start_rot": 1},
-	{"id": "A", "cell": Vector2i(5, 2), "rotatable": true, "teaching": false, "show_preview": false, "start_rot": 0},
-	{"id": "F", "cell": Vector2i(1, 2), "rotatable": false, "teaching": false, "show_preview": false, "start_rot": 1},
-	{"id": "B", "cell": Vector2i(1, 5), "rotatable": true, "teaching": false, "show_preview": false, "start_rot": 3},
+	{"id": "T", "cell": Vector2i(5, 7), "rotatable": true, "teaching": true, "show_preview": true, "start_rot": 1, "solution_rot": 3},
+	{"id": "A", "cell": Vector2i(5, 2), "rotatable": true, "teaching": false, "show_preview": false, "start_rot": 3, "solution_rot": 2},
+	{"id": "F", "cell": Vector2i(1, 2), "rotatable": false, "teaching": false, "show_preview": false, "start_rot": 1, "solution_rot": 1},
+	{"id": "B", "cell": Vector2i(1, 5), "rotatable": true, "teaching": false, "show_preview": false, "start_rot": 3, "solution_rot": 0},
 ]
 var connected := false
 const RELAY_PLATES := [Vector2i(3, 5), Vector2i(5, 2)]
@@ -200,7 +200,7 @@ func undo() -> bool:
 	elif s.has("mirror_rot"):
 		_reset_mirror_rots()
 		if bool(s.get("reached", reached)):
-			mirror_rots = {"T": 3, "A": 2, "F": 1, "B": 0}
+			mirror_rots = solution_rots()
 	scarf = s.scarf; reached = s.reached; bridges = s.bridges; visits = s.visits
 	moves = s.moves; turns = s.turns; progress = 0; turning = -1
 	return true
@@ -313,6 +313,13 @@ func visual_player() -> Vector2:
 
 func visual_box() -> Vector2:
 	return Vector2(box).lerp(Vector2(box_destination), smoothstep(0, 1, progress)) if busy == "step" else Vector2(box)
+
+static func solution_rots() -> Dictionary:
+	var rots := {}
+	for mirror in MIRROR_DEFS:
+		rots[str(mirror["id"])] = int(mirror["solution_rot"])
+	return rots
+
 
 func _reset_mirror_rots() -> void:
 	mirror_rots = {}

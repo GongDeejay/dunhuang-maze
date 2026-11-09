@@ -68,6 +68,8 @@ static func run(t: Node) -> void:
 	m.advance(1)
 	t.assert_true(m.turn_mirror(), "mirror A turns a second time")
 	m.advance(1)
+	t.assert_true(m.turn_mirror(), "mirror A turns a third time")
+	m.advance(1)
 	walk(t, m, "ULLLLLLDDDD")
 	t.assert_true(m.turn_mirror(), "mirror B turns from the west")
 	m.advance(1)

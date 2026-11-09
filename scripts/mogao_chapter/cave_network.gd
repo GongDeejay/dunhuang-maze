@@ -111,7 +111,7 @@ func restore_room(s: Dictionary) -> void:
 		elif s.has("mirror_rot"):
 			_reset_mirror_rots()
 			if bool(s.get("reached", false)):
-				mirror_rots = {"T": 3, "A": 2, "F": 1, "B": 0}
+				mirror_rots = solution_rots()
 	if not walkable(player) or player == box: player = entry
 	destination = player; box_destination = box
 	history.clear()

@@ -244,6 +244,13 @@ static func _mirror_room(t: Node) -> void:
 	t.assert_eq(previews.size(), 1, "only the teaching mirror previews")
 	t.assert_eq(str(previews[0]["id"]), "T", "preview belongs to the teaching mirror")
 	t.assert_eq(int(previews[0]["k"]), 2, "the teaching preview asks for two turns")
+	var pits := 0
+	for cell in dark["cells"]:
+		if _beam_fixture(cell):
+			continue
+		pits += 1
+		t.assert_true(not blocked.land.has(cell), "the opening beam stays off the floor at %s" % cell)
+	t.assert_true(pits > 0, "the opening beam crosses a dark pit")
 	var only_b := CaveNetwork.new()
 	only_b.load_room(CaveModel.MIRROR_ROOM)
 	only_b.mirror_rots["B"] = 0
@@ -254,12 +261,12 @@ static func _mirror_room(t: Node) -> void:
 	t.assert_true(solved.reached and not solved.undo(), "solved mirror cave cannot be undone into a trap")
 	var search := _mirror_search(t)
 	print("MEASURE mirror min_actions=%d min_turns=%d" % [search["actions"], search["turns"]])
-	t.assert_eq(search["turns"], 5, "the official layout needs five mirror turns")
-	t.assert_eq(search["actions"], 33, "bfs finds the 33-action solution")
+	t.assert_eq(search["turns"], 6, "the official layout needs six mirror turns")
+	t.assert_eq(search["actions"], 34, "bfs finds the 34-action solution")
 	t.assert_eq(search["solutions"], 1, "only one facing triple lights the lotus")
 	var saved := CaveNetwork.new()
 	saved.load_room(CaveModel.MIRROR_ROOM)
-	saved.mirror_rots = {"T": 3, "A": 2, "F": 1, "B": 0}
+	saved.mirror_rots = CaveModel.solution_rots()
 	saved.player = CaveModel.MIRROR_GOAL
 	saved.destination = saved.player
 	saved.reached = true
@@ -282,6 +289,8 @@ static func _solve_mirrors(t: Node, model: CaveNetwork) -> void:
 	model.advance(1)
 	t.assert_true(model.turn_mirror(), "A turns a second time")
 	model.advance(1)
+	t.assert_true(model.turn_mirror(), "A turns a third time")
+	model.advance(1)
 	Puzzle.route(t, model, "ULLLLLLDDDD")
 	t.assert_true(model.turn_mirror(), "B turns from the west wall")
 	model.advance(1)
@@ -289,7 +298,7 @@ static func _solve_mirrors(t: Node, model: CaveNetwork) -> void:
 
 
 static func _mirror_search(t: Node) -> Dictionary:
-	var start := "1,0,3"
+	var start := "%d,%d,%d" % [_def_rot("T", "start_rot"), _def_rot("A", "start_rot"), _def_rot("B", "start_rot")]
 	var queue: Array = [{"p": CaveModel.MIRROR_ENTRY, "r": start, "s": 0, "turns": 0}]
 	var seen := {"%s|%s" % [CaveModel.MIRROR_ENTRY, start]: true}
 	var best_actions := -1
@@ -345,6 +354,22 @@ static func _mirror_at(state: Dictionary) -> CaveNetwork:
 	var parts: PackedStringArray = str(state["r"]).split(",")
 	model.mirror_rots = {"T": int(parts[0]), "A": int(parts[1]), "F": 1, "B": int(parts[2])}
 	return model
+
+
+static func _def_rot(id: String, field: String) -> int:
+	for mirror in CaveModel.MIRROR_DEFS:
+		if str(mirror["id"]) == id:
+			return int(mirror[field])
+	return 0
+
+
+static func _beam_fixture(cell: Vector2i) -> bool:
+	if cell == CaveModel.MIRROR_LAMP or cell == CaveModel.MIRROR_LOTUS:
+		return true
+	for mirror in CaveModel.MIRROR_DEFS:
+		if mirror["cell"] == cell:
+			return true
+	return false
 
 
 static func _rot_key(model: CaveNetwork) -> String:

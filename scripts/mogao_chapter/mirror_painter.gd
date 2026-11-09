@@ -28,7 +28,7 @@ static func draw_previews(canvas: CanvasItem, host) -> void:
 		var start: Vector2 = origin + dir * host.unit * 0.55
 		var finish: Vector2 = host.point(seg["to"])
 		_draw_dashed(canvas, start, finish, Color(0.98, 0.86, 0.45, 0.8), maxf(3.0, host.unit * 0.06))
-		canvas.draw_string(MogaoChapter.FONT, finish + Vector2(6, -6), "×%d" % int(seg["k"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("f5dba8"))
+		canvas.draw_string(MogaoChapter.FONT, finish + Vector2(6, -6), "还要转%d下" % int(seg["k"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("f5dba8"))
 
 
 static func mirror_texture(rot: int, lit: bool) -> Texture2D:

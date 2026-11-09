@@ -18,14 +18,9 @@ static func _mirrors(t: Node) -> void:
 
 
 static func _mirror_back(t: Node) -> void:
-	var dedicated := false
-	for ext in [".wav", ".ogg", ".mp3"]:
-		if ResourceLoader.exists("res://assets/audio/mirror_back" + ext):
-			dedicated = true
-	if dedicated:
-		t.assert_true(AudioManager.mirror_back_source().contains("mirror_back"), "a dedicated mirror-back sample wins")
-	else:
-		t.assert_eq(AudioManager.mirror_back_source(), AudioManager.wall_hit_source(), "mirror back reuses the wall-hit sample")
+	t.assert_true(ResourceLoader.exists("res://assets/audio/mirror_back.ogg"), "mirror back sample is delivered")
+	t.assert_eq(AudioManager.mirror_back_source(), "res://assets/audio/mirror_back.ogg", "mirror back plays its own sample")
+	t.assert_true(AudioManager.mirror_back_source() != AudioManager.wall_hit_source(), "mirror back no longer reuses the wall hit")
 
 
 static func _halo(t: Node) -> void:
