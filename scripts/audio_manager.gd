@@ -150,10 +150,19 @@ func wall_hit_fallback() -> Dictionary:
 	return {"freq": 70.0, "duration": 0.09, "volume": 0.25, "decay_at": 0.12}
 
 
+func mirror_back_source() -> String:
+	var extensions: Array[String] = [".wav", ".ogg", ".mp3"]
+	for ext in extensions:
+		var path: String = AUDIO_DIR + "mirror_back" + ext
+		if ResourceLoader.exists(path):
+			return path
+	return wall_hit_source()
+
+
 func play_mirror_back() -> void:
 	if _play_sample("mirror_back"):
 		return
-	_play_tone(90.0, 0.08, 0.25, 0, 0.12)
+	play_wall_hit()
 
 
 func play_drink() -> void:

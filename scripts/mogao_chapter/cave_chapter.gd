@@ -52,6 +52,8 @@ var gate_visual := [0.0, 0.0]
 var light_visual := 0.0
 var painter := Painter.new()
 var mirror_art: Control
+var lamp_halo: Control
+var actor_layer: Control
 
 func _ready() -> void:
 	rescued_presented = model.rescued
@@ -71,6 +73,8 @@ func _ready() -> void:
 		arrows.append(make_button(spec[0], func(): move(d)))
 	make_modal()
 	_add_mirror_art()
+	_add_lamp_halo()
+	_add_actor_layer()
 	rebuild_cranks()
 	get_viewport().size_changed.connect(layout)
 	layout(); refresh()
@@ -125,10 +129,8 @@ func rebuild_cranks() -> void:
 	for i in model.cranks.size():
 		var index := i
 		cranks.append(make_button("", func(): turn(index), self, true))
-	# Modal must always intercept input above scenery and newly created cranks.
-	if mirror_art:
-		move_child(mirror_art, 0)
-	move_child(overlay, -1)
+	# Halo, then the player, then mirrors. HUD and the modal stay in front.
+	_order_scene_layers()
 
 func layout() -> void:
 	size = get_viewport_rect().size
@@ -162,6 +164,12 @@ func layout() -> void:
 	if mirror_art:
 		mirror_art.position = Vector2.ZERO
 		mirror_art.size = size
+	if lamp_halo:
+		lamp_halo.position = Vector2.ZERO
+		lamp_halo.size = size
+	if actor_layer:
+		actor_layer.position = Vector2.ZERO
+		actor_layer.size = size
 	overlay.size = size
 	panel.position = Vector2(maxf(8, (size.x - 530) / 2), maxf(8, (size.y - 500) / 2))
 	panel.size = Vector2(minf(530, size.x - 16), minf(500, size.y - 16))
@@ -531,8 +539,39 @@ func _add_mirror_art() -> void:
 	art.set_script(preload("res://scripts/mogao_chapter/mirror_art.gd"))
 	art.host = self
 	add_child(art)
-	move_child(art, 0)
 	mirror_art = art
+
+
+func _add_lamp_halo() -> void:
+	var halo := Control.new()
+	halo.name = "LampHalo"
+	halo.set_script(preload("res://scripts/mogao_chapter/lamp_halo.gd"))
+	halo.host = self
+	add_child(halo)
+	lamp_halo = halo
+
+
+func _add_actor_layer() -> void:
+	var layer := Control.new()
+	layer.name = "ActorLayer"
+	layer.set_script(preload("res://scripts/mogao_chapter/actor_layer.gd"))
+	layer.host = self
+	add_child(layer)
+	actor_layer = layer
+
+
+func _order_scene_layers() -> void:
+	var back: Array[Node] = []
+	if lamp_halo:
+		back.append(lamp_halo)
+	if actor_layer:
+		back.append(actor_layer)
+	if mirror_art:
+		back.append(mirror_art)
+	for i in back.size():
+		move_child(back[i], i)
+	if overlay:
+		move_child(overlay, -1)
 
 func _draw() -> void:
 	if heading: painter.paint(self)

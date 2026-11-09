@@ -59,7 +59,8 @@
 | `item/waterskin.png` / `waterskin_empty.png` | 16×16 | 水囊满 / 空 |
 | `lore/mother_fragments.png` | 96×64 | 通关卡合图，未收集的段压暗。非文物原图 |
 | `decal/footprint_n/e/s/w.png` | 16×16 | 支路入口脚印，后缀是前进方向 |
-| `mogao/mirror_ne/se/sw/nw.png` 及 `_lit` | 16×16 | 单面铜镜四朝向与受光态。光束由代码画 |
+| `mogao/mirror_ne/se/sw/nw.png` 及 `_lit` | 16×16 | 单面铜镜四朝向与受光态。正面亮金，背面深青铜，光束由代码画 |
+| `mogao/lamp_halo.png` | 32×32 | 拿灯时脚下的光晕。只在鹿影和灯窟显示，Nearest |
 | `mogao/lotus_stand.png` / `lotus_stand_lit.png` | 16×16 | 莲花灯座暗 / 亮 |
 
 ## 缺失 / 待补充
