@@ -52,8 +52,65 @@ static func pressure_graph(t: Node, room_id: int = 1) -> void:
 	t.assert_true(solved, "exhaustive pressure graph contains a winning route")
 	t.assert_true(not bypass, "neither side plate nor body-only weight bypasses the shared crate solution")
 
+static func shared_ear_doors(t: Node) -> void:
+	var m := CaveModel.new()
+	m.load_room(1)
+	route(t, m, "UUU")
+	t.assert_eq(m.player, CaveModel.PLATE, "player stands on the shared plate")
+	t.assert_true(m.gate_open(0) and m.gate_open(1), "body weight still powers both wires")
+	t.assert_true(not m.gate_passable(0) and not m.gate_passable(1), "neither door stays open once that weight leaves")
+	t.assert_true(not m.step(Vector2i.UP), "cannot walk through the door held only by the player")
+	var c := MogaoChapter.new()
+	t.add_child(c)
+	c.model.load_room(1)
+	c.model.player = CaveModel.PLATE
+	c.model.destination = c.model.player
+	c.model.box = Vector2i(2, 4)
+	c.gate_visual = [1.0, 1.0]
+	c._process(1.0)
+	t.assert_true(c.model.gate_open() and not c.door_leaf_open(0) and not c.door_leaf_open(1), "pressed plate draws both shared doors shut")
+	c.model.box = CaveModel.PLATE
+	c.model.player = Vector2i(2, 2)
+	c.model.destination = c.model.player
+	c._process(1.0)
+	t.assert_true(c.model.gate_passable(0) and c.door_leaf_open(0) and c.door_leaf_open(1), "crate on the shared plate draws both doors open")
+	t.assert_true(c.model.step(Vector2i.RIGHT), "the drawn-open door can be entered from beside it")
+	var relay := MogaoChapter.new()
+	t.add_child(relay)
+	relay.model.load_room(3)
+	relay.model.player = CaveModel.RELAY_PLATES[0]
+	relay.model.destination = relay.model.player
+	relay.model.box = Vector2i(2, 6)
+	relay._process(1.0)
+	t.assert_true(not relay.model.gate_passable(0) and relay.gate_visual[0] > 0.9, "borrowed corridor still draws a pressed plate as an open leaf")
+	c.free()
+	relay.free()
+
+static func cave_popup_layer(t: Node) -> void:
+	var c := MogaoChapter.new()
+	t.add_child(c)
+	for room_id in [0, 1, 2, 3, 4, 5, CaveModel.MIRROR_ROOM]:
+		c.close_card()
+		c.model.load_room(room_id)
+		c.rebuild_cranks()
+		c.show_note()
+		t.assert_true(c.overlay.visible, "room %s opens its note" % room_id)
+		t.assert_true(c.overlay.get_parent() is CanvasLayer, "room %s note sits on a canvas layer" % room_id)
+		var layer := c.overlay.get_parent() as CanvasLayer
+		t.assert_true(layer.layer >= 40, "room %s note draws above the cave sprites" % room_id)
+		t.assert_true(c.mirror_art.get_parent() != layer and c.lamp_halo.get_parent() != layer, "sprites stay off the popup layer")
+	c.show_note()
+	t.assert_eq(c.card_title.text, "镜窟 · 铜镜折光", "reopening the solved mirror cave shows the refraction note")
+	t.assert_true(c.mirror_art.preview_layer.z_index > 0, "mirror preview still stacks above the mirror sprites")
+	t.assert_true((c.overlay.get_parent() as CanvasLayer).layer > c.mirror_art.preview_layer.z_index, "popup layer is above the preview")
+	c.show_card("finish", "走出莫高窟", "这次走了 6 步\n用时 6 分 14 秒", "前往三危山", "再看看洞窟")
+	t.assert_true(c.overlay.visible and c.overlay.get_parent() is CanvasLayer, "settlement uses the same top layer")
+	c.free()
+
 static func run(t: Node) -> void:
 	print("\n[TEST] Mogao three distinct cave mechanisms")
+	shared_ear_doors(t)
+	cave_popup_layer(t)
 	pressure_graph(t)
 	pressure_graph(t, 3)
 	var dark := CaveModel.new(); dark.load_room(4)

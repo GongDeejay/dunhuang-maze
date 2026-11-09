@@ -34,6 +34,7 @@ var note_button: Button
 var pause_button: Button
 var arrows: Array[Button] = []
 var cranks: Array[Button] = []
+var modal_layer: CanvasLayer
 var overlay: ColorRect
 var level_elapsed := 0.0
 var panel: PanelContainer
@@ -108,9 +109,15 @@ func make_button(text: String, callback: Callable, parent: Node = self, crank: b
 	return node
 
 func make_modal() -> void:
+	# Mirror and lamp sprites use their own z_index, which draws above a sibling Control.
+	# Every cave card (notes, pause, settlement) shares this layer, above those sprites.
+	modal_layer = CanvasLayer.new()
+	modal_layer.name = "CaveModal"
+	modal_layer.layer = 40
+	add_child(modal_layer)
 	overlay = ColorRect.new(); overlay.color = Color(0.04, .04, .035, .86)
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(overlay)
+	modal_layer.add_child(overlay)
 	panel = PanelContainer.new(); overlay.add_child(panel)
 	var style := StyleBoxFlat.new(); style.bg_color = Color("303d39")
 	style.border_color = Color("bea471"); style.set_border_width_all(2); style.set_corner_radius_all(14)
@@ -173,7 +180,8 @@ func layout() -> void:
 	if actor_layer:
 		actor_layer.position = Vector2.ZERO
 		actor_layer.size = size
-	overlay.size = size
+	overlay.position = Vector2.ZERO
+	overlay.size = get_viewport_rect().size
 	panel.position = Vector2(maxf(8, (size.x - 530) / 2), maxf(8, (size.y - 500) / 2))
 	panel.size = Vector2(minf(530, size.x - 16), minf(500, size.y - 16))
 	settle_text.call_deferred(); queue_redraw()
@@ -361,7 +369,9 @@ func modal_tertiary() -> void:
 	if mode == "pause": show_card("menu", "返回首页？", "下次从最近完成的动作继续；已解机关、捷径和小画都会保留。", "返回首页", "留在这里")
 
 func shutdown() -> void:
-	stopped = true; model.paused = true; hide(); set_process(false); set_process_unhandled_key_input(false)
+	stopped = true; model.paused = true
+	if modal_layer: modal_layer.hide()
+	hide(); set_process(false); set_process_unhandled_key_input(false)
 	restore_browser_viewport()
 
 func restore_browser_viewport() -> void:
@@ -538,7 +548,10 @@ func _process(delta: float) -> void:
 		var old_light := light_visual
 		for i in 2:
 			var before: float = gate_visual[i]
-			gate_visual[i] = move_toward(before, 1.0 if model.gate_open(i) else 0.0, delta * 3)
+			# 共耳: draw the leaf only when the door stays open after you step off.
+			# 借路回廊 still follows plate weight; that room is waiting on a replacement.
+			var shown_open := model.gate_passable(i) if model.room == 1 else model.gate_open(i)
+			gate_visual[i] = move_toward(before, 1.0 if shown_open else 0.0, delta * 3)
 			if before != gate_visual[i]: queue_redraw()
 		light_visual = move_toward(light_visual, 1.0 if model.lit() else 0.0, delta * 2)
 		if old_light != light_visual: queue_redraw()
@@ -589,8 +602,11 @@ func _order_scene_layers() -> void:
 		back.append(mirror_art)
 	for i in back.size():
 		move_child(back[i], i)
-	if overlay:
-		move_child(overlay, -1)
+	if modal_layer:
+		move_child(modal_layer, -1)
+
+func door_leaf_open(index: int) -> bool:
+	return gate_visual[index] >= 0.99
 
 func _draw() -> void:
 	if heading: painter.paint(self)

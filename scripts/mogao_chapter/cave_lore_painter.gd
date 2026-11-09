@@ -22,8 +22,10 @@ static func shared_ears(c: Control) -> void:
 	for i in 2:
 		var g: Vector2 = c.point(CaveModel.GATES[i])
 		for dx in [-.46, .46]: c.draw_line(g + Vector2(dx * u, u * .24), g + Vector2(dx * u, -u * .5), Color("715235"), maxf(4, u * .10), true)
-		if c.gate_visual[i] < .99:
-			var h: float = u * .65 * (1 - c.gate_visual[i])
+		if c.door_leaf_open(i):
+			c.draw_line(g + Vector2(0, -u * .48), g + Vector2(0, -u * .06), Color("fff0c2"), maxf(4, u * .08), true)
+		else:
+			var h: float = u * .65 * (1.0 - clampf(c.gate_visual[i], 0.0, 0.99))
 			c.draw_rect(Rect2(g + Vector2(-u * .36, -u * .42), Vector2(u * .72, h)), Color("84613c"))
 			for dx in [-.2, 0, .2]: c.draw_line(g + Vector2(dx * u, -u * .42), g + Vector2(dx * u, -u * .42 + h), Color("d4af6e"), 2, true)
 	var art := Rect2(c.point(Vector2(.8, 1.1)) - Vector2.ONE * u * .72, Vector2.ONE * u * 1.44)

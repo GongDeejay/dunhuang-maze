@@ -177,6 +177,11 @@ func gate_open(index: int = -1, actor: Vector2i = player) -> bool:
 	if room == 3: return (latch or plate_active(0, actor)) if index == 0 else plate_active(1, actor)
 	return plate_active(1, actor) or plate_active(0 if index == 0 else 2, actor)
 
+## A door the player can walk through. Body weight makes gate_open true, but stepping
+## onto the gate leaves the plate, so that weight does not count as a way through.
+func gate_passable(index: int) -> bool:
+	return gate_open(index, Vector2i(-99, -99))
+
 func bank_lit() -> bool:
 	return room == 2 and not lamp_held and lamp == STANDS[1]
 

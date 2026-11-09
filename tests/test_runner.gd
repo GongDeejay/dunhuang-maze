@@ -688,15 +688,17 @@ func test_web_font_payload():
 	var mogao_font: FontFile = load("res://assets/fonts/MogaoSubset.ttf")
 	mogao_font.allow_system_fallback = false
 	var mogao_chars := {}
-	var mogao_files: Array[String] = []
-	_collect_files("res://scripts/mogao_chapter", ".gd", mogao_files)
-	_collect_files("res://scripts/mogao_chapter", ".json", mogao_files)
+	var mogao_files := _mogao_render_sources()
 	var saw_mirror_script := false
+	var saw_measure_text := false
 	for file in mogao_files:
 		if file.get_file().begins_with("mirror_") and file.ends_with(".gd"):
 			saw_mirror_script = true
-		_collect_string_chars(FileAccess.get_file_as_string(file), mogao_chars)
+		if file.ends_with("measure_text.gd"):
+			saw_measure_text = true
+		_collect_display_chars(file, mogao_chars)
 	assert_true(saw_mirror_script, "chapter 2 glyph scan includes mirror_*.gd")
+	assert_true(saw_measure_text, "chapter 2 glyph scan includes settlement text rendered with the cave font")
 	var mogao_watch := "镜洞窟灯折光还要转这面镜"
 	var mogao_missed := ""
 	for i in mogao_watch.length():
@@ -726,6 +728,63 @@ func test_web_font_payload():
 		if not game_chars.has(third_code) or not game_font.has_char(third_code):
 			third_missed += char(third_code)
 	assert_true(third_missed.is_empty(), "chapter 3 copy is covered by the game subset: %s" % third_missed)
+	var duration_template := "用时 %d 分 %d 秒"
+	var template_gap := ""
+	for i in duration_template.length():
+		var template_code: int = duration_template.unicode_at(i)
+		if template_code < 32:
+			continue
+		if not game_chars.has(template_code) or not mogao_chars.has(template_code):
+			template_gap += char(template_code)
+	assert_true(template_gap.is_empty(), "settlement template is scanned for both fonts: %s" % template_gap)
+	for sample in ["用时 12 分 34 秒", "用时 6 分 14 秒"]:
+		var game_gap := ""
+		var mogao_gap := ""
+		for i in sample.length():
+			var sample_code: int = sample.unicode_at(i)
+			if not game_font.has_char(sample_code):
+				game_gap += char(sample_code)
+			if not mogao_font.has_char(sample_code):
+				mogao_gap += char(sample_code)
+		assert_true(game_gap.is_empty(), "level 1 settlement font is missing: %s" % game_gap)
+		assert_true(mogao_gap.is_empty(), "level 2 settlement font is missing: %s" % mogao_gap)
+
+
+func _mogao_render_sources() -> Array[String]:
+	# Cave theme font. Chapter scripts, their JSON, and every script they preload,
+	# because settlement time is built outside the chapter folder and drawn with this font.
+	var pending: Array[String] = []
+	_collect_files("res://scripts/mogao_chapter", ".gd", pending)
+	_collect_files("res://scripts/mogao_chapter", ".json", pending)
+	var files: Array[String] = []
+	var seen := {}
+	var preload_re := RegEx.new()
+	preload_re.compile("preload\\(\"res://([^\"]+\\.gd)\"\\)")
+	while not pending.is_empty():
+		var path: String = pending.pop_back()
+		if seen.has(path):
+			continue
+		seen[path] = true
+		files.append(path)
+		if not path.ends_with(".gd"):
+			continue
+		for found in preload_re.search_all(FileAccess.get_file_as_string(path)):
+			var nxt := "res://" + found.get_string(1)
+			if FileAccess.file_exists(nxt):
+				pending.append(nxt)
+	return files
+
+
+func _collect_display_chars(path: String, chars: Dictionary) -> void:
+	var text := FileAccess.get_file_as_string(path)
+	if path.ends_with(".json"):
+		var parsed = JSON.parse_string(text)
+		if parsed == null:
+			_collect_string_chars(text, chars)
+		else:
+			_collect_json_chars(parsed, chars)
+	else:
+		_collect_string_chars(text, chars)
 
 
 func _collect_files(path: String, suffix: String, into: Array[String]) -> void:
