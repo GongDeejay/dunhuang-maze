@@ -61,7 +61,9 @@ static func preview_label_rect(mirror: Vector2, beam_dir: Vector2, unit: float, 
 	var gap := maxf(6.0, unit * 0.22)
 	if absf(beam_dir.x) > absf(beam_dir.y):
 		return Rect2(Vector2(sprite.get_center().x - text_size.x * 0.5, sprite.position.y - gap - text_size.y), text_size)
-	return Rect2(Vector2(sprite.position.x - gap - text_size.x, sprite.get_center().y - text_size.y * 0.5), text_size)
+	# The incoming beam crosses the mirror's middle, and the dash leaves along beam_dir.
+	# The corner above the sprite and beside that dash clears both.
+	return Rect2(Vector2(sprite.position.x - gap - text_size.x, sprite.position.y - gap - text_size.y), text_size)
 
 
 static func segment_hits_rect(a: Vector2, b: Vector2, rect: Rect2) -> bool:

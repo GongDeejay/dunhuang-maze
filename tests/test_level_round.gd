@@ -333,6 +333,8 @@ static func _preview_label_clears_mirror(t: Node, seg: Dictionary) -> void:
 		var start := mirror + beam * unit * 0.55
 		var stroke := maxf(3.0, unit * 0.06)
 		t.assert_true(not Painter.segment_hits_rect(start, far, label.grow(stroke)), "turn count stays off the dashed line at unit %s" % unit)
+		var incoming := mirror + Vector2(-180, 0)
+		t.assert_true(not Painter.segment_hits_rect(incoming, mirror, label.grow(stroke)), "turn count stays off the incoming beam at unit %s" % unit)
 		t.assert_true(label.get_center().distance_to(mirror) < label.get_center().distance_to(far), "turn count sits by the lit mirror")
 
 
