@@ -10,7 +10,15 @@ const BROTHER = preload("res://assets/high_quality/player/mac.svg")
 const RABBITS = preload("res://assets/lore/three_hares.svg")
 const DEER = preload("res://assets/lore/nine_deer.svg")
 const Painter = preload("res://scripts/mogao_chapter/cave_painter.gd")
-const ROOM_NAMES := ["入窟 · 转桥", "侧窟 · 共耳", "深窟 · 鹿影", "回廊 · 借路", "灯窟 · 接桥", "中央窟"]
+const ROOM_NAMES := {
+	0: "入窟 · 转桥",
+	1: "侧窟 · 共耳",
+	2: "深窟 · 鹿影",
+	3: "回廊 · 借路",
+	4: "灯窟 · 接桥",
+	5: "中央窟",
+	7: "镜窟 · 折光",
+}
 var model := CaveNetwork.new()
 var heading: Label
 var objective: Label
@@ -40,6 +48,7 @@ var frame := 0
 var gate_visual := [0.0, 0.0]
 var light_visual := 0.0
 var painter := Painter.new()
+var mirror_art: Control
 
 func _ready() -> void:
 	rescued_presented = model.rescued
@@ -58,6 +67,7 @@ func _ready() -> void:
 		var d: Vector2i = spec[1]
 		arrows.append(make_button(spec[0], func(): move(d)))
 	make_modal()
+	_add_mirror_art()
 	rebuild_cranks()
 	get_viewport().size_changed.connect(layout)
 	layout(); refresh()
@@ -113,6 +123,8 @@ func rebuild_cranks() -> void:
 		var index := i
 		cranks.append(make_button("", func(): turn(index), self, true))
 	# Modal must always intercept input above scenery and newly created cranks.
+	if mirror_art:
+		move_child(mirror_art, 0)
 	move_child(overlay, -1)
 
 func layout() -> void:
@@ -144,6 +156,9 @@ func layout() -> void:
 	for i in cranks.size():
 		cranks[i].position = point(model.cranks[i].cell) - Vector2(24, 28)
 		cranks[i].size = Vector2(48, 48); cranks[i].visual_scale = clampf(unit / 70, .6, 1)
+	if mirror_art:
+		mirror_art.position = Vector2.ZERO
+		mirror_art.size = size
 	overlay.size = size
 	panel.position = Vector2(maxf(8, (size.x - 530) / 2), maxf(8, (size.y - 500) / 2))
 	panel.size = Vector2(minf(530, size.x - 16), minf(500, size.y - 16))
@@ -173,10 +188,16 @@ func refresh() -> void:
 	if model.room == 4:
 		action_button.text = ("放上灯座" if model.lamp_held else "提起灯笼") if not model.lamp_action().is_empty() else "转动栈桥"
 		action_button.disabled = locked or (model.lamp_action().is_empty() and not model.can_turn())
+	if model.room == CaveModel.MIRROR_ROOM:
+		action_button.text = "转动铜镜"
+		action_button.disabled = locked or not model.can_turn_mirror()
 	if model.reached:
 		action_button.text = "机关已解"
 		action_button.disabled = true
-	objective.text = ["蓝围巾在对岸 · 转桥接近它", "三兔共耳 · 找到两扇门共用的机关", "九色鹿回望河面 · 对岸还没有光", "一个木箱 · 先借路，再送到对岸", "先留下光 · 再把桥接向对岸", "左边推箱借路 · 右边提灯接桥"][model.room]
+	if model.room == CaveModel.MIRROR_ROOM:
+		objective.text = "把光从镜子正面折到莲花灯座"
+	else:
+		objective.text = ["蓝围巾在对岸 · 转桥接近它", "三兔共耳 · 找到两扇门共用的机关", "九色鹿回望河面 · 对岸还没有光", "一个木箱 · 先借路，再送到对岸", "先留下光 · 再把桥接向对岸", "左边推箱借路 · 右边提灯接桥"][model.room]
 	hint.text = "点方向键走到岸边，再转动栈桥" if touch else "方向键 / WASD 移动 · 空格互动 · Z 撤销"
 	if model.room == 0 and model.can_turn(): hint.text = "点转柄，看看桥会通向哪里"
 	if model.room == 0 and model.bridges[0].pose == 1: hint.text = "桥接通了，亲自走过去"
@@ -204,6 +225,13 @@ func refresh() -> void:
 		hint.text = "把灯留在左岸灯座，看看桥下的石刻"
 		if model.lit(): hint.text = "光照出了南北路标 · 去右岸转柄接桥"
 		if model.lit() and model.bridges[0].pose == 1: hint.text = "灯留在岸边，沿亮起的桥走过去"
+	if model.room == CaveModel.MIRROR_ROOM:
+		hint.text = "右边的铜镜可以转。虚线只预告再转一下后的下一段，不是整条路。"
+		if model.can_turn_mirror():
+			hint.text = "站在教学镜旁边。虚线变成实线，就是这一转把光送出去的方向。"
+		if model.lotus_lit():
+			objective.text = "莲花亮了 · 沿光桥走向哥哥"
+			hint.text = "光从镜子正面折了过去，北面的路亮了"
 	if model.reached:
 		hint.text = "机关保持开启，可自由折返"
 	if model.room == 5:
@@ -223,6 +251,7 @@ func refresh() -> void:
 	if not model.busy.is_empty():
 		if model.busy == "turn": hint.text = "栈桥正在转动……"
 		elif model.busy == "lamp": hint.text = "灯光正在安定下来……"
+		elif model.busy == "mirror": hint.text = "铜镜正在转动……"
 	settle_text.call_deferred(); queue_redraw()
 
 func move(direction: Vector2i) -> void:
@@ -247,6 +276,9 @@ func interact() -> void:
 	elif model.room == 0: turn()
 	elif model.room in [1, 3]: show_note()
 	elif model.room == 4 and model.lamp_action().is_empty(): turn()
+	elif model.room == CaveModel.MIRROR_ROOM:
+		if model.turn_mirror():
+			refresh()
 	elif model.use_lamp(): refresh()
 
 func undo() -> void:
@@ -256,6 +288,9 @@ func undo() -> void:
 
 func show_note() -> void:
 	if mode != "playing" or stopped: return
+	if model.room == CaveModel.MIRROR_ROOM:
+		show_card("note", "镜窟 · 铜镜折光", model.map_note() + "\n\n本窟线索\n灯固定在北面，光沿直线走。铜镜只有正面反光：和箭头一致的方向才能折过去，打到镜背就停住。\n左边那面是固定的，右边这面可以转。站在教学镜旁边时，淡色虚线只画出再转一下之后的下一段。\n把光引到莲花灯座上，北面的路才会亮，通向哥哥所在的鹿影窟。\n转错可以撤销。\n\n本关为壁画幻境；机关为游戏虚构。", "回到洞窟")
+		return
 	if model.room == 5:
 		show_card("note", "六窟相连 · 旅行窟图", model.map_note(), "回到洞窟")
 		return
@@ -318,6 +353,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if mode != "playing":
 		if key == KEY_ESCAPE and mode in ["note", "pause", "reset", "menu"]: close_card()
 		get_viewport().set_input_as_handled(); return
+	if model.room == CaveModel.MIRROR_ROOM:
+		var action := InputHandler.new().handle_feature(event, {"mirror_cave": true})
+		if action.type == GameAction.Type.INTERACT:
+			interact()
+			get_viewport().set_input_as_handled()
+			return
 	match key:
 		KEY_W, KEY_UP: move(Vector2i.UP)
 		KEY_A, KEY_LEFT: move(Vector2i.LEFT)
@@ -362,5 +403,18 @@ func _process(delta: float) -> void:
 		var target := Vector2(minf(530, available.x - 16), minf(500, available.y - 16))
 		if panel.size != target: panel.size = target
 
+func _add_mirror_art() -> void:
+	var art := Control.new()
+	art.name = "MirrorArt"
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	art.set_script(preload("res://scripts/mogao_chapter/mirror_art.gd"))
+	art.host = self
+	add_child(art)
+	move_child(art, 0)
+	mirror_art = art
+
 func _draw() -> void:
 	if heading: painter.paint(self)
+	if mirror_art:
+		mirror_art.queue_redraw()
