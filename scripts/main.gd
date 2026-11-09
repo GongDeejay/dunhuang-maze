@@ -44,7 +44,10 @@ var first_family_tip_shown: bool = false
 var guide_assist_active: bool = false
 var moves_since_progress: int = 0
 var low_hp_pulse: float = 0.0
+const ATTACK_COOLDOWN := 0.35
+const MoveBufferScript = preload("res://scripts/handlers/move_buffer.gd")
 var input_handler := InputHandler.new()
+var attack_buffer = MoveBufferScript.new()
 var attack_cooldown := 0.0
 var first_journey: FirstJourney
 var journey_card: JourneyCard
@@ -150,6 +153,8 @@ func _notification(what: int) -> void:
 	if third_chapter != null or cave_chapter != null: return
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		held_inputs.clear()
+		input_handler.held.clear()
+		attack_buffer.clear()
 		if pattern_panel and pattern_panel.visible: pattern_panel.suspend()
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and game != null and game.is_playing():
 		game.toggle_pause()
@@ -234,9 +239,15 @@ func _refresh_layout() -> void:
 			pattern_prompt.position.x = area.end.x - pattern_prompt.size.x - 8
 
 
+func _keyboard_move_allowed() -> bool:
+	return game.can_move() and not _modal_open() and not _input_guarded()
+
+
 func _input(event: InputEvent) -> void:
 	if third_chapter != null or cave_chapter != null: return
 	_track_held_input(event)
+	# Track presses while a card is open so the close frame cannot replay them.
+	input_handler.handle_direction(event, _keyboard_move_allowed())
 	if _modal_open(): return
 	if _input_guarded():
 		get_viewport().set_input_as_handled()
@@ -289,6 +300,8 @@ func _new_game(level_idx: int = -1) -> void:
 	_close_third_chapter()
 	_close_cave_chapter()
 	attack_cooldown = 0.0
+	attack_buffer.clear()
+	input_handler.held.clear()
 	if journey_card: journey_card.visible = false
 	advance_after_story = false
 	first_journey = null
@@ -508,6 +521,8 @@ func _start_third_chapter() -> void:
 
 func _show_story(card: Dictionary) -> void:
 	if journey_card and not card.is_empty():
+		attack_buffer.clear()
+		input_handler.held.set_blocked(true)
 		journey_card.open_card(card)
 		_request_redraw()
 
@@ -673,7 +688,7 @@ func _update_guide_assist() -> void:
 func _combat(target: MonsterEntity) -> void:
 	if attack_cooldown > 0.0 or not target.is_alive():
 		return
-	attack_cooldown = 0.35
+	attack_cooldown = ATTACK_COOLDOWN
 	if not first_combat_warned:
 		first_combat_warned = true
 		_add_tutorial("【即时战斗】怪物会持续行动；黄色箭头表示下一步意图，P 可暂停")
@@ -893,11 +908,18 @@ func _try_move(dir: int) -> bool:
 		var destination := player.pos + Vector2i(MazeGenerator.DX[dir], MazeGenerator.DY[dir])
 		var target := _get_monster_at(destination)
 		if target != null:
+			# A living enemy on cooldown keeps one direction, then strikes once it ends.
+			if target.is_alive() and attack_cooldown > 0.0:
+				attack_buffer.remember(dir)
+				return false
+			attack_buffer.clear()
 			_combat(target)
 			return false
+		attack_buffer.clear()
 		player.pos = destination
 		player.moved.emit(player.pos)
 		return true
+	attack_buffer.clear()
 	AudioManager.play_wall_hit()
 	return false
 
@@ -983,6 +1005,13 @@ func _process(delta: float) -> void:
 		dirty = true
 	if game.can_move() and not _modal_open() and not was_revealing:
 		attack_cooldown = maxf(0.0, attack_cooldown - delta)
+		if _input_guarded():
+			input_handler.held.set_blocked(true)
+			attack_buffer.clear()
+		else:
+			input_handler.held.set_blocked(false)
+			_flush_attack_buffer()
+			_repeat_held_move(delta)
 		var monster_delta := delta
 		if maze != null:
 			var terrain_key: String = MazeGenerator.TERRAIN_KEY[maze.get_terrain(player.pos.x, player.pos.y)]
@@ -990,11 +1019,36 @@ func _process(delta: float) -> void:
 			monster_delta *= maxf(0.45, 1.0 - float(effect.get("move_speed_bonus", 0.0)))
 		if _move_monsters(monster_delta):
 			dirty = true
+	else:
+		input_handler.held.set_blocked(true)
+		attack_buffer.clear()
 	if dirty:
 		_request_redraw()
 	if needs_redraw:
 		queue_redraw()
 		needs_redraw = false
+
+func _flush_attack_buffer() -> void:
+	if attack_cooldown > 0.0 or not attack_buffer.pending():
+		return
+	if not _keyboard_move_allowed():
+		attack_buffer.clear()
+		return
+	_apply_game_action(GameAction.move(attack_buffer.take()))
+
+
+func _repeat_held_move(delta: float) -> void:
+	for direction in input_handler.held.pull(delta):
+		if not _keyboard_move_allowed():
+			input_handler.held.set_blocked(true)
+			attack_buffer.clear()
+			return
+		_apply_game_action(GameAction.move(direction))
+		if not _keyboard_move_allowed():
+			input_handler.held.set_blocked(true)
+			attack_buffer.clear()
+			return
+
 
 func _move_monsters(delta: float) -> bool:
 	var changed := false

@@ -2,10 +2,27 @@ class_name InputHandler
 extends RefCounted
 ## 将 InputEvent 转为 GameAction（Roguelike Basic Set EventHandler 模式）
 
+const HeldMoveScript = preload("res://scripts/handlers/held_move.gd")
+var held = HeldMoveScript.new()
+
+
+func handle_direction(event: InputEvent, allowed: bool) -> GameAction:
+	var direction := int(held.feed(event, allowed))
+	if direction >= 0:
+		return GameAction.move(direction)
+	return GameAction.new()
+
+
 func handle(
 	event: InputEvent,
 	ctx: Dictionary,
 ) -> GameAction:
+	var move_allowed := not bool(ctx.get("show_confirm", false)) \
+		and not bool(ctx.get("difficulty_select", false)) \
+		and not bool(ctx.get("paused", false)) \
+		and not bool(ctx.get("game_won", false)) \
+		and not bool(ctx.get("game_over", false))
+	var direction_action := handle_direction(event, move_allowed)
 	if event is InputEventKey and event.echo and event.keycode in [KEY_P, KEY_ESCAPE]:
 		return GameAction.new()
 	if ctx.get("show_confirm", false):
@@ -41,14 +58,8 @@ func handle(
 				return GameAction.click_at(event.position)
 			return GameAction.new()
 		return GameAction.click_at(event.position)
-	if event.is_action_pressed("move_up"):
-		return GameAction.move(MazeGenerator.N)
-	if event.is_action_pressed("move_down"):
-		return GameAction.move(MazeGenerator.S)
-	if event.is_action_pressed("move_left"):
-		return GameAction.move(MazeGenerator.W)
-	if event.is_action_pressed("move_right"):
-		return GameAction.move(MazeGenerator.E)
+	if direction_action.type == GameAction.Type.MOVE:
+		return direction_action
 	return GameAction.new()
 
 
