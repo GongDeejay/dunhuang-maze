@@ -94,6 +94,12 @@ const FRAGMENT_SHEET_REGIONS: Array[Rect2] = [
 	Rect2(64, 0, 32, 64),
 ]
 const FRAGMENT_DIM := Color(0.25, 0.22, 0.2, 1)
+const MOTHER_SILHOUETTE_FILE := "mother_silhouette.png"
+## Slot inside one maze cell. At cell_size 40 this is 25.6×25.6 px.
+const FAMILY_SILHOUETTE_ORIGIN := Vector2(0.18, 0.12)
+const FAMILY_SILHOUETTE_SIZE := Vector2(0.64, 0.64)
+const FAMILY_SILHOUETTE_TEX_PX := 16
+const FAMILY_SILHOUETTE_DARKEN := Color(0.16, 0.12, 0.08, 0.9)
 
 
 static func character_sprite_path(name: String, prefer_hq: bool = false) -> String:
@@ -105,6 +111,19 @@ static func character_sprite_path(name: String, prefer_hq: bool = false) -> Stri
 	if ResourceLoader.exists(low):
 		return low
 	return low
+
+
+static func mother_silhouette_path() -> String:
+	return LANDMARK_DIR + MOTHER_SILHOUETTE_FILE
+
+
+## Dedicated art wins when the file exists. Otherwise the maze darkens le.png.
+static func family_silhouette_source(dedicated_exists: Variant = null) -> Dictionary:
+	var path := mother_silhouette_path()
+	var exists := ResourceLoader.exists(path) if dedicated_exists == null else bool(dedicated_exists)
+	if exists:
+		return {"path": path, "darken": false, "nearest": true}
+	return {"path": character_sprite_path("le", false), "darken": true, "nearest": true}
 
 
 static func item_sprite_path(item_type: String) -> String:

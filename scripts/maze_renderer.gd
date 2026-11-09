@@ -325,9 +325,13 @@ func draw_landmark(canvas: CanvasItem, landmark: Dictionary, origin: Vector2, cs
 	if landmark.kind == "family_silhouette":
 		if not landmark.get("silhouette", false):
 			return
-		var sprite := _cached_texture(AssetRegistry.character_sprite_path("le", false))
+		var source: Dictionary = AssetRegistry.family_silhouette_source()
+		var sprite := _cached_texture(str(source.get("path", "")))
+		var slot := AssetRegistry.FAMILY_SILHOUETTE_ORIGIN
+		var slot_size := AssetRegistry.FAMILY_SILHOUETTE_SIZE
+		var modulate := AssetRegistry.FAMILY_SILHOUETTE_DARKEN if source.get("darken", false) else Color.WHITE
 		if sprite:
-			canvas.draw_texture_rect(sprite, Rect2(origin + Vector2(cs * 0.18, cs * 0.12), Vector2(cs * 0.64, cs * 0.64)), false, Color(0.16, 0.12, 0.08, 0.9))
+			canvas.draw_texture_rect(sprite, Rect2(origin + Vector2(cs * slot.x, cs * slot.y), Vector2(cs * slot_size.x, cs * slot_size.y)), false, modulate)
 		canvas.draw_arc(origin + Vector2(cs * 0.5, cs * 0.5), cs * 0.42, 0, TAU, 16, Color(0.85, 0.72, 0.35, 0.75), maxf(2, cs * 0.06), true)
 		return
 	if landmark.kind == "mural" and not landmark.get("found", false):

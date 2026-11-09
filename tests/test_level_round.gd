@@ -10,6 +10,7 @@ const DIR := {"n": Vector2i(0, -1), "s": Vector2i(0, 1), "e": Vector2i(1, 0), "w
 static func run(t: Node) -> void:
 	print("\n[TEST] Level round: branches, camp clue, single-faced mirror")
 	_art(t)
+	_silhouette_source(t)
 	_branches(t)
 	_rewards(t)
 	_mirror_faces(t)
@@ -47,6 +48,23 @@ static func _image(t: Node, path: String, size: Vector2i) -> void:
 	var image := Image.new()
 	t.assert_eq(image.load(path), OK, path + " loads")
 	t.assert_eq(Vector2i(image.get_width(), image.get_height()), size, path + " size")
+
+
+static func _silhouette_source(t: Node) -> void:
+	var dedicated := AssetRegistry.mother_silhouette_path()
+	t.assert_eq(dedicated, "res://assets/sprites/landmark/mother_silhouette.png", "silhouette art has one registry path")
+	t.assert_true(not ResourceLoader.exists(dedicated), "dedicated silhouette is not shipped yet")
+	var live: Dictionary = AssetRegistry.family_silhouette_source()
+	var fallback: Dictionary = AssetRegistry.family_silhouette_source(false)
+	t.assert_eq(live.get("path", ""), AssetRegistry.character_sprite_path("le", false), "missing art falls back to le.png")
+	t.assert_true(bool(live.get("darken", false)) and bool(fallback.get("darken", false)), "le fallback is darkened")
+	t.assert_true(str(live.get("path", "")).ends_with("le.png"), "fallback is the pixel portrait, not a generic figure")
+	var ready: Dictionary = AssetRegistry.family_silhouette_source(true)
+	t.assert_eq(ready.get("path", ""), dedicated, "existing silhouette art is preferred")
+	t.assert_true(not bool(ready.get("darken", true)), "dedicated silhouette is not recolored")
+	t.assert_true(bool(ready.get("nearest", false)) and bool(live.get("nearest", false)), "both silhouette sources use nearest filtering")
+	t.assert_eq(AssetRegistry.FAMILY_SILHOUETTE_SIZE, Vector2(0.64, 0.64), "silhouette occupies 64 percent of the cell")
+	t.assert_eq(AssetRegistry.FAMILY_SILHOUETTE_TEX_PX, 16, "suggested silhouette texture is 16x16")
 
 
 static func _branches(t: Node) -> void:
