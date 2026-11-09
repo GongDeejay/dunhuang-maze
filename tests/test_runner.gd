@@ -654,7 +654,9 @@ func test_web_font_payload():
 	var path := "res://assets/fonts/NotoSansSC-GameSubset.ttf"
 	assert_true(FileAccess.file_exists(path), "subset font exists")
 	assert_true(FileAccess.get_file_as_bytes(path).size() < 400_000, "subset font stays below 400 KB")
-	var game_font: Font = load(path)
+	var game_font: FontFile = load(path)
+	# The import allows system fallback, which would hide a missing subset glyph on a desktop with Noto.
+	game_font.allow_system_fallback = false
 	var game_chars := {}
 	var script_files: Array[String] = []
 	_collect_files("res://scripts", ".gd", script_files)
@@ -669,20 +671,18 @@ func test_web_font_payload():
 				_collect_string_chars(FileAccess.get_file_as_string(file), game_chars)
 			else:
 				_collect_json_chars(parsed, game_chars)
+	_collect_string_chars(FileAccess.get_file_as_string("res://project.godot"), game_chars)
+	var seen := ""
+	var watch := "卒压囊己座残烽燧登碑言铃队驼龛遗壁画"
+	for i in watch.length():
+		var watch_code: int = watch.unicode_at(i)
+		if not game_chars.has(watch_code):
+			seen += char(watch_code)
+	assert_true(seen.is_empty(), "player-copy scan missed glyphs that are on screen: %s" % seen)
+	assert_true(game_chars.size() > 200, "player-copy scan covers the script and JSON strings")
 	_assert_font_covers(game_font, game_chars, "game subset")
-	# 路牌、三条支路弹窗、结算页都由 JourneyCard 使用工程默认字体，不是莫高窟子集。
-	var phrases: Array[String] = ["远处有座烽燧", "石窟里有壁画和补给", "商队遗驼", "壁画残片", "石窟壁画", "这三片画"]
-	var missing := ""
-	for phrase in phrases:
-		for i in phrase.length():
-			var phrase_code: int = phrase.unicode_at(i)
-			if not game_font.has_char(phrase_code):
-				missing += char(phrase_code)
-	var detail := "sign, branch popups, and settlement use NotoSansSC-GameSubset"
-	if not missing.is_empty():
-		detail = "game subset missing journey-card glyphs: " + missing
-	assert_true(missing.is_empty(), detail)
-	var mogao_font: Font = load("res://assets/fonts/MogaoSubset.ttf")
+	var mogao_font: FontFile = load("res://assets/fonts/MogaoSubset.ttf")
+	mogao_font.allow_system_fallback = false
 	var mogao_chars := {}
 	var mogao_files: Array[String] = []
 	_collect_files("res://scripts/mogao_chapter", ".gd", mogao_files)
