@@ -50,7 +50,7 @@
 | 文件 | 尺寸 | 用途 |
 |------|------|------|
 | `landmark/beacon.png` / `beacon_lit.png` | 16×32 | 烽燧常态 / 登台后，底边对齐所在格 |
-| `landmark/mother_silhouette.png` | 16×16 建议 | 烽燧剪影。文件还没到时，用压暗的 `player/le.png`。格子内显示为单元格的 64%（40px 格上约 26×26） |
+| `landmark/mother_silhouette.png` | 16×16 | 烽燧剪影。文件存在时优先用它，Nearest，不再压暗。缺文件时回退压暗的 `player/le.png`。格子内显示为单元格的 64%（40px 格上约 26×26） |
 | `landmark/caravan.png` / `caravan_searched.png` | 32×16 | 商队遗驼 / 取走清水后；远处驼影用同一张图透明度约 0.45 |
 | `landmark/stele.png` / `stele_read.png` | 16×16 | 残碑未读 / 已读 |
 | `item/fragment_1.png` `fragment_2.png` `fragment_3.png` | 16×16 | 壁画残片标记，对应合图左中右 |
