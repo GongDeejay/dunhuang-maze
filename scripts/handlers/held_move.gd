@@ -34,7 +34,11 @@ func feed(event: InputEvent, allowed: bool) -> int:
 	if direction < 0:
 		return -1
 	if key_event.pressed:
-		_order.erase(direction)
+		# Browsers sometimes repeat keydown without the echo flag. The key is
+		# already held, so this is not a new press and must not step or reset
+		# the repeat clock. A real press requires a release first.
+		if _order.has(direction):
+			return -1
 		_order.append(direction)
 		_elapsed = 0.0
 		if _blocked or not allowed:
