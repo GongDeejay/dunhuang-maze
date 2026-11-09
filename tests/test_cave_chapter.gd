@@ -280,6 +280,53 @@ static func plank_hints(t: Node) -> void:
 	t.assert_true("先绕左，中间下，右边上" in c.hint.text, "the fifth trap gives the whole rhyme")
 	c.free()
 
+static func _front_at(node: Node, point: Vector2) -> Control:
+	var found: Array = []
+	_collect_hit(node, point, found)
+	var best: Control = null
+	var best_z := -999
+	var best_i := -1
+	for i in found.size():
+		var item := found[i] as Control
+		if best == null or item.z_index > best_z or (item.z_index == best_z and i > best_i):
+			best = item
+			best_z = item.z_index
+			best_i = i
+	return best
+
+static func _collect_hit(node: Node, point: Vector2, into: Array) -> void:
+	if not (node is Control):
+		return
+	var control := node as Control
+	if not control.visible or control.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+		return
+	if not control.get_global_rect().has_point(point):
+		return
+	into.append(control)
+	for child in control.get_children():
+		_collect_hit(child, point, into)
+
+static func reset_confirm(t: Node) -> void:
+	var c := MogaoChapter.new()
+	t.add_child(c)
+	c.model.load_room(3)
+	c.model.player = Vector2i(2, 4)
+	c.model.destination = c.model.player
+	c.model.entry = Vector2i(1, 2)
+	c.model.planks_up[Vector2i(2, 4)] = true
+	c.pause_game()
+	c.modal_secondary()
+	c._process(0.05)
+	t.assert_eq(c.primary.text, "确认重置", "the reset card offers confirm")
+	t.assert_eq(c.primary.action_mode, BaseButton.ACTION_MODE_BUTTON_PRESS, "confirm fires on press, not on a release that can miss")
+	var hit := _front_at(c.overlay, c.primary.get_global_rect().get_center())
+	t.assert_eq(hit, c.primary, "nothing covers the confirm-reset button")
+	c.modal_primary()
+	t.assert_eq(c.mode, "playing", "one confirm closes the reset card")
+	t.assert_eq(c.model.player, CaveModel.PLANK_ENTRY, "reset returns to the entrance under the demo plank")
+	t.assert_true(c.model.planks_up.is_empty(), "reset lays the planks flat")
+	c.free()
+
 static func shared_ear_doors(t: Node) -> void:
 	var m := CaveModel.new()
 	m.load_room(1)
@@ -329,6 +376,7 @@ static func cave_popup_layer(t: Node) -> void:
 static func run(t: Node) -> void:
 	print("\n[TEST] Mogao three distinct cave mechanisms")
 	shared_ear_doors(t)
+	reset_confirm(t)
 	cave_popup_layer(t)
 	pressure_graph(t)
 	plank_graph(t)

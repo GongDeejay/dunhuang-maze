@@ -110,6 +110,14 @@ func make_button(text: String, callback: Callable, parent: Node = self, crank: b
 	node.pressed.connect(callback); parent.add_child(node)
 	return node
 
+func make_modal_button(text: String, callback: Callable, parent: Node) -> Button:
+	var node := make_button(text, callback, parent)
+	# Fire on press. A release is easy to miss when the card sorts itself under the cursor.
+	node.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	node.z_index = 4
+	node.mouse_filter = Control.MOUSE_FILTER_STOP
+	return node
+
 func make_modal() -> void:
 	# Mirror and lamp sprites use their own z_index, which draws above a sibling Control.
 	# Every cave card (notes, pause, settlement) shares this layer, above those sprites.
@@ -128,11 +136,14 @@ func make_modal() -> void:
 	var column := VBoxContainer.new(); column.add_theme_constant_override("separation", 10); panel.add_child(column)
 	card_title = make_label("", 23, Color("f5dba8"), column)
 	card_scroll = ScrollContainer.new(); card_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL; card_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	card_scroll.mouse_filter = Control.MOUSE_FILTER_STOP
+	card_scroll.clip_contents = true
 	column.add_child(card_scroll)
 	card_body = make_label("", 18, Color("eee1c8"), card_scroll); card_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	primary = make_button("继续", modal_primary, column)
-	secondary = make_button("", modal_secondary, column)
-	tertiary = make_button("", modal_tertiary, column)
+	primary = make_modal_button("继续", modal_primary, column)
+	secondary = make_modal_button("", modal_secondary, column)
+	tertiary = make_modal_button("", modal_tertiary, column)
+	primary.z_index = 6
 	overlay.hide()
 
 func rebuild_cranks() -> void:
@@ -204,7 +215,7 @@ func point(cell: Vector2) -> Vector2:
 func refresh() -> void:
 	var locked := stopped or mode != "playing" or not model.busy.is_empty()
 	for arrow in arrows: arrow.disabled = locked
-	for i in cranks.size():
+	for i in mini(cranks.size(), model.cranks.size()):
 		cranks[i].disabled = locked or not model.can_turn(i)
 		cranks[i].angle = model.angle(model.cranks[i].bridge); cranks[i].queue_redraw()
 	undo_button.disabled = locked or model.history.is_empty() or model.reached or model.rescued
@@ -228,7 +239,8 @@ func refresh() -> void:
 	else:
 		objective.text = ["蓝围巾在对岸 · 转桥接近它", "三兔共耳 · 找到两扇门共用的机关", "九色鹿回望河面 · 对岸还没有光", "每块翻板只踩一次", "先留下光 · 再把桥接向对岸", "左边推箱借路 · 右边提灯接桥"][model.room]
 	if model.room == 3:
-		objective.text = "每块翻板只踩一次 · 已踩 %d/11" % model.plank_count()
+		# Solved state comes from the save. Do not recount the nailed boards.
+		objective.text = "栈道钉牢了 · 11/11" if model.reached else "每块翻板只踩一次 · 已踩 %d/11" % model.plank_count()
 	hint.text = "点方向键走到岸边，再转动栈桥" if touch else "方向键 / WASD 移动 · 空格互动 · Z 撤销"
 	if model.room == 0 and model.can_turn(): hint.text = "点转柄，看看桥会通向哪里"
 	if model.room == 0 and model.bridges[0].pose == 1: hint.text = "桥接通了，亲自走过去"
@@ -280,7 +292,9 @@ func refresh() -> void:
 	if not door.is_empty():
 		action_button.text = ("进入" if door.open else "未通") + door.label
 		action_button.disabled = locked or not door.open
-		if not door.open: hint.text = "门栓在栈道窟另一侧" if model.room == 5 else "此路未通，先走另一边"
+		if not door.open:
+			var shortcut_cell: bool = door.cell == Vector2i(3, 0) or door.cell == CaveModel.PLANK_WEST
+			hint.text = "从栈道窟西侧开启" if shortcut_cell else ("门栓在栈道窟另一侧" if model.room == 5 else "此路未通，先走另一边")
 	if model.room == 2 and model.rescued and model.player == model.exit_cell:
 		action_button.text = "前往三危山"; action_button.disabled = locked
 	if not model.busy.is_empty():
@@ -357,6 +371,8 @@ func show_card(next_mode: String, title: String, body: String, first: String, se
 	primary.text = first; secondary.text = second; tertiary.text = third
 	secondary.visible = not second.is_empty(); tertiary.visible = not third.is_empty()
 	card_scroll.scroll_vertical = 0; overlay.show(); layout(); refresh()
+	# Sort now, so the confirm button's hit rect matches what is drawn on the first click.
+	panel.notification(Container.NOTIFICATION_SORT_CHILDREN)
 
 func close_card() -> void:
 	mode = "playing"; model.paused = false; overlay.hide(); refresh()
@@ -636,6 +652,8 @@ func _plank_hint_text() -> String:
 		if plank_solved_note > 0.0:
 			return "翻板踩遍了 · 绳栓拉开，窟门开了"
 		return "栈道钉牢了，可以自由往返"
+	if model.player == CaveModel.PLANK_WEST:
+		return "从栈道窟西侧开启"
 	if model.player == CaveModel.PLANK_DEMO and not model.planks_up.has(CaveModel.PLANK_DEMO):
 		return "这是试板，翻起也不碍事，旁边石阶能绕回来"
 	if plank_demo_note > 0.0:

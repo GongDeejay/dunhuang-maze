@@ -90,6 +90,7 @@ static func run(t: Node) -> void:
 	legacy.resume_network(99, {"version": 1})
 	t.assert_eq(legacy.room, 0, "invalid room and empty network safely use entrance")
 	west_shortcut(t)
+	solved_return(t)
 
 static func door_at(m: CaveNetwork, cell: Vector2i) -> Dictionary:
 	for d in m.doors():
@@ -124,6 +125,54 @@ static func west_shortcut(t: Node) -> void:
 	hub.player = CaveModel.PLANK_WEST
 	hub.destination = hub.player
 	t.assert_true(door_at(hub, CaveModel.PLANK_WEST).open and hub.travel() and hub.room == 5, "the west side can return to the hub")
+
+static func _open_gate_frame(sprite: Sprite2D) -> bool:
+	return sprite.visible and sprite.texture is AtlasTexture and int((sprite.texture as AtlasTexture).region.position.x) == 16
+
+static func solved_return(t: Node) -> void:
+	var drifted := CaveNetwork.new()
+	drifted.load_room(3)
+	drifted.entry = Vector2i(1, 2)
+	drifted.player = Vector2i(2, 4)
+	drifted.planks_up[Vector2i(2, 4)] = true
+	t.assert_true(drifted.reset_current(), "an unsolved plank cave can reset")
+	t.assert_eq(drifted.player, CaveModel.PLANK_ENTRY, "reset ignores the shortcut spawn and returns to E")
+	t.assert_true(drifted.planks_up.is_empty(), "reset flattens every plank")
+	walk(t, drifted, "UULUULUURRDDRRUULULU")
+	t.assert_true(drifted.reached and drifted.moves == 20, "the same 20-step route still solves from E")
+	var c := MogaoChapter.new()
+	t.add_child(c)
+	c.model.load_room(3)
+	c.rebuild_cranks()
+	c.plank_art._process(0)
+	t.assert_true(not c.plank_art.side_gate.visible, "a locked side door does not use the open rope gate")
+	walk(t, c.model, "UULUULUURRDDRRUULULU")
+	c.refresh()
+	t.assert_eq(c.objective.text, "栈道钉牢了 · 11/11", "solving pins the progress line")
+	c.plank_art._process(0)
+	t.assert_true(_open_gate_frame(c.plank_art.side_gate), "the solved west door uses the open rope-gate frame")
+	c.model.player = CaveModel.PLANK_WEST
+	c.model.destination = c.model.player
+	t.assert_true(c.model.travel() and c.model.room == 5, "the west door still leads back to the hub")
+	c.model.player = Vector2i(3, 0)
+	c.model.destination = c.model.player
+	c.plank_art._process(0)
+	t.assert_true(door_at(c.model, Vector2i(3, 0)).open and _open_gate_frame(c.plank_art.side_gate), "the hub arch uses the same open frame")
+	t.assert_true(c.model.travel() and c.model.room == 3 and c.model.reached, "the shortcut returns into the solved cave")
+	t.assert_eq(c.model.plank_count(), 0, "returning does not rebuild a flip count")
+	c.refresh()
+	t.assert_eq(c.objective.text, "栈道钉牢了 · 11/11", "the saved solved flag keeps 11/11")
+	var again := CaveNetwork.new()
+	again.resume_network(3, c.model.save_network())
+	t.assert_true(again.reached and again.player == CaveModel.PLANK_WEST, "a version 4 save restores the open shortcut")
+	c.model = again
+	c.plank_art.host = c
+	c.rebuild_cranks()
+	c.refresh()
+	c.plank_art._process(0)
+	t.assert_eq(c.objective.text, "栈道钉牢了 · 11/11", "loading the save does not recount the boards")
+	t.assert_true(_open_gate_frame(c.plank_art.side_gate), "loading the save still draws the open side gate")
+	c.free()
 	var old_room := {"player": [0, 0], "box": [2, 6], "latch": true, "reached": false, "moves": 4}
 	var old := {"version": 3, "shortcut": false, "secret": false, "entry": [0, 0], "rooms": {"3": old_room}}
 	var migrated := CaveNetwork.new()

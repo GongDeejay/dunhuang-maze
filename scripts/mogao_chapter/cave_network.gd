@@ -176,8 +176,10 @@ func migrate_linear_save(id: int) -> void:
 
 func reset_current() -> bool:
 	if reached or rescued or room == 5: return false
-	var start := entry
+	# The shortcut can leave you on the west stone. Reset always returns to entrance E.
+	var start := PLANK_ENTRY if room == 3 else entry
 	load_room(room); player = start; destination = start
+	if room == 3: entry = PLANK_ENTRY
 	remember_room()
 	return true
 

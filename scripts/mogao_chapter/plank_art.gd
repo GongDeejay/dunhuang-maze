@@ -7,6 +7,7 @@ var tag: Sprite2D
 var gate: Sprite2D
 var thread: Sprite2D
 var west_door: Node2D
+var side_gate: Sprite2D
 var void_sprites: Dictionary = {}
 var edge_sprites: Dictionary = {}
 var _frames: Array[Texture2D] = []
@@ -66,6 +67,7 @@ func _ready() -> void:
 	add_child(doors)
 	doors.draw.connect(_draw_west_door)
 	west_door = doors
+	side_gate = _make_sprite()
 
 
 func _make_sprite() -> Sprite2D:
@@ -92,6 +94,9 @@ func _process(_delta: float) -> void:
 		thread.visible = false
 		if west_door:
 			west_door.visible = false
+		side_gate.visible = false
+		if host.model.room == 5:
+			_sync_side_gate()
 		for cell in void_sprites:
 			void_sprites[cell].visible = false
 		for cell in edge_sprites:
@@ -119,16 +124,37 @@ func _process(_delta: float) -> void:
 	if west_door:
 		west_door.visible = true
 		west_door.queue_redraw()
+	_sync_side_gate()
+
+
+func _side_gate_cell() -> Vector2i:
+	if host.model.room == 3:
+		return CaveModel.PLANK_WEST
+	if host.model.room == 5:
+		return Vector2i(3, 0)
+	return Vector2i(-99, -99)
+
+
+func _side_gate_open() -> bool:
+	var cell := _side_gate_cell()
+	for door in host.model.doors():
+		if door.cell == cell:
+			return bool(door.open)
+	return false
+
+
+func _sync_side_gate() -> void:
+	var cell := _side_gate_cell()
+	if cell.x < 0 or not _side_gate_open() or _gates.size() < 2:
+		side_gate.visible = false
+		return
+	_place(side_gate, cell, _gates[1], -host.unit * 0.35)
 
 
 func _draw_west_door() -> void:
-	if host == null or host.model.room != 3:
+	if host == null or host.model.room != 3 or _side_gate_open():
 		return
-	var open := false
-	for door in host.model.doors():
-		if door.cell == CaveModel.PLANK_WEST:
-			open = bool(door.open)
-	host.painter.portal(host, host.point(CaveModel.PLANK_WEST), open, west_door)
+	host.painter.portal(host, host.point(CaveModel.PLANK_WEST), false, west_door)
 
 
 func _plank_texture(cell: Vector2i) -> Texture2D:

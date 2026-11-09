@@ -74,7 +74,8 @@ func paint(c: Control) -> void:
 	if m is CaveNetwork:
 		if m.room == 5: hub(c)
 		for d in m.doors():
-			if not (m.room == 3 and (d.cell == m.goal or d.cell == CaveModel.PLANK_WEST)):
+			var side_gate: bool = (m.room == 3 and d.cell == CaveModel.PLANK_WEST) or (m.room == 5 and d.cell == Vector2i(3, 0))
+			if not (m.room == 3 and d.cell == m.goal) and not (side_gate and d.open):
 				portal(c, c.point(d.cell), d.open)
 			var p: Vector2 = c.point(d.cell) - Vector2(0, u * .94)
 			if d.cell.y == int(m.extent.y) - 1: p = c.point(d.cell) + Vector2(0, u * .48)
