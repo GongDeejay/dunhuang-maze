@@ -221,6 +221,14 @@ static func _mirror_faces(t: Node) -> void:
 	t.assert_eq(Beam.reflect(Vector2i.RIGHT, 2), Vector2i.ZERO, "sw blocks a west-coming beam")
 	t.assert_eq(Beam.reflect(Vector2i.RIGHT, 3), Vector2i.UP, "nw reflects west to north")
 	t.assert_eq(Beam.reflect(Vector2i.DOWN, 3), Vector2i.ZERO, "nw blocks the bright-face reverse from the north")
+	for rot in 4:
+		var incoming := _reflect_entry(rot)
+		var outgoing: Vector2i = Beam.reflect(incoming, rot)
+		var expected := Vector2(-incoming.x, -incoming.y) + Vector2(outgoing)
+		var facing := Beam.facing(rot)
+		for suffix in ["", "_lit"]:
+			var offset := _arrow_offset("mirror_" + facing + suffix)
+			t.assert_true(offset.dot(expected) > 2.0, "%s%s arrow follows the beam" % [facing, suffix])
 	t.assert_true(Beam.preview_allowed(CaveModel.MIRROR_DEFS[0]), "teaching mirror preview is on")
 	t.assert_true(not Beam.preview_allowed(CaveModel.MIRROR_DEFS[1]), "rotatable A keeps preview off")
 	t.assert_true(not Beam.preview_allowed(CaveModel.MIRROR_DEFS[2]), "fixed mirror keeps preview off")
@@ -279,6 +287,7 @@ static func _mirror_room(t: Node) -> void:
 	var search := _mirror_search(t)
 	print("MEASURE mirror min_actions=%d min_turns=%d" % [search["actions"], search["turns"]])
 	t.assert_true(int(search["actions"]) > 0, "the mirror cave has a solution")
+	t.assert_eq(int(search["actions"]), 34, "the recommended openings take 34 actions")
 	t.assert_true(int(search["turns"]) >= 6, "the mirror cave takes at least six turns")
 	t.assert_eq(search["solutions"], 1, "only one facing triple lights the lotus")
 	var saved := CaveNetwork.new()
@@ -369,6 +378,26 @@ static func _mirror_at(state: Dictionary) -> CaveNetwork:
 	var parts: PackedStringArray = str(state["r"]).split(",")
 	model.mirror_rots = {"T": int(parts[0]), "A": int(parts[1]), "F": 1, "B": int(parts[2])}
 	return model
+
+
+static func _reflect_entry(rot: int) -> Vector2i:
+	for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		if Beam.reflect(dir, rot) != Vector2i.ZERO:
+			return dir
+	return Vector2i.ZERO
+
+
+static func _arrow_offset(key: String) -> Vector2:
+	var image := (load(AssetRegistry.mogao_sprite_path(key)) as Texture2D).get_image()
+	var total := Vector2.ZERO
+	var count := 0
+	for y in image.get_height():
+		for x in image.get_width():
+			var pixel := image.get_pixel(x, y)
+			if pixel.a > 0.8 and pixel.r > 0.7 and pixel.g < 0.4 and pixel.b < 0.35:
+				total += Vector2(x, y)
+				count += 1
+	return total / float(count) - Vector2((image.get_width() - 1) * 0.5, (image.get_height() - 1) * 0.5)
 
 
 static func _def_rot(id: String, field: String) -> int:
