@@ -138,6 +138,9 @@ func resume_network(id: int, data: Dictionary) -> void:
 	shortcut = bool(data.get("shortcut", false)); secret = bool(data.get("secret", false))
 	entry = cell_value(data.get("entry"), entry)
 	if rooms.has(str(room)): restore_room(rooms[str(room)])
+	# Snapshots never store an in-progress wait. Drop one if an older or
+	# hand-edited save carried it, so continuing a game cannot reopen a lock.
+	_clear_motion()
 
 func migrate_linear_save(id: int) -> void:
 	# Old saves only identify the next room in the five-room linear sequence.
@@ -153,13 +156,19 @@ func migrate_linear_save(id: int) -> void:
 		if room == 4: lamp = STANDS[0]; deer_seen = true
 		remember_room()
 	load_room(id); entry = player
+	_clear_motion()
 
 func reset_current() -> bool:
 	if reached or rescued or room == 5: return false
 	var start := entry
 	load_room(room); player = start; destination = start
+	_clear_motion()
 	remember_room()
 	return true
+
+func _clear_motion() -> void:
+	busy = ""; progress = 0; paused = false; turning = -1
+	lamp_destination = Vector2i(-1, -1)
 
 func map_note() -> String:
 	var text := "洞窟相连，左右任一路都能找到哥哥。\n\n入窟 ↔ 中央窟\n左路：中央 ↔ 共耳 ↔ 借路 ↔ 鹿影\n右路：中央 ↔ 灯窟 ↔ 镜窟 ↔ 鹿影\n回廊捷径：" + ("已通" if shortcut else "从借路回廊背面开启") + "\n\n"

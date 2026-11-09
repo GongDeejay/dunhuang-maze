@@ -40,6 +40,11 @@ var level_elapsed := 0.0
 var mirror_turn_queued := false
 var _card_title_source := ""
 var _card_body_source := ""
+# Lamp, bridge, and mirror waits last 0.7s. Finish one that is still running
+# after a few seconds of real time, so a skipped frame cannot lock the cave.
+var action_limit_msec := 2000
+var action_started_msec := -1
+var visual_since_msec := -1
 var panel: PanelContainer
 var card_title: Label
 var card_body: Label
@@ -383,6 +388,8 @@ func modal_primary() -> void:
 			stopped = true; completed.emit()
 		"reset":
 			model.reset_current(); rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
+			action_started_msec = -1; visual_since_msec = -1
+			move_buffer.clear(); input_handler.held.clear()
 			rebuild_cranks(); close_card(); layout()
 			checkpoint_changed.emit(model.room)
 		"menu": stopped = true; menu_requested.emit()
@@ -472,7 +479,10 @@ func _collect_step_repeat(delta: float) -> void:
 			move(_direction_vector(int(direction)))
 		else:
 			move_buffer.remember(int(direction))
-	if repeats.is_empty():
+	# A held direction used to consume the whole frame. Lamp, bridge, and mirror
+	# waits then never finished while that key was down and a frame lasted at
+	# least one repeat (0.14s). Only a step is consumed by the repeat itself.
+	if repeats.is_empty() or model.busy != "step":
 		model.advance(delta)
 
 
@@ -550,6 +560,68 @@ func _tick_mirror_feedback(delta: float) -> void:
 		hint.text = mirror_note
 
 
+func _card_holds_play() -> bool:
+	return model.paused and overlay != null and overlay.visible and mode != "playing"
+
+
+func _release_stalled_action() -> void:
+	var waiting := not stopped and not model.busy.is_empty()
+	if not waiting or _card_holds_play():
+		action_started_msec = -1
+		return
+	# A pause flag with no card is not a pause the player can leave.
+	if model.paused:
+		model.paused = false
+		mode = "playing"
+	var now := Time.get_ticks_msec()
+	if action_started_msec < 0:
+		action_started_msec = now
+		return
+	if now - action_started_msec < action_limit_msec:
+		return
+	model.advance(CaveModel.TURN_SECONDS, true)
+	action_started_msec = -1
+
+
+func _shown_gate_open(index: int) -> bool:
+	# 共耳: draw the leaf only when the door stays open after you step off.
+	# 借路回廊 still follows plate weight; that room is waiting on a replacement.
+	return model.gate_passable(index) if model.room == 1 else model.gate_open(index)
+
+
+func _settle_visuals(delta: float) -> void:
+	var pending := false
+	for i in 2:
+		var before: float = gate_visual[i]
+		var target := 1.0 if _shown_gate_open(i) else 0.0
+		gate_visual[i] = move_toward(before, target, delta * 3)
+		if not is_equal_approx(gate_visual[i], target):
+			pending = true
+		if before != gate_visual[i]:
+			queue_redraw()
+	var old_light := light_visual
+	var light_target := 1.0 if model.lit() else 0.0
+	light_visual = move_toward(light_visual, light_target, delta * 2)
+	if not is_equal_approx(light_visual, light_target):
+		pending = true
+	if old_light != light_visual:
+		queue_redraw()
+	if not pending:
+		visual_since_msec = -1
+		return
+	var now := Time.get_ticks_msec()
+	if visual_since_msec < 0:
+		visual_since_msec = now
+		return
+	if now - visual_since_msec < action_limit_msec:
+		return
+	for i in 2:
+		gate_visual[i] = 1.0 if _shown_gate_open(i) else 0.0
+	light_visual = 1.0 if model.lit() else 0.0
+	visual_since_msec = -1
+	queue_redraw()
+
+
 func _process(delta: float) -> void:
 	if stopped: return
 	if mode == "playing" and not model.paused and not overlay.visible:
@@ -560,6 +632,7 @@ func _process(delta: float) -> void:
 	var was_lit := model.lit()
 	var previous_deer := model.deer_time
 	_collect_step_repeat(delta)
+	_release_stalled_action()
 	if previous == "mirror" and model.busy.is_empty() and mirror_turn_queued:
 		mirror_turn_queued = false
 		if model.turn_mirror():
@@ -575,17 +648,8 @@ func _process(delta: float) -> void:
 	if was_lit != model.lit():
 		refresh(); checkpoint_changed.emit(model.room)
 	if previous_deer != model.deer_time: queue_redraw()
-	if not model.paused:
-		var old_light := light_visual
-		for i in 2:
-			var before: float = gate_visual[i]
-			# 共耳: draw the leaf only when the door stays open after you step off.
-			# 借路回廊 still follows plate weight; that room is waiting on a replacement.
-			var shown_open := model.gate_passable(i) if model.room == 1 else model.gate_open(i)
-			gate_visual[i] = move_toward(before, 1.0 if shown_open else 0.0, delta * 3)
-			if before != gate_visual[i]: queue_redraw()
-		light_visual = move_toward(light_visual, 1.0 if model.lit() else 0.0, delta * 2)
-		if old_light != light_visual: queue_redraw()
+	if not _card_holds_play():
+		_settle_visuals(delta)
 	if not model.busy.is_empty():
 		for i in cranks.size(): cranks[i].angle = model.angle(model.cranks[i].bridge); cranks[i].queue_redraw()
 		queue_redraw()
