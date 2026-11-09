@@ -690,7 +690,21 @@ func test_web_font_payload():
 	_collect_files("res://scripts/mogao_chapter", ".gd", mogao_files)
 	for file in mogao_files:
 		_collect_string_chars(FileAccess.get_file_as_string(file), mogao_chars)
+	var mogao_watch := "镜洞窟灯折光"
+	var mogao_missed := ""
+	for i in mogao_watch.length():
+		var mogao_code: int = mogao_watch.unicode_at(i)
+		if not mogao_chars.has(mogao_code):
+			mogao_missed += char(mogao_code)
+	assert_true(mogao_missed.is_empty(), "chapter 2 scan missed glyphs: %s" % mogao_missed)
 	_assert_font_covers(mogao_font, mogao_chars, "mogao subset")
+	var third_watch := "三危山弟弟"
+	var third_missed := ""
+	for i in third_watch.length():
+		var third_code: int = third_watch.unicode_at(i)
+		if not game_chars.has(third_code) or not game_font.has_char(third_code):
+			third_missed += char(third_code)
+	assert_true(third_missed.is_empty(), "chapter 3 copy is covered by the game subset: %s" % third_missed)
 
 
 func _collect_files(path: String, suffix: String, into: Array[String]) -> void:
