@@ -38,6 +38,8 @@ func _draw_ranges() -> void:
 		var cell: Vector2i = area["cell"]
 		var center := map_point(cell)
 		var span := range_span(float(area["radius"]), size)
+		center.x = clampf(center.x, span.x * 0.5 + 12.0, size.x - span.x * 0.5 - 12.0)
+		center.y = clampf(center.y, span.y * 0.5 + 12.0, size.y - span.y * 0.5 - 12.0)
 		var rx := span.x * 0.5
 		var ry := span.y * 0.5
 		var pts := PackedVector2Array()

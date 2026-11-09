@@ -195,8 +195,8 @@ func roadbook_ranges() -> Array:
 	if not beacon_found:
 		return []
 	return [
-		{"cell": CARAVAN, "label": "驼队一带", "radius": 2.2},
-		{"cell": STELE, "label": "残碑一带", "radius": 2.2},
+		{"cell": CARAVAN, "label": "驼队一带", "radius": 1.5},
+		{"cell": STELE, "label": "残碑一带", "radius": 1.5},
 	]
 
 

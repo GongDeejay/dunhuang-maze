@@ -135,11 +135,10 @@ func draw_panel(owner: Node2D, panel_x: float, panel_w: float, vp_h: float,
 	# Inventory
 	y = _draw_inventory(owner, lx, y, panel_w - pad * 2.0, inventory, selected_slot, s)
 	if water_skin_line != "":
-		y += 20.0 * s
+		y += line_h
 		owner.draw_string(ThemeDB.fallback_font, Vector2(lx, y),
 			water_skin_line, HORIZONTAL_ALIGNMENT_LEFT, int(panel_w - pad * 2.0), small_fs, Color("d7e4c4"))
-
-	y += 8
+		y += line_h
 
 	# Optional legends share columns; reserve room for controls and live messages.
 	var legend_h := (maxi(DataLoader.terrain_data.size(), DataLoader.monster_data.size()) + 2) * line_h

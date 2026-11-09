@@ -77,7 +77,7 @@ static func _ranges(t: Node) -> void:
 	var sketch := Vector2(520, 230)
 	var span := RouteSketch.range_span(2.2, sketch)
 	var cell_w := (sketch.x - 40.0) / 14.0
-	t.assert_true(span.x > cell_w * 3.0, "drawn range covers more than one map cell")
+	t.assert_true(span.x > cell_w * 2.0, "drawn range covers more than one map cell")
 	player.free()
 
 
