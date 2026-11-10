@@ -2,6 +2,16 @@
 .godot/
 *.import
 !assets/ending/family.webp.import
+!assets/sprites/mogao/plank_flip.png.import
+!assets/sprites/mogao/plank_demo_tag.png.import
+!assets/sprites/mogao/plank_nailed.png.import
+!assets/sprites/mogao/ledge_stone.png.import
+!assets/sprites/mogao/rope_gate.png.import
+!assets/sprites/mogao/cliff_void.png.import
+!assets/sprites/mogao/cliff_edge.png.import
+!assets/sprites/mogao/blue_thread.png.import
+!assets/audio/plank_flip.ogg.import
+!assets/audio/rope_gate.ogg.import
 *.uid
 
 # macOS

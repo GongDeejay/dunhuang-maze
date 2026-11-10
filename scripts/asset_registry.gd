@@ -99,6 +99,14 @@ const MOGAO_SPRITE_FILES := {
 	"mirror_sw_lit": "mirror_sw_lit.png",
 	"mirror_nw": "mirror_nw.png",
 	"mirror_nw_lit": "mirror_nw_lit.png",
+	"plank_flip": "plank_flip.png",
+	"plank_demo_tag": "plank_demo_tag.png",
+	"plank_nailed": "plank_nailed.png",
+	"ledge_stone": "ledge_stone.png",
+	"rope_gate": "rope_gate.png",
+	"cliff_void": "cliff_void.png",
+	"cliff_edge": "cliff_edge.png",
+	"blue_thread": "blue_thread.png",
 }
 
 const FRAGMENT_SHEET := "mother_fragments.png"

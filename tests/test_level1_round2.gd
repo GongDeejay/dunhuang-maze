@@ -20,6 +20,7 @@ static func run(t: Node) -> void:
 	_mobile(t)
 	_play(t)
 	_measures(t)
+	_keep_words(t)
 	_popup_layout(t)
 	_camp_pictures(t)
 	_roadbook_log(t)
@@ -284,6 +285,49 @@ static func _skin(t: Node, main, journey: FirstJourney) -> void:
 	t.assert_eq(paused.handle(held, ctx).type, GameAction.Type.NONE, "pause ignores H")
 
 
+static func _keep_words(t: Node) -> void:
+	var font := load("res://assets/fonts/NotoSansSC-GameSubset.ttf") as FontFile
+	font.allow_system_fallback = false
+	var words := MeasureText.keep_words()
+	var shortcut := -1
+	var cave := -1
+	for i in words.size():
+		if words[i] == "栈道捷径":
+			shortcut = i
+		elif words[i] == "栈道窟":
+			cave = i
+	t.assert_true(shortcut >= 0 and cave > shortcut, "栈道捷径 is matched before the shorter 栈道窟")
+	var missing := ""
+	var seen := {}
+	for word in words:
+		for i in word.length():
+			var code := word.unicode_at(i)
+			if seen.has(code):
+				continue
+			seen[code] = true
+			if not font.has_char(code):
+				missing += word.substr(i, 1)
+	t.assert_eq(missing, "", "keep words are missing web font glyphs: %s" % missing)
+	var prefix := "北面通向"
+	var sentence := prefix + "鹿影窟。"
+	var width := font.get_string_size(prefix + "鹿", HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 0.5
+	t.assert_true(font.get_string_size(prefix + "鹿影", HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x > width, "the boundary cuts through 鹿影窟")
+	t.assert_true(font.get_string_size("鹿影窟。", HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x <= width + 0.01, "鹿影窟 still fits on a line of its own")
+	var wrapped := MeasureText.layout_text(sentence, width, font, 18)
+	t.assert_eq(_plain(wrapped).replace("\n", ""), sentence, "the deer-cave sentence keeps every character")
+	var intact := false
+	for line in _plain(wrapped).split("\n"):
+		if line.contains("鹿影窟"):
+			intact = true
+	t.assert_true(intact, "鹿影窟 stays together: %s" % _plain(wrapped))
+	_assert_lines(t, wrapped, "deer cave boundary")
+	var narrow := font.get_string_size("栈", HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 0.5
+	var overlong := MeasureText.layout_text("栈道捷径。", narrow, font, 18)
+	t.assert_eq(_plain(overlong).replace("\n", ""), "栈道捷径。", "an overlong name falls back to characters")
+	t.assert_true(_plain(overlong).split("\n").size() > 1 and _plain(overlong).split("\n").size() <= 8, "an overlong name breaks by character and stops")
+	_assert_lines(t, overlong, "overlong keep word")
+
+
 static func _popup_layout(t: Node) -> void:
 	var mom := "“你没事，太好了！孩子们往莫高窟那边去了。”\n妈妈帮你包扎，恢复 4 点体力，并指出右侧通往营地的旧路。\n捷径已经打开。先一起到营地，再去找孩子们。"
 	var mirror := "灯固定在西南角，光沿直线走。\n铜镜亮金的一面是正面：光照上来，会顺着红箭头拐出去；打到深青绿的背面，或逆着箭头照来，光就停住。\n带石座的那面嵌在石里，转不动；另外三面站在旁边就能转。转错可以撤销。\n把光引到莲花灯座上，北面窟门的光帘才会散开，通向鹿影窟。\n\n本关为壁画幻境；机关为游戏虚构。"
@@ -496,6 +540,8 @@ static func _clock(t: Node) -> void:
 	main._process(1.0)
 	t.assert_true(main.level_elapsed > stamped, "time resumes after the popup closes")
 	t.assert_eq(MeasureText.format_duration(12.0 * 60.0 + 34.0), "用时 12 分 34 秒", "duration reads as minutes and seconds")
+	t.assert_eq(MeasureText.format_duration(29.0 * 60.0 + 50.0), "用时 29 分 50 秒", "two-digit minutes keep the spaces")
+	t.assert_eq(MeasureText.format_duration(60.0), "用时 1 分 0 秒", "a whole minute still has both units")
 	main.move_count = 226
 	main.level_elapsed = 12.0 * 60.0 + 34.0
 	main.first_journey = FirstJourney.new()
@@ -503,6 +549,10 @@ static func _clock(t: Node) -> void:
 	var level_one := _plain(main.journey_card.body_label.text)
 	t.assert_true(level_one.contains("这次走了 226 步"), "level 1 settlement names the steps")
 	t.assert_true(level_one.contains("用时 12 分 34 秒"), "level 1 settlement names the time")
+	main.level_elapsed = 29.0 * 60.0 + 50.0
+	main.move_count = 40
+	main._on_level_completed()
+	t.assert_true(_plain(main.journey_card.body_label.text).replace("\n", "").contains("29 分 50 秒"), "level 1 settlement keeps spaces around a two-digit minute")
 	main.free()
 	var chapter := MogaoChapter.new()
 	t.add_child(chapter)
@@ -525,6 +575,16 @@ static func _clock(t: Node) -> void:
 	var level_two := _plain(chapter.card_body.text).replace("\n", "")
 	t.assert_true(level_two.contains("这次走了 18 步"), "level 2 settlement names the steps")
 	t.assert_true(level_two.contains("用时 1 分 15 秒"), "level 2 settlement names the time")
+	chapter.close_card()
+	chapter.mode = "playing"
+	chapter.level_elapsed = 29.0 * 60.0 + 50.0
+	chapter.model.moves = 18
+	chapter.model.room = 2
+	chapter.model.rescued = true
+	chapter.model.player = chapter.model.exit_cell
+	chapter.interact()
+	var long_time := _plain(chapter.card_body.text).replace("\n", "")
+	t.assert_true(long_time.contains("29 分 50 秒"), "level 2 settlement keeps spaces around a two-digit minute")
 	chapter.free()
 
 

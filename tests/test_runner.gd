@@ -699,7 +699,7 @@ func test_web_font_payload():
 		_collect_display_chars(file, mogao_chars)
 	assert_true(saw_mirror_script, "chapter 2 glyph scan includes mirror_*.gd")
 	assert_true(saw_measure_text, "chapter 2 glyph scan includes settlement text rendered with the cave font")
-	var mogao_watch := "镜洞窟灯折光还要转这面镜"
+	var mogao_watch := "镜洞窟灯折光还要转这面镜栈道翻板绳栓撤销"
 	var mogao_missed := ""
 	for i in mogao_watch.length():
 		var mogao_code: int = mogao_watch.unicode_at(i)

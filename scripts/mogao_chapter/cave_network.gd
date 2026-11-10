@@ -10,7 +10,7 @@ const NAMES := {
 	0: "入窟",
 	1: "共耳窟",
 	2: "鹿影窟",
-	3: "借路回廊",
+	3: "栈道窟",
 	4: "灯窟",
 	5: "中央窟",
 	7: "镜窟",
@@ -23,18 +23,23 @@ func _init() -> void:
 func solved(id: int) -> bool:
 	return reached if id == room else bool(rooms.get(str(id), {}).get("reached", false))
 
+## The west door itself follows this room. The hub side and the map used to wait
+## for the first walk back, so a solved cave still showed a lock from the hub.
+func shortcut_open() -> bool:
+	return shortcut or solved(3)
+
 func door(cell: Vector2i, target: int, spawn: Vector2i, label: String, open: bool = true) -> Dictionary:
 	return {"cell": cell, "target": target, "spawn": spawn, "label": label, "open": open}
 
 func doors() -> Array:
 	match room:
 		0: return [door(goal, 5, Vector2i(3, 5), "中央窟", reached)]
-		5: return [door(Vector2i(3, 6), 0, Vector2i(2, 0), "入窟"), door(Vector2i(0, 3), 1, Vector2i(3, 6), "共耳窟"), door(Vector2i(6, 3), 4, Vector2i(3, 7), "灯窟"), door(Vector2i(3, 0), 3, Vector2i(1, 2), "回廊捷径", shortcut)]
-		1: return [door(Vector2i(3, 6), 5, Vector2i(0, 3), "中央窟"), door(goal, 3, Vector2i(3, 8), "借路回廊", reached)]
-		3: return [door(Vector2i(3, 8), 1, Vector2i(3, 0), "共耳窟"), door(goal, 2, Vector2i(1, 7), "鹿影窟", reached), door(Vector2i(1, 2), 5, Vector2i(3, 0), "回廊捷径", reached)]
+		5: return [door(Vector2i(3, 6), 0, Vector2i(2, 0), "入窟"), door(Vector2i(0, 3), 1, Vector2i(3, 6), "共耳窟"), door(Vector2i(6, 3), 4, Vector2i(3, 7), "灯窟"), door(Vector2i(3, 0), 3, Vector2i(1, 2), "栈道捷径", shortcut_open())]
+		1: return [door(Vector2i(3, 6), 5, Vector2i(0, 3), "中央窟"), door(goal, 3, Vector2i(3, 8), "栈道窟", reached)]
+		3: return [door(Vector2i(3, 8), 1, Vector2i(3, 0), "共耳窟"), door(goal, 2, Vector2i(1, 7), "鹿影窟", reached), door(Vector2i(1, 2), 5, Vector2i(3, 0), "栈道捷径", reached)]
 		4: return [door(Vector2i(3, 7), 5, Vector2i(6, 3), "中央窟"), door(goal, 7, Vector2i(4, 8), "镜窟", reached)]
 		7: return [door(Vector2i(3, 8), 4, Vector2i(3, 0), "灯窟"), door(goal, 2, Vector2i(5, 7), "鹿影窟", reached)]
-		2: return [door(Vector2i(1, 7), 3, Vector2i(3, 0), "借路回廊", solved(3)), door(Vector2i(5, 7), 7, Vector2i(3, 0), "镜窟", solved(7))]
+		2: return [door(Vector2i(1, 7), 3, Vector2i(3, 0), "栈道窟", solved(3)), door(Vector2i(5, 7), 7, Vector2i(3, 0), "镜窟", solved(7))]
 	return []
 
 func current_door() -> Dictionary:
@@ -72,7 +77,7 @@ func next_room() -> bool:
 
 func step(direction: Vector2i) -> bool:
 	# A crate may not obstruct a room transition, including an unsolved room's retreat.
-	if room in [1, 3] and player + direction == box:
+	if room == 1 and player + direction == box:
 		if reached: return false
 		for d in doors():
 			if box + direction == d.cell: return false
@@ -91,7 +96,10 @@ func remember_room() -> void:
 	if not busy.is_empty(): return
 	var poses: Array = []
 	for b in bridges: poses.append(b.pose)
-	rooms[str(room)] = {"player": [player.x, player.y], "box": [box.x, box.y], "lamp": [lamp.x, lamp.y], "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "reached": reached, "scarf": scarf, "latch": latch, "poses": poses, "moves": moves, "turns": turns, "mirror_rots": mirror_rots.duplicate(true)}
+	var ups: Array = []
+	for cell in planks_up.keys():
+		ups.append([cell.x, cell.y])
+	rooms[str(room)] = {"player": [player.x, player.y], "box": [box.x, box.y], "lamp": [lamp.x, lamp.y], "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "reached": reached, "scarf": scarf, "planks_up": ups, "poses": poses, "moves": moves, "turns": turns, "mirror_rots": mirror_rots.duplicate(true)}
 
 func restore_room(s: Dictionary) -> void:
 	player = cell_value(s.get("player"), player)
@@ -100,7 +108,18 @@ func restore_room(s: Dictionary) -> void:
 	lamp_held = bool(s.get("held", false)); deer_seen = bool(s.get("deer", false))
 	deer_time = clampf(float(s.get("deer_time", -1)), -1, DEER_SECONDS + .8)
 	rescued = bool(s.get("rescued", false)); reached = bool(s.get("reached", false))
-	scarf = bool(s.get("scarf", room > 0)); latch = bool(s.get("latch", false))
+	scarf = bool(s.get("scarf", room > 0))
+	if room == 3:
+		# Old borrowed-corridor saves stored a crate and a latch. Both are ignored.
+		box = Vector2i(-9, -9)
+		planks_up.clear()
+		if not reached:
+			var ups = s.get("planks_up", [])
+			if ups is Array:
+				for item in ups:
+					var cell := cell_value(item, Vector2i(-99, -99))
+					if _plank_like(cell):
+						planks_up[cell] = true
 	var poses = s.get("poses", [])
 	if poses is Array:
 		for i in mini(poses.size(), bridges.size()): bridges[i].pose = clampi(int(poses[i]), 0, 1)
@@ -113,6 +132,7 @@ func restore_room(s: Dictionary) -> void:
 			if bool(s.get("reached", false)):
 				mirror_rots = solution_rots()
 	if not walkable(player) or player == box: player = entry
+	if room == 3 and not walkable(player): player = PLANK_ENTRY
 	destination = player; box_destination = box
 	history.clear()
 
@@ -123,13 +143,13 @@ static func cell_value(value: Variant, fallback: Vector2i) -> Vector2i:
 
 func save_network() -> Dictionary:
 	remember_room()
-	return {"version": 3, "rooms": rooms.duplicate(true), "shortcut": shortcut, "secret": secret, "entry": [entry.x, entry.y]}
+	return {"version": 4, "rooms": rooms.duplicate(true), "shortcut": shortcut, "secret": secret, "entry": [entry.x, entry.y]}
 
 func resume_network(id: int, data: Dictionary) -> void:
 	load_room(id); entry = player
 	rooms.clear(); shortcut = false; secret = false
 	var version := int(data.get("version", 0))
-	if (version != 1 and version != 2 and version != 3) or not data.get("rooms", {}) is Dictionary:
+	if version < 1 or version > 4 or not data.get("rooms", {}) is Dictionary:
 		migrate_linear_save(room)
 		return
 	var saved_rooms: Dictionary = data.get("rooms", {})
@@ -152,7 +172,7 @@ func migrate_linear_save(id: int) -> void:
 		player = goal; destination = player
 		for b in bridges: b.pose = 1
 		if room == 1: box = PLATE
-		if room == 3: box = RELAY_PLATES[1]; latch = true
+		if room == 3: box = Vector2i(-9, -9); planks_up.clear()
 		if room == 4: lamp = STANDS[0]; deer_seen = true
 		remember_room()
 	load_room(id); entry = player
@@ -160,8 +180,10 @@ func migrate_linear_save(id: int) -> void:
 
 func reset_current() -> bool:
 	if reached or rescued or room == 5: return false
-	var start := entry
+	# The shortcut can leave you on the west stone. Reset always returns to entrance E.
+	var start := PLANK_ENTRY if room == 3 else entry
 	load_room(room); player = start; destination = start
+	if room == 3: entry = PLANK_ENTRY
 	_clear_motion()
 	remember_room()
 	return true
@@ -171,7 +193,7 @@ func _clear_motion() -> void:
 	lamp_destination = Vector2i(-1, -1)
 
 func map_note() -> String:
-	var text := "洞窟相连，左右任一路都能找到哥哥。\n\n入窟 ↔ 中央窟\n左路：中央 ↔ 共耳 ↔ 借路 ↔ 鹿影\n右路：中央 ↔ 灯窟 ↔ 镜窟 ↔ 鹿影\n回廊捷径：" + ("已通" if shortcut else "从借路回廊背面开启") + "\n\n"
+	var text := "洞窟相连，左右任一路都能找到哥哥。\n\n入窟 ↔ 中央窟\n左路：中央 ↔ 共耳 ↔ 栈道 ↔ 鹿影\n右路：中央 ↔ 灯窟 ↔ 镜窟 ↔ 鹿影\n栈道捷径：" + ("已通" if shortcut_open() else "从栈道窟西侧开启") + "\n\n"
 	for id in [0, 5, 1, 3, 4, 7, 2]:
 		text += ("● " if id == room else "○ ") + NAMES[id] + (" · 当前" if id == room else (" · 已通" if solved(id) else (" · 来过" if rooms.has(str(id)) else " · 未探索"))) + "\n"
 	return text + ("\n手记里多了一张小兔合影。" if secret else "\n中央窟有三条铜线，汇向同一个小节点。")

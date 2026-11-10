@@ -25,9 +25,25 @@ const MIRROR_DEFS := [
 	{"id": "B", "cell": Vector2i(1, 5), "rotatable": true, "teaching": false, "show_preview": false, "start_rot": 3, "solution_rot": 0},
 ]
 var connected := false
-const RELAY_PLATES := [Vector2i(3, 5), Vector2i(5, 2)]
-const RELAY_GATES := [Vector2i(5, 4), Vector2i(3, 1)]
-var latch := false
+## 栈道窟 replaces the borrowed corridor. Room id, size, and door cells stay.
+const PLANK_CELLS: Array[Vector2i] = [
+	Vector2i(4, 1), Vector2i(2, 2), Vector2i(3, 2), Vector2i(4, 2),
+	Vector2i(1, 3), Vector2i(5, 3), Vector2i(1, 4), Vector2i(2, 4),
+	Vector2i(3, 4), Vector2i(4, 4), Vector2i(5, 4),
+]
+const PLANK_STONES: Array[Vector2i] = [
+	Vector2i(3, 1), Vector2i(1, 2), Vector2i(5, 2), Vector2i(3, 3),
+	Vector2i(2, 5), Vector2i(2, 6), Vector2i(3, 6), Vector2i(2, 7),
+	Vector2i(2, 8), Vector2i(3, 8),
+]
+const PLANK_DEMO := Vector2i(3, 7)
+const PLANK_LANDING := Vector2i(3, 1)
+const PLANK_NICHE := Vector2i(3, 3)
+const PLANK_ENTRY := Vector2i(3, 8)
+const PLANK_GOAL := Vector2i(3, 0)
+const PLANK_WEST := Vector2i(1, 2)
+var planks_up: Dictionary = {}
+var _plank_cache: Dictionary = {}
 var room := 0
 var land: Dictionary = {}
 var bridges: Array = []
@@ -81,11 +97,11 @@ func add_bridge(pivot: Vector2i, poses: Array, angle: float, crank_cells: Array)
 
 func load_room(index: int) -> void:
 	room = index if index in ROOMS else 0
-	latch = false
 	scarf = room > 0; rescued = false
 	land.clear(); bridges.clear(); cranks.clear(); visits.clear()
 	history.clear(); box = Vector2i(-9, -9); lamp = Vector2i(3, 6); lamp_held = false; deer_seen = false; deer_time = -1
 	busy = ""; progress = 0; turning = -1; paused = false; reached = false
+	planks_up.clear(); _plank_cache.clear()
 	_reset_mirror_rots()
 	if room == 0:
 		extent = Vector2(5, 7)
@@ -99,8 +115,13 @@ func load_room(index: int) -> void:
 		player = Vector2i(3, 6); goal = Vector2i(3, 0); box = Vector2i(2, 4)
 	elif room == 3:
 		extent = Vector2(7, 9)
-		fill(Rect2i(1, 5, 5, 4)); fill(Rect2i(1, 2, 5, 2)); land[Vector2i(3, 0)] = true
-		player = Vector2i(3, 8); goal = Vector2i(3, 0); box = Vector2i(2, 6)
+		for cell in PLANK_STONES:
+			land[cell] = true
+		for cell in PLANK_CELLS:
+			land[cell] = true
+		land[PLANK_DEMO] = true
+		player = PLANK_ENTRY
+		goal = PLANK_GOAL
 	elif room == 4:
 		extent = Vector2(7, 8)
 		fill(Rect2i(1, 5, 5, 3)); fill(Rect2i(1, 0, 5, 2))
@@ -152,29 +173,36 @@ func walkable(cell: Vector2i) -> bool:
 				if lit_cell == cell:
 					return true
 		return false
+	if room == 3:
+		if reached:
+			return land.has(cell) or cell == goal
+		if cell == goal:
+			return plank_count() >= PLANK_CELLS.size()
+		if not land.has(cell):
+			return false
+		return not planks_up.has(cell)
 	if land.has(cell): return true
-	if room in [1, 3] and cell in gates(): return gate_open(gates().find(cell))
+	if room == 1 and cell in gates(): return gate_open(gates().find(cell))
 	if room == 2 and lit() and cell in LIGHT_PATH: return true
 	for i in bridges.size():
 		if cell in bridge_cells(i): return room != 4 or lit()
 	return false
 
 func gates() -> Array:
-	return RELAY_GATES if room == 3 else GATES
+	return GATES if room == 1 else []
 
 func plates() -> Array:
-	return RELAY_PLATES if room == 3 else PLATES
+	return PLATES if room == 1 else []
 
 func stands() -> Array:
 	return [STANDS[0]] if room == 4 else STANDS
 
 func plate_active(index: int, actor: Vector2i = player) -> bool:
-	return room in [1, 3] and (box == plates()[index] or actor == plates()[index])
+	return room == 1 and (box == plates()[index] or actor == plates()[index])
 
 func gate_open(index: int = -1, actor: Vector2i = player) -> bool:
-	if room not in [1, 3]: return false
+	if room != 1: return false
 	if index < 0: return gate_open(0, actor) and gate_open(1, actor)
-	if room == 3: return (latch or plate_active(0, actor)) if index == 0 else plate_active(1, actor)
 	return plate_active(1, actor) or plate_active(0 if index == 0 else 2, actor)
 
 ## A door the player can walk through. Body weight makes gate_open true, but stepping
@@ -190,8 +218,7 @@ func lit() -> bool:
 	return bank_lit() and deer_time >= DEER_SECONDS
 
 func remember() -> void:
-	history.append({"player": player, "box": box, "lamp": lamp, "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "scarf": scarf, "reached": reached, "bridges": bridges.duplicate(true), "visits": visits.duplicate(), "moves": moves, "turns": turns, "mirror_rots": mirror_rots.duplicate(true)})
-	history[-1]["latch"] = latch
+	history.append({"player": player, "box": box, "lamp": lamp, "held": lamp_held, "deer": deer_seen, "deer_time": deer_time, "rescued": rescued, "scarf": scarf, "reached": reached, "bridges": bridges.duplicate(true), "visits": visits.duplicate(), "moves": moves, "turns": turns, "mirror_rots": mirror_rots.duplicate(true), "planks_up": planks_up.duplicate()})
 
 func undo() -> bool:
 	if paused or not busy.is_empty() or history.is_empty(): return false
@@ -199,7 +226,7 @@ func undo() -> bool:
 	player = s.player; destination = player; box = s.box; box_destination = box
 	lamp = s.lamp; lamp_held = s.held; deer_seen = s.deer; rescued = s.rescued
 	deer_time = s.deer_time
-	latch = s.latch
+	planks_up = (s["planks_up"] as Dictionary).duplicate() if s.get("planks_up") is Dictionary else {}
 	if s.has("mirror_rots") and s["mirror_rots"] is Dictionary:
 		mirror_rots = (s["mirror_rots"] as Dictionary).duplicate(true)
 	elif s.has("mirror_rot"):
@@ -259,11 +286,10 @@ func step(direction: Vector2i) -> bool:
 	if not walkable(player + direction): return false
 	# Evaluate the destination's weight, so stepping off a plate cannot slip through
 	# a closing door. No crushing, trapping, or frame-dependent bypasses.
-	if room in [1, 3] and player + direction in gates() and not gate_open(gates().find(player + direction), player + direction): return false
+	if room == 1 and player + direction in gates() and not gate_open(gates().find(player + direction), player + direction): return false
 	box_destination = box
-	if room in [1, 3] and player + direction == box:
-		# Crates stay on stone, except the relay door after its latch is secured.
-		if not land.has(box + direction) and not (room == 3 and latch and box + direction == RELAY_GATES[0]): return false
+	if room == 1 and player + direction == box:
+		if not land.has(box + direction): return false
 		box_destination = box + direction
 	remember()
 	destination = player + direction
@@ -295,8 +321,10 @@ func advance(delta: float, force: bool = false) -> void:
 			deer_seen = true
 			if lamp == STANDS[1] and deer_time < DEER_SECONDS: deer_time = 0
 	else:
+		var departed := player
 		player = destination; box = box_destination; moves += 1; visits[player] = true
-		if room == 3 and player == RELAY_GATES[0]: latch = true
+		if room == 3 and _plank_like(departed):
+			planks_up[departed] = true
 		if player == goal:
 			if room == 2: rescued = true
 			else:
@@ -431,3 +459,85 @@ func _note_beam_stop() -> void:
 	if kind == "back" or kind == "reverse":
 		back_flash = 0.25
 		back_flash_cell = traced.get("stop_cell", Vector2i(-1, -1))
+
+
+func plank_count() -> int:
+	var n := 0
+	for cell in PLANK_CELLS:
+		if planks_up.has(cell):
+			n += 1
+	return n
+
+
+func plank_can_move() -> bool:
+	if paused or not busy.is_empty() or reached:
+		return false
+	for direction in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		if walkable(player + direction):
+			return true
+	return false
+
+
+## True when some sequence still flips every counting plank and reaches the landing.
+## Walking in circles on stone is not "alive" if the remaining boards cannot be finished.
+func plank_live() -> bool:
+	if room != 3 or reached:
+		return true
+	var key := _plank_state_key(player, planks_up)
+	if _plank_cache.has(key):
+		return bool(_plank_cache[key])
+	var live := _plank_search(player, planks_up)
+	_plank_cache[key] = live
+	return live
+
+
+func plank_stone(cell: Vector2i) -> bool:
+	return cell in PLANK_STONES
+
+
+func _plank_like(cell: Vector2i) -> bool:
+	return cell == PLANK_DEMO or cell in PLANK_CELLS
+
+
+func _plank_all_counting(flips: Dictionary) -> bool:
+	for cell in PLANK_CELLS:
+		if not flips.has(cell):
+			return false
+	return true
+
+
+func _plank_state_key(pos: Vector2i, flips: Dictionary) -> String:
+	var parts: Array[String] = []
+	for cell in flips.keys():
+		parts.append("%d:%d" % [cell.x, cell.y])
+	parts.sort()
+	return "%d,%d|%s" % [pos.x, pos.y, "|".join(parts)]
+
+
+func _plank_search(start: Vector2i, start_flips: Dictionary) -> bool:
+	var seen := {}
+	var queue: Array = [[start, start_flips.duplicate()]]
+	seen[_plank_state_key(start, start_flips)] = true
+	var head := 0
+	var dirs: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+	while head < queue.size():
+		var item: Array = queue[head]
+		head += 1
+		var pos: Vector2i = item[0]
+		var flips: Dictionary = item[1]
+		for direction in dirs:
+			var nxt: Vector2i = pos + direction
+			var nfl: Dictionary = flips.duplicate()
+			if _plank_like(pos):
+				nfl[pos] = true
+			if nxt == PLANK_GOAL:
+				if _plank_all_counting(nfl):
+					return true
+				continue
+			if plank_stone(nxt) or (_plank_like(nxt) and not nfl.has(nxt)):
+				var key := _plank_state_key(nxt, nfl)
+				if seen.has(key):
+					continue
+				seen[key] = true
+				queue.append([nxt, nfl])
+	return false

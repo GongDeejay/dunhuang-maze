@@ -169,10 +169,28 @@ func _ready() -> void:
 	_try_load_save()
 	_refresh_layout()
 	_request_redraw()
-	if _mirror_preview_requested():
+	if _plank_preview_requested():
+		call_deferred("_start_plank_preview")
+	elif _mirror_preview_requested():
 		call_deferred("_start_mirror_preview")
 	elif _depart_preview_requested():
 		call_deferred("_start_depart_preview")
+
+
+func _query_has(flag: String) -> bool:
+	if not OS.has_feature("web"):
+		return false
+	var search := str(JavaScriptBridge.eval("window.location.search", true))
+	return flag in search
+
+
+func _plank_preview_requested() -> bool:
+	if OS.get_environment("DUNHUANG_PLANK_PREVIEW") == "1":
+		return true
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--plank" or arg == "plank=1":
+			return true
+	return _query_has("plank=1") or _query_has("room=plank")
 
 
 func _mirror_preview_requested() -> bool:
@@ -181,10 +199,7 @@ func _mirror_preview_requested() -> bool:
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--mirror" or arg == "mirror=1":
 			return true
-	if OS.has_feature("web"):
-		var search := str(JavaScriptBridge.eval("window.location.search", true))
-		return "mirror=1" in search
-	return false
+	return _query_has("mirror=1")
 
 
 func _depart_preview_requested() -> bool:
@@ -193,13 +208,10 @@ func _depart_preview_requested() -> bool:
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--depart" or arg == "depart=1":
 			return true
-	if OS.has_feature("web"):
-		var search := str(JavaScriptBridge.eval("window.location.search", true))
-		return "depart=1" in search
-	return false
+	return _query_has("depart=1")
 
 
-func _open_debug_cave(room_id: int) -> void:
+func _start_debug_cave(room_id: int) -> void:
 	# Debug entrance. It never reads or writes the campaign save.
 	for child in get_children():
 		if child is MonsterEntity or child is ItemEntity:
@@ -219,12 +231,16 @@ func _open_debug_cave(room_id: int) -> void:
 	_refresh_layout(); queue_redraw()
 
 
+func _start_plank_preview() -> void:
+	_start_debug_cave(3)
+
+
 func _start_mirror_preview() -> void:
-	_open_debug_cave(CaveModel.MIRROR_ROOM)
+	_start_debug_cave(CaveModel.MIRROR_ROOM)
 
 
 func _start_depart_preview() -> void:
-	_open_debug_cave(2)
+	_start_debug_cave(2)
 	cave_chapter.model.rescued = true
 	cave_chapter.model.player = cave_chapter.model.exit_cell
 	cave_chapter.model.destination = cave_chapter.model.player

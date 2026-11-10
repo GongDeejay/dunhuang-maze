@@ -41,7 +41,7 @@ func paint(c: Control) -> void:
 	for cell in m.land: tile(c, cell, false)
 	if m.room == CaveModel.MIRROR_ROOM:
 		_mirror_floor(c)
-	if m.room in [1, 3]:
+	if m.room == 1:
 		for gate in m.gates(): tile(c, gate, false)
 	if m.room == 2:
 		# A faint silhouette explains the missing light without making the whole screen dark.
@@ -69,12 +69,14 @@ func paint(c: Control) -> void:
 	if m.room == 1: pressure(c)
 	if m.room == 2: light_room(c)
 	if m.room == 3:
-		relay(c); crate(c)
+		planks(c)
 	if m.room == 4: light_bridge(c)
 	if m is CaveNetwork:
 		if m.room == 5: hub(c)
 		for d in m.doors():
-			portal(c, c.point(d.cell), d.open)
+			var side_gate: bool = (m.room == 3 and d.cell == CaveModel.PLANK_WEST) or (m.room == 5 and d.cell == Vector2i(3, 0))
+			if not (m.room == 3 and d.cell == m.goal) and not (side_gate and d.open):
+				portal(c, c.point(d.cell), d.open)
 			var p: Vector2 = c.point(d.cell) - Vector2(0, u * .94)
 			if d.cell.y == int(m.extent.y) - 1: p = c.point(d.cell) + Vector2(0, u * .48)
 			var label: String = d.label
@@ -140,7 +142,7 @@ func lantern(c: Control, p: Vector2, radius: float, strength: float, canvas: Can
 	for i in range(4, 0, -1): draw.draw_circle(p, radius * i * 1.8, Color(1, .67, .27, strength * .035))
 	draw.draw_line(p + Vector2(0, radius), p + Vector2(0, radius * 1.8), Color("735338"), 3, true)
 	draw.draw_style_box(lamp_style(), Rect2(p - Vector2.ONE * radius, Vector2.ONE * radius * 2))
-	draw.draw_arc(p - Vector2(0, radius), radius * .7, PI, TAU, 12, Color("d6b276"), 2, true)
+	draw.draw_line(p - Vector2(0, radius), p - Vector2(0, radius * 1.7), Color("d6b276"), 2, true)
 	draw.draw_line(p - Vector2(0, radius), p + Vector2(0, radius), Color("ffeab3"), 2, true)
 
 func lamp_style() -> StyleBoxFlat:
@@ -148,7 +150,8 @@ func lamp_style() -> StyleBoxFlat:
 	style.set_border_width_all(2); style.set_corner_radius_all(4)
 	return style
 
-func portal(c: Control, p: Vector2, open: bool) -> void:
+func portal(c: Control, p: Vector2, open: bool, canvas: CanvasItem = null) -> void:
+	var draw: CanvasItem = c if canvas == null else canvas
 	var u: float = c.unit
 	# The first scarf must remain readable; its exit is shown only after collection.
 	if c.model.room == 0 and not c.model.reached: return
@@ -156,9 +159,9 @@ func portal(c: Control, p: Vector2, open: bool) -> void:
 	var style := StyleBoxFlat.new(); style.bg_color = Color("acb5a0") if open else Color("35443e")
 	style.corner_radius_top_left = int(u * .38); style.corner_radius_top_right = int(u * .38)
 	style.border_color = Color("d1b78b"); style.set_border_width_all(3)
-	c.draw_style_box(style, rect)
-	if open: c.draw_line(p + Vector2(0, -u * .5), p + Vector2(0, -u * .14), Color("fff0c2"), 4, true)
-	else: c.draw_line(p + Vector2(-u * .31, -u * .35), p + Vector2(u * .31, -u * .35), Color("b58b55"), maxf(4, u * .1), true)
+	draw.draw_style_box(style, rect)
+	if open: draw.draw_line(p + Vector2(0, -u * .5), p + Vector2(0, -u * .14), Color("fff0c2"), 4, true)
+	else: draw.draw_line(p + Vector2(-u * .31, -u * .35), p + Vector2(u * .31, -u * .35), Color("b58b55"), maxf(4, u * .1), true)
 
 func bridge(c: Control, index: int) -> void:
 	var b: Dictionary = c.model.bridges[index]
@@ -187,21 +190,11 @@ func crate(c: Control) -> void:
 	c.draw_line(rect.position + Vector2(3, 3), rect.end - Vector2(3, 3), Color("735330"), 3, true)
 	c.draw_line(Vector2(rect.end.x - 3, rect.position.y + 3), Vector2(rect.position.x + 3, rect.end.y - 3), Color("735330"), 3, true)
 
-func relay(c: Control) -> void:
-	var m: CaveModel = c.model; var u: float = c.unit
-	for i in 2:
-		var p: Vector2 = c.point(m.plates()[i]); var g: Vector2 = c.point(m.gates()[i])
-		var color := Color("ffe1a1") if m.gate_open(i) else Color("9c886a")
-		c.draw_polyline(PackedVector2Array([p, Vector2(g.x, p.y), g]), color, 3, true)
-		c.draw_circle(p, u * .3, Color("6f8877") if m.plate_active(i) else Color("756747"))
-		c.draw_arc(p, u * .27, 0, TAU, 24, color, 2, true)
-		for x in [-.42, .42]: c.draw_line(g + Vector2(x * u, u * .25), g + Vector2(x * u, -u * .5), Color("98764e"), 5, true)
-		var h: float = u * .7 * (1 - c.gate_visual[i])
-		if h > .5: c.draw_rect(Rect2(g + Vector2(-u * .35, -u * .45), Vector2(u * .70, h)), Color("8c6944"))
-		if i == 0:
-			var latch_pos := g + Vector2(u * .6, -u * .35)
-			c.draw_arc(latch_pos, u * .15, 0, TAU, 16, color, 3, true)
-			if m.latch: c.draw_polyline(PackedVector2Array([latch_pos + Vector2(-u * .1, 0), latch_pos + Vector2(0, u * .08), latch_pos + Vector2(u * .18, -u * .17)]), Color("ffe1a1"), 3, true)
+func planks(c: Control) -> void:
+	var u: float = c.unit
+	var niche: Vector2 = c.point(CaveModel.PLANK_NICHE)
+	c.draw_circle(niche + Vector2(-u * .12, u * .08), maxf(2.0, u * .07), Color("6a5340"))
+	c.draw_circle(niche + Vector2(u * .12, u * .12), maxf(1.5, u * .045), Color("6a5340"))
 
 func light_bridge(c: Control) -> void:
 	var m: CaveModel = c.model; var u: float = c.unit
