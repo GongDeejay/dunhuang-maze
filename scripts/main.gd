@@ -169,6 +169,39 @@ func _ready() -> void:
 	_try_load_save()
 	_refresh_layout()
 	_request_redraw()
+	if _mirror_preview_requested():
+		call_deferred("_start_mirror_preview")
+
+
+func _mirror_preview_requested() -> bool:
+	if OS.get_environment("DUNHUANG_MIRROR_PREVIEW") == "1":
+		return true
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--mirror" or arg == "mirror=1":
+			return true
+	if OS.has_feature("web"):
+		var search := str(JavaScriptBridge.eval("window.location.search", true))
+		return "mirror=1" in search
+	return false
+
+
+func _start_mirror_preview() -> void:
+	# Debug entrance. It never reads or writes the campaign save.
+	for child in get_children():
+		if child is MonsterEntity or child is ItemEntity:
+			child.queue_free()
+	monsters.clear(); items.clear(); maze = null
+	inventory.clear(); key_tracker.setup(1)
+	game.reset_round(); game.start_game()
+	_close_cave_chapter()
+	cave_chapter = MogaoChapter.new()
+	cave_chapter.model.load_room(CaveModel.MIRROR_ROOM)
+	cave_chapter.menu_requested.connect(func():
+		_close_cave_chapter()
+		game.return_to_menu()
+		_request_redraw())
+	add_child(cave_chapter)
+	_refresh_layout(); queue_redraw()
 
 
 func _notification(what: int) -> void:
