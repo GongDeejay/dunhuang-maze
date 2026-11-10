@@ -25,6 +25,10 @@ const MoveBufferScript = preload("res://scripts/handlers/move_buffer.gd")
 var model := CaveNetwork.new()
 var input_handler := InputHandler.new()
 var move_buffer = MoveBufferScript.new()
+var bump_count := 0
+var bump_offset := Vector2.ZERO
+var bump_time := -1.0
+var bump_dir := 0
 var heading: Label
 var objective: Label
 var hint: Label
@@ -37,7 +41,7 @@ var cranks: Array[Button] = []
 var modal_layer: CanvasLayer
 var overlay: ColorRect
 var level_elapsed := 0.0
-var mirror_turn_queued := false
+var mirror_turns_pending := 0
 var _card_title_source := ""
 var _card_body_source := ""
 # Lamp, bridge, and mirror waits last 0.7s. Finish one that is still running
@@ -68,6 +72,9 @@ var lamp_halo: Control
 var actor_layer: Control
 
 func _ready() -> void:
+	# Browser keydown/keyup arrive in a batch. Without this, a press and its
+	# release in the same frame collapse and the tap never enters the queue.
+	Input.use_accumulated_input = false
 	rescued_presented = model.rescued
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("var s=document.createElement('style');s.id='mogao-cave-viewport';s.textContent='#canvas{position:fixed;inset:0;width:100%!important;height:100%!important}';document.head.appendChild(s);")
@@ -139,6 +146,11 @@ func make_modal() -> void:
 	primary = make_button("继续", modal_primary, column)
 	secondary = make_button("", modal_secondary, column)
 	tertiary = make_button("", modal_tertiary, column)
+	for button in [primary, secondary, tertiary]:
+		button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+		button.z_index = 4
+		button.custom_minimum_size = Vector2(160, 48)
+	primary.z_index = 6
 	overlay.hide()
 
 func rebuild_cranks() -> void:
@@ -320,12 +332,17 @@ func turn(index: int = -1) -> void:
 func interact() -> void:
 	if stopped or mode != "playing": return
 	if model.room == CaveModel.MIRROR_ROOM and model.busy == "mirror":
-		mirror_turn_queued = true
+		if mirror_turns_pending >= MoveBuffer.MAX_PENDING_STEPS:
+			_play_bump(0)
+		else:
+			mirror_turns_pending += 1
 		return
 	if not model.busy.is_empty(): return
 	if model.room == 2 and model.rescued and model.player == model.exit_cell:
 		show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n这次走了 %d 步\n%s\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。" % [model.moves, MeasureText.format_duration(level_elapsed)], "前往三危山", "再看看洞窟")
 	elif model.travel():
+		move_buffer.clear()
+		mirror_turns_pending = 0
 		rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
 		rebuild_cranks(); layout(); refresh(); AudioManager.play_level_start()
 		checkpoint_changed.emit(model.room)
@@ -370,7 +387,7 @@ func show_card(next_mode: String, title: String, body: String, first: String, se
 	mode = next_mode; model.paused = true
 	# A popup invalidates the step that was waiting for the animation to finish.
 	move_buffer.clear()
-	mirror_turn_queued = false
+	mirror_turns_pending = 0
 	input_handler.held.set_blocked(true)
 	_card_title_source = title
 	_card_body_source = body
@@ -390,6 +407,7 @@ func modal_primary() -> void:
 			model.reset_current(); rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
 			action_started_msec = -1; visual_since_msec = -1
 			move_buffer.clear(); input_handler.held.clear()
+			mirror_turns_pending = 0
 			rebuild_cranks(); close_card(); layout()
 			checkpoint_changed.emit(model.room)
 		"menu": stopped = true; menu_requested.emit()
@@ -449,16 +467,55 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
+func _play_bump(direction: int) -> void:
+	bump_count += 1
+	bump_dir = direction
+	bump_time = 0.0
+	var sign := Vector2(MazeGenerator.DX.get(direction, 0), MazeGenerator.DY.get(direction, 0))
+	bump_offset = sign * 3.0
+	AudioManager.play_wall_hit()
+
+
+func _tick_bump(delta: float) -> void:
+	if bump_time < 0.0:
+		return
+	bump_time += delta
+	var out_t := 0.06
+	var back_t := 0.06
+	var sign := Vector2(MazeGenerator.DX.get(bump_dir, 0), MazeGenerator.DY.get(bump_dir, 0)) * 3.0
+	if bump_time >= out_t + back_t:
+		bump_offset = Vector2.ZERO
+		bump_time = -1.0
+	elif bump_time <= out_t:
+		bump_offset = sign * (bump_time / out_t)
+	else:
+		var back := (bump_time - out_t) / back_t
+		bump_offset = sign * (1.0 - back)
+	queue_redraw()
+
+
+func _begin_step(direction: int) -> bool:
+	var offset := _direction_vector(direction)
+	var next := model.player + offset
+	if not model.walkable(next):
+		return false
+	move(offset)
+	return not model.busy.is_empty()
+
+
 func _take_direction(direction: int) -> void:
 	if stopped or mode != "playing" or model.paused:
 		move_buffer.clear()
 		return
 	if model.busy == "step":
-		move_buffer.remember(direction)
+		if not move_buffer.enqueue(direction):
+			_play_bump(direction)
 		return
 	if not model.busy.is_empty():
 		return
-	move(_direction_vector(direction))
+	if not _begin_step(direction):
+		move_buffer.clear()
+		_play_bump(direction)
 
 
 func _direction_vector(direction: int) -> Vector2i:
@@ -471,18 +528,25 @@ func _collect_step_repeat(delta: float) -> void:
 		input_handler.held.set_blocked(true)
 		return
 	input_handler.held.set_blocked(false)
-	var repeats := input_handler.held.pull(delta)
-	for direction in repeats:
+	var started := false
+	for direction in input_handler.held.pull(delta):
+		var way := int(direction)
 		if model.busy == "step":
+			# A held key keeps the 0.14s rhythm: finish the step in progress, then
+			# keep walking. Taps already queued are left for the settle below.
 			model.advance(1000.0)
-		if model.busy.is_empty():
-			move(_direction_vector(int(direction)))
-		else:
-			move_buffer.remember(int(direction))
-	# A held direction used to consume the whole frame. Lamp, bridge, and mirror
-	# waits then never finished while that key was down and a frame lasted at
-	# least one repeat (0.14s). Only a step is consumed by the repeat itself.
-	if repeats.is_empty() or model.busy != "step":
+			if model.busy.is_empty() and not move_buffer.pending():
+				started = _begin_step(way)
+				if not started:
+					move_buffer.clear()
+					_play_bump(way)
+		elif model.busy.is_empty():
+			started = _begin_step(way)
+			if not started:
+				_play_bump(way)
+	# Lamp, bridge, and mirror waits still advance while a key is held.
+	# A step that just started this frame keeps its full animation.
+	if not started:
 		model.advance(delta)
 
 
@@ -493,9 +557,18 @@ func _settle_buffered_step(previous: String) -> void:
 		return
 	if previous != "step" or not model.busy.is_empty():
 		return
-	var direction := int(move_buffer.take())
-	if direction >= 0:
-		move(_direction_vector(direction))
+	while move_buffer.pending():
+		var direction := int(move_buffer.take())
+		if direction < 0:
+			continue
+		if not _begin_step(direction):
+			move_buffer.clear()
+			_play_bump(direction)
+			return
+		return
+	var held_dir := int(input_handler.held.current())
+	if held_dir >= 0 and not _begin_step(held_dir):
+		_play_bump(held_dir)
 
 var mirror_stuck := 0.0
 var mirror_coverage := -1
@@ -628,15 +701,19 @@ func _process(delta: float) -> void:
 		level_elapsed += delta
 	frame += 1
 	_tick_mirror_feedback(delta)
+	_tick_bump(delta)
 	var previous := model.busy
 	var was_lit := model.lit()
 	var previous_deer := model.deer_time
 	_collect_step_repeat(delta)
 	_release_stalled_action()
-	if previous == "mirror" and model.busy.is_empty() and mirror_turn_queued:
-		mirror_turn_queued = false
+	if previous == "mirror" and model.busy.is_empty() and mirror_turns_pending > 0:
+		mirror_turns_pending -= 1
 		if model.turn_mirror():
 			refresh()
+		else:
+			mirror_turns_pending = 0
+			_play_bump(0)
 	if previous != model.busy:
 		if model.rescued and not rescued_presented:
 			rescued_presented = true

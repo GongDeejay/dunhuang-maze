@@ -14,6 +14,9 @@ static func run(t: Node) -> void:
 	_test_modal_does_not_catch_up(t)
 	_test_attack_buffer(t)
 	_test_cave_buffer(t)
+	_test_cave_queue(t)
+	_test_event_flush_keeps_every_press(t)
+	_test_maze_rapid_taps(t)
 	_test_hazard_hold_stop(t)
 	_test_wall_hold_bumps_once(t)
 	_test_one_second_hold(t)
@@ -287,13 +290,13 @@ static func _test_cave_buffer(t: Node) -> void:
 	_cave(chapter, KEY_RIGHT, true, false)
 	_cave(chapter, KEY_RIGHT, false, false)
 	chapter._process(CaveModel.STEP_SECONDS)
-	t.assert_eq(chapter.model.moves, 1, "several presses during one cave step become one step")
-	t.assert_eq(chapter.model.busy, "step", "the single buffered cave step starts after the animation")
-	t.assert_eq(chapter.model.destination, Vector2i(2, 6), "the buffered cave step keeps the latest direction")
+	t.assert_eq(chapter.model.moves, 1, "the step already moving finishes before the queue")
+	t.assert_eq(chapter.model.destination, Vector2i(1, 5), "a released press stays queued instead of being replaced")
 	chapter._process(CaveModel.STEP_SECONDS)
-	t.assert_eq(chapter.model.player, Vector2i(2, 6), "the buffered cave step resolves once")
-	t.assert_eq(chapter.model.busy, "", "a released buffer does not chain another step")
-	t.assert_eq(chapter.model.moves, 2, "cave buffer executed one extra step, not three")
+	chapter._process(CaveModel.STEP_SECONDS)
+	t.assert_eq(chapter.model.player, Vector2i(2, 5), "three released presses are three steps")
+	t.assert_eq(chapter.model.moves, 3, "the queue walks every released press")
+	t.assert_eq(chapter.model.busy, "", "the queue stops when those presses are done")
 
 	_reset_cave(chapter, Vector2i(2, 6))
 	_cave(chapter, KEY_LEFT, true, false)
@@ -326,6 +329,96 @@ static func _test_wall_hold_bumps_once(t: Node) -> void:
 	_press(controller, KEY_S, true)
 	t.assert_eq(controller.wall_bumps, 3, "changing direction bumps the new wall")
 	_release(controller)
+	controller.free()
+
+
+static func _test_cave_queue(t: Node) -> void:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	chapter.model.load_room(0)
+	# Two steps west, at 125ms, 80ms, and 15ms. None of them may be dropped.
+	for gap in [0.125, 0.08, 0.015]:
+		_reset_cave(chapter, Vector2i(3, 6))
+		for _step in 2:
+			_cave(chapter, KEY_LEFT, true, false)
+			_cave(chapter, KEY_LEFT, false, false)
+			chapter._process(gap)
+		for _drain in 8:
+			if chapter.model.busy.is_empty() and not chapter.move_buffer.pending():
+				break
+			chapter._process(0.05)
+		t.assert_eq(chapter.model.moves, 2, "two same-direction taps both count at %dms" % int(gap * 1000))
+		t.assert_eq(chapter.model.player, Vector2i(1, 6), "two west taps land on the far stone at %dms" % int(gap * 1000))
+	# Five lefts from the right stone: two walk, the third hits the wall and drops the rest.
+	_reset_cave(chapter, Vector2i(3, 6))
+	for _step in 5:
+		_cave(chapter, KEY_LEFT, true, false)
+		_cave(chapter, KEY_LEFT, false, false)
+		chapter._process(0.02)
+	for _drain in 12:
+		chapter._process(CaveModel.STEP_SECONDS)
+	t.assert_eq(chapter.model.player, Vector2i(1, 6), "the first wall stops the run")
+	t.assert_eq(chapter.model.moves, 2, "steps after the wall are not walked")
+	t.assert_true(not chapter.move_buffer.pending(), "hitting the wall clears the queue")
+	t.assert_true(chapter.bump_count >= 1, "hitting the wall shakes")
+	var stopped_at := chapter.model.player
+	var bumps: int = chapter.bump_count
+	chapter._process(0.5)
+	t.assert_eq(chapter.model.player, stopped_at, "nothing moves after the wall")
+	# One step is in progress, 24 may wait, the 25th shakes and leaves the 24 alone.
+	_reset_cave(chapter, Vector2i(3, 6))
+	chapter.bump_count = 0
+	_cave(chapter, KEY_LEFT, true, false)
+	t.assert_eq(chapter.model.busy, "step", "the cap test starts from a moving step")
+	for _extra in MoveBuffer.MAX_PENDING_STEPS:
+		_cave(chapter, KEY_LEFT, false, false)
+		_cave(chapter, KEY_LEFT, true, false)
+	t.assert_eq(chapter.move_buffer.pending_count(), MoveBuffer.MAX_PENDING_STEPS, "the queue fills to the cap")
+	var filled: int = chapter.bump_count
+	_cave(chapter, KEY_LEFT, false, false)
+	_cave(chapter, KEY_LEFT, true, false)
+	t.assert_eq(chapter.move_buffer.pending_count(), MoveBuffer.MAX_PENDING_STEPS, "a press on a full queue does not change the queued steps")
+	t.assert_true(chapter.bump_count > filled, "a press on a full queue shakes like a wall")
+	chapter.free()
+
+
+static func _test_event_flush_keeps_every_press(t: Node) -> void:
+	var ear := Node.new()
+	ear.set_script(preload("res://tests/key_count.gd"))
+	t.add_child(ear)
+	Input.use_accumulated_input = false
+	for _i in 8:
+		_parse_key(KEY_D, true)
+		_parse_key(KEY_D, false)
+	Input.flush_buffered_events()
+	t.assert_eq(ear.presses, 8, "eight press-release pairs in one frame all reach the game")
+	ear.free()
+
+
+static func _parse_key(keycode: int, pressed: bool) -> void:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.physical_keycode = keycode
+	event.pressed = pressed
+	event.echo = false
+	Input.parse_input_event(event)
+
+
+static func _test_maze_rapid_taps(t: Node) -> void:
+	var controller = _maze(t)
+	_key(controller, KEY_D, true, false)
+	_key(controller, KEY_D, false, false)
+	controller._process(0.02)
+	_key(controller, KEY_D, true, false)
+	_key(controller, KEY_D, false, false)
+	t.assert_eq(controller.player.pos, Vector2i(3, 2), "two quick taps on the road both step")
+	controller.player.pos = Vector2i(9, 2)
+	var bumps: int = controller.wall_bumps
+	for _i in 5:
+		_key(controller, KEY_D, true, false)
+		_key(controller, KEY_D, false, false)
+	t.assert_eq(controller.player.pos, Vector2i(9, 2), "mashing into a wall does not move")
+	t.assert_true(controller.wall_bumps > bumps, "mashing into a wall shakes")
 	controller.free()
 
 
