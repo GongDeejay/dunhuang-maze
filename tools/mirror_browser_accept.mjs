@@ -85,8 +85,8 @@ print(hashlib.sha256(im.tobytes()).hexdigest())
   return createHash("sha256").update(text).digest("hex");
 }
 
-async function boot(page, port) {
-  await page.goto(`http://127.0.0.1:${port}/index.html?mirror=1`, { waitUntil: "domcontentloaded", timeout: 60000 });
+async function boot(page, port, tag) {
+  await page.goto(`http://127.0.0.1:${port}/index.html?mirror=1&r=${tag}`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForFunction(() => {
     const button = document.querySelector("#intro-enter");
     return !!button && !button.disabled;
@@ -110,8 +110,14 @@ async function main() {
   });
   const results = [];
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
-    await boot(page, port);
+    const fresh = async () => {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+      const page = await context.newPage();
+      return { context, page };
+    };
+    let session = await fresh();
+    let page = session.page;
+    await boot(page, port, "gray");
     await page.mouse.click(BUTTON.x, BUTTON.y);
     await page.waitForTimeout(400);
     const grayShot = join(OUT, "gray-click.png");
@@ -132,7 +138,10 @@ async function main() {
     const oneHash = await cropHash(oneShot);
 
     for (const gap of [500, 1500]) {
-      await boot(page, port);
+      await session.context.close();
+      session = await fresh();
+      page = session.page;
+      await boot(page, port, String(gap));
       await page.keyboard.press("ArrowRight");
       await page.waitForTimeout(400);
       await page.mouse.click(BUTTON.x, BUTTON.y);
