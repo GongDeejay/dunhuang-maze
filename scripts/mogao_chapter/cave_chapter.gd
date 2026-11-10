@@ -15,6 +15,10 @@ const MoveBufferScript = preload("res://scripts/handlers/move_buffer.gd")
 var model := CaveNetwork.new()
 var input_handler := InputHandler.new()
 var move_buffer = MoveBufferScript.new()
+var bump_count := 0
+var bump_offset := Vector2.ZERO
+var bump_time := -1.0
+var bump_dir := 0
 var heading: Label
 var objective: Label
 var hint: Label
@@ -45,6 +49,9 @@ var light_visual := 0.0
 var painter := Painter.new()
 
 func _ready() -> void:
+	# Browser keydown/keyup arrive in a batch. Without this, a press and its
+	# release in the same frame collapse and the tap never enters the queue.
+	Input.use_accumulated_input = false
 	rescued_presented = model.rescued
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("var s=document.createElement('style');s.id='mogao-cave-viewport';s.textContent='#canvas{position:fixed;inset:0;width:100%!important;height:100%!important}';document.head.appendChild(s);")
@@ -107,6 +114,11 @@ func make_modal() -> void:
 	primary = make_button("继续", modal_primary, column)
 	secondary = make_button("", modal_secondary, column)
 	tertiary = make_button("", modal_tertiary, column)
+	for button in [primary, secondary, tertiary]:
+		button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+		button.z_index = 4
+		button.custom_minimum_size = Vector2(160, 48)
+	primary.z_index = 6
 	overlay.hide()
 
 func rebuild_cranks() -> void:
@@ -240,6 +252,7 @@ func interact() -> void:
 	if model.room == 2 and model.rescued and model.player == model.exit_cell:
 		show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。", "前往三危山", "再看看洞窟")
 	elif model.travel():
+		move_buffer.clear()
 		rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
 		rebuild_cranks(); layout(); refresh(); AudioManager.play_level_start()
 		checkpoint_changed.emit(model.room)
@@ -292,6 +305,8 @@ func modal_primary() -> void:
 			stopped = true; completed.emit()
 		"reset":
 			model.reset_current(); rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
+			move_buffer.clear()
+			input_handler.held.clear()
 			rebuild_cranks(); close_card(); layout()
 			checkpoint_changed.emit(model.room)
 		"menu": stopped = true; menu_requested.emit()
@@ -343,16 +358,55 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
+func _play_bump(direction: int) -> void:
+	bump_count += 1
+	bump_dir = direction
+	bump_time = 0.0
+	var sign := Vector2(MazeGenerator.DX.get(direction, 0), MazeGenerator.DY.get(direction, 0))
+	bump_offset = sign * 3.0
+	AudioManager.play_wall_hit()
+
+
+func _tick_bump(delta: float) -> void:
+	if bump_time < 0.0:
+		return
+	bump_time += delta
+	var out_t := 0.06
+	var back_t := 0.06
+	var sign := Vector2(MazeGenerator.DX.get(bump_dir, 0), MazeGenerator.DY.get(bump_dir, 0)) * 3.0
+	if bump_time >= out_t + back_t:
+		bump_offset = Vector2.ZERO
+		bump_time = -1.0
+	elif bump_time <= out_t:
+		bump_offset = sign * (bump_time / out_t)
+	else:
+		var back := (bump_time - out_t) / back_t
+		bump_offset = sign * (1.0 - back)
+	queue_redraw()
+
+
+func _begin_step(direction: int) -> bool:
+	var offset := _direction_vector(direction)
+	var next := model.player + offset
+	if not model.walkable(next):
+		return false
+	move(offset)
+	return not model.busy.is_empty()
+
+
 func _take_direction(direction: int) -> void:
 	if stopped or mode != "playing" or model.paused:
 		move_buffer.clear()
 		return
 	if model.busy == "step":
-		move_buffer.remember(direction)
+		if not move_buffer.enqueue(direction):
+			_play_bump(direction)
 		return
 	if not model.busy.is_empty():
 		return
-	move(_direction_vector(direction))
+	if not _begin_step(direction):
+		move_buffer.clear()
+		_play_bump(direction)
 
 
 func _direction_vector(direction: int) -> Vector2i:
@@ -368,7 +422,8 @@ func _collect_step_repeat(delta: float) -> void:
 	if model.busy != "step":
 		return
 	for direction in input_handler.held.pull(delta):
-		move_buffer.remember(int(direction))
+		if not move_buffer.enqueue(int(direction)):
+			_play_bump(int(direction))
 
 
 func _settle_buffered_step(previous: String) -> void:
@@ -378,15 +433,23 @@ func _settle_buffered_step(previous: String) -> void:
 		return
 	if previous != "step" or not model.busy.is_empty():
 		return
-	var direction := int(move_buffer.take())
-	if direction < 0:
-		direction = int(input_handler.held.current())
-	if direction >= 0:
-		move(_direction_vector(direction))
+	while move_buffer.pending():
+		var direction := int(move_buffer.take())
+		if direction < 0:
+			continue
+		if not _begin_step(direction):
+			move_buffer.clear()
+			_play_bump(direction)
+			return
+		return
+	var held_dir := int(input_handler.held.current())
+	if held_dir >= 0 and not _begin_step(held_dir):
+		_play_bump(held_dir)
 
 func _process(delta: float) -> void:
 	if stopped: return
 	frame += 1
+	_tick_bump(delta)
 	_collect_step_repeat(delta)
 	var previous := model.busy
 	var was_lit := model.lit()

@@ -52,8 +52,30 @@ static func pressure_graph(t: Node, room_id: int = 1) -> void:
 	t.assert_true(solved, "exhaustive pressure graph contains a winning route")
 	t.assert_true(not bypass, "neither side plate nor body-only weight bypasses the shared crate solution")
 
+static func reset_buttons(t: Node) -> void:
+	var c := MogaoChapter.new()
+	t.add_child(c)
+	c.model.load_room(0)
+	c.pause_game()
+	t.assert_true(c.secondary.visible, "pause shows the reset button")
+	t.assert_eq(c.secondary.text, "重置这一窟", "pause offers to reset this cave")
+	t.assert_true(c.secondary.size.y >= 48.0, "the reset button has a real hit area")
+	t.assert_eq(c.secondary.action_mode, BaseButton.ACTION_MODE_BUTTON_PRESS, "reset fires on press")
+	t.assert_eq(c.tertiary.text, "返回首页", "pause still offers the menu")
+	c.modal_secondary()
+	t.assert_eq(c.primary.text, "确认重置", "the confirm button is present")
+	t.assert_eq(c.primary.action_mode, BaseButton.ACTION_MODE_BUTTON_PRESS, "confirm reset fires on press")
+	c.model.player = Vector2i(1, 6)
+	c.model.destination = c.model.player
+	c.modal_primary()
+	t.assert_eq(c.model.player, Vector2i(2, 6), "confirm reset returns to the room entrance")
+	t.assert_eq(c.mode, "playing", "confirm reset closes the card")
+	c.free()
+
+
 static func run(t: Node) -> void:
 	print("\n[TEST] Mogao three distinct cave mechanisms")
+	reset_buttons(t)
 	pressure_graph(t)
 	pressure_graph(t, 3)
 	var dark := CaveModel.new(); dark.load_room(4)

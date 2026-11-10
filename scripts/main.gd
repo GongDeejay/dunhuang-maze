@@ -49,6 +49,7 @@ const MoveBufferScript = preload("res://scripts/handlers/move_buffer.gd")
 const HazardGateScript = preload("res://scripts/handlers/hazard_gate.gd")
 var input_handler := InputHandler.new()
 var attack_buffer = MoveBufferScript.new()
+var wall_bumps := 0
 var hazard_gate = HazardGateScript.new()
 var attack_cooldown := 0.0
 var first_journey: FirstJourney
@@ -87,6 +88,10 @@ var current_level_index: int:
 	get: return game.current_level_index
 
 func _ready() -> void:
+	# The web display server buffers a frame of key events and then flushes them
+	# together. Accumulation would collapse a press and its release into one
+	# state, so a fast tap never becomes a step. Deliver every event instead.
+	Input.use_accumulated_input = false
 	_ensure_data_loaded()
 	# 像素美术放大时保持硬边，避免浏览器缩放后的模糊插值。
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -956,6 +961,7 @@ func _try_move(dir: int) -> bool:
 		player.moved.emit(player.pos)
 		return true
 	attack_buffer.clear()
+	wall_bumps += 1
 	AudioManager.play_wall_hit()
 	return false
 
