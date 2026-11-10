@@ -342,19 +342,41 @@ func refresh() -> void:
 	settle_text.call_deferred(); queue_redraw()
 
 func move(direction: Vector2i) -> void:
-	if mode == "playing" and not stopped and model.step(direction):
-		AudioManager.play_step(); refresh()
+	if mode != "playing" or stopped:
+		return
+	if model.step(direction):
+		AudioManager.play_step()
+		refresh()
+		return
+	# North of the deer door is off the map. Pushing that way leaves the cave.
+	_leave_through_door()
 
 func turn(index: int = -1) -> void:
 	if mode == "playing" and not stopped and model.turn(index): refresh()
 
+func _on_open_door() -> bool:
+	var door := model.current_door()
+	return not door.is_empty() and bool(door.open)
+
 func press_action() -> void:
-	# Away from a door, the mirror button and the space key only turn a mirror.
-	# Standing on 进入鹿影窟 / 进入灯窟 must travel; that click is not a mirror turn.
-	if model.room == CaveModel.MIRROR_ROOM and model.current_door().is_empty():
+	# 1. An open door is entered, even if a mirror is beside it.
+	# 2. An unsolved mirror cave turns the mirror you are standing next to.
+	# 3. Otherwise that button only shows the hint.
+	# 4. A solved mirror cave never turns a mirror and never shows that hint.
+	if _on_open_door():
+		interact()
+		return
+	if model.room == CaveModel.MIRROR_ROOM and not model.reached:
 		_request_mirror_turn()
 		return
 	interact()
+
+func _leave_through_door() -> bool:
+	if not _on_open_door() or model.paused or not model.busy.is_empty():
+		return false
+	var before := model.room
+	interact()
+	return model.room != before
 
 func _pin_mirror_hint(text: String) -> void:
 	mirror_hint_text = text
@@ -366,7 +388,7 @@ func _clear_mirror_hint() -> void:
 	mirror_hint_text = ""
 
 func _request_mirror_turn() -> void:
-	if stopped or mode != "playing" or model.paused or model.room != CaveModel.MIRROR_ROOM:
+	if stopped or mode != "playing" or model.paused or model.room != CaveModel.MIRROR_ROOM or model.reached:
 		return
 	if model.busy == "mirror":
 		if mirror_turns_pending >= MoveBuffer.MAX_PENDING_STEPS:
@@ -388,7 +410,9 @@ func _request_mirror_turn() -> void:
 
 func interact() -> void:
 	if stopped or mode != "playing": return
-	if model.room == CaveModel.MIRROR_ROOM and model.current_door().is_empty():
+	if _on_open_door():
+		pass
+	elif model.room == CaveModel.MIRROR_ROOM and not model.reached:
 		_request_mirror_turn()
 		return
 	if not model.busy.is_empty(): return
@@ -501,18 +525,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if key == KEY_ESCAPE and mode in ["note", "pause", "reset", "menu"]: close_card()
 		get_viewport().set_input_as_handled()
 		return
-	if model.room == CaveModel.MIRROR_ROOM:
-		var feature := input_handler.handle_feature(event, {"mirror_cave": true})
-		if feature.type == GameAction.Type.INTERACT:
-			interact()
-			get_viewport().set_input_as_handled()
-			return
+	if _confirm_key(key):
+		interact()
+		get_viewport().set_input_as_handled()
+		return
 	if action.type == GameAction.Type.MOVE:
 		_take_direction(action.direction)
 		get_viewport().set_input_as_handled()
 		return
 	match key:
-		KEY_SPACE, KEY_E: interact()
+		KEY_SPACE, KEY_E, KEY_ENTER, KEY_KP_ENTER: interact()
 		KEY_Z: undo()
 		KEY_F: show_note()
 		KEY_P, KEY_ESCAPE: pause_game()
@@ -546,6 +568,10 @@ func _tick_bump(delta: float) -> void:
 	queue_redraw()
 
 
+func _confirm_key(key: int) -> bool:
+	return key == KEY_SPACE or key == KEY_E or key == KEY_ENTER or key == KEY_KP_ENTER
+
+
 func _begin_step(direction: int) -> bool:
 	var offset := _direction_vector(direction)
 	var next := model.player + offset
@@ -567,7 +593,8 @@ func _take_direction(direction: int) -> void:
 		return
 	if not _begin_step(direction):
 		move_buffer.clear()
-		_play_bump(direction)
+		if not _leave_through_door():
+			_play_bump(direction)
 
 
 func _direction_vector(direction: int) -> Vector2i:
@@ -591,10 +618,11 @@ func _collect_step_repeat(delta: float) -> void:
 				started = _begin_step(way)
 				if not started:
 					move_buffer.clear()
-					_play_bump(way)
+					if not _leave_through_door():
+						_play_bump(way)
 		elif model.busy.is_empty():
 			started = _begin_step(way)
-			if not started:
+			if not started and not _leave_through_door():
 				_play_bump(way)
 	# Lamp, bridge, and mirror waits still advance while a key is held.
 	# A step that just started this frame keeps its full animation.
@@ -615,11 +643,12 @@ func _settle_buffered_step(previous: String) -> void:
 			continue
 		if not _begin_step(direction):
 			move_buffer.clear()
-			_play_bump(direction)
+			if not _leave_through_door():
+				_play_bump(direction)
 			return
 		return
 	var held_dir := int(input_handler.held.current())
-	if held_dir >= 0 and not _begin_step(held_dir):
+	if held_dir >= 0 and not _begin_step(held_dir) and not _leave_through_door():
 		_play_bump(held_dir)
 
 var mirror_stuck := 0.0

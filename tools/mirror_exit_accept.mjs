@@ -120,12 +120,14 @@ async function main() {
     await page.screenshot({ path: before });
     if (how === "space") {
       await page.keyboard.press("Space");
-    } else if (how === "walk") {
-      await page.keyboard.press("ArrowDown");
-      await page.waitForTimeout(300);
+    } else if (how === "enter") {
+      await page.keyboard.press("Enter");
+    } else if (how === "up") {
       await page.keyboard.press("ArrowUp");
+    } else if (how === "south") {
+      await page.keyboard.press("ArrowLeft");
       await page.waitForTimeout(300);
-      await page.keyboard.press("Space");
+      await page.mouse.click(BUTTON.x, BUTTON.y);
     } else {
       await page.mouse.click(BUTTON.x, BUTTON.y);
     }

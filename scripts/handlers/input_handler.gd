@@ -73,7 +73,7 @@ func handle_feature(event: InputEvent, ctx: Dictionary) -> GameAction:
 	if not ctx.get("mirror_cave", false):
 		return GameAction.new()
 	var key: int = event.physical_keycode if event.physical_keycode else event.keycode
-	if key == KEY_SPACE or key == KEY_E:
+	if key == KEY_SPACE or key == KEY_E or key == KEY_ENTER or key == KEY_KP_ENTER:
 		return GameAction.interact()
 	return GameAction.new()
 
