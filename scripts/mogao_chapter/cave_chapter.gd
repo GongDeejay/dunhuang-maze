@@ -408,6 +408,11 @@ func press_action() -> void:
 func _leave_through_door() -> bool:
 	if not _on_open_door() or model.paused or not model.busy.is_empty():
 		return false
+	# The plank entrance is the open door back to 共耳窟, and it is also the south wall.
+	# Pushing into that wall stays put and clears the step queue. The button, space, and
+	# enter still leave. Other open doors still travel when the outward step cannot walk.
+	if model.room == 3 and model.player == CaveModel.PLANK_ENTRY:
+		return false
 	var before := model.room
 	interact()
 	return model.room != before
