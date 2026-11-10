@@ -173,6 +173,8 @@ func _ready() -> void:
 		call_deferred("_start_plank_preview")
 	elif _mirror_preview_requested():
 		call_deferred("_start_mirror_preview")
+	elif _depart_preview_requested():
+		call_deferred("_start_depart_preview")
 
 
 func _query_has(flag: String) -> bool:
@@ -200,6 +202,15 @@ func _mirror_preview_requested() -> bool:
 	return _query_has("mirror=1")
 
 
+func _depart_preview_requested() -> bool:
+	if OS.get_environment("DUNHUANG_DEPART_PREVIEW") == "1":
+		return true
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--depart" or arg == "depart=1":
+			return true
+	return _query_has("depart=1")
+
+
 func _start_debug_cave(room_id: int) -> void:
 	# Debug entrance. It never reads or writes the campaign save.
 	for child in get_children():
@@ -215,6 +226,7 @@ func _start_debug_cave(room_id: int) -> void:
 		_close_cave_chapter()
 		game.return_to_menu()
 		_request_redraw())
+	cave_chapter.completed.connect(func(): _new_game(2))
 	add_child(cave_chapter)
 	_refresh_layout(); queue_redraw()
 
@@ -225,6 +237,14 @@ func _start_plank_preview() -> void:
 
 func _start_mirror_preview() -> void:
 	_start_debug_cave(CaveModel.MIRROR_ROOM)
+
+
+func _start_depart_preview() -> void:
+	_start_debug_cave(2)
+	cave_chapter.model.rescued = true
+	cave_chapter.model.player = cave_chapter.model.exit_cell
+	cave_chapter.model.destination = cave_chapter.model.player
+	cave_chapter.interact()
 
 
 func _notification(what: int) -> void:

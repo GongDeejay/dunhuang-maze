@@ -73,6 +73,8 @@ static func run(t: Node) -> void:
 		m.advance(1)
 	t.assert_true(m.lotus_lit(), "the second segment lights the lotus")
 	walk(t, m, "UUUURRRU")
+	# Model graph only. The button, ui_accept, space, and arrow keys are tested
+	# in test_level_round.gd; calling travel() here would hide a swallowed click.
 	t.assert_true(m.reached and m.travel() and m.room == 2, "mirror cave leads to deer")
 	t.assert_true(not m.solved(1) and not m.solved(3) and not m.secret, "no all-room or secret completion gate")
 	m = reload(m)
