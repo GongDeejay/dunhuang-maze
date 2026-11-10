@@ -84,6 +84,8 @@ func paint(c: Control) -> void:
 	else: portal(c, c.point(m.exit_cell), m.room != 2 or m.rescued)
 	if m.room == 2 and not m.rescued: actor(c, c.point(m.goal), c.BROTHER, .85)
 	var player: Vector2 = c.point(m.visual_player())
+	if "bump_offset" in c:
+		player += c.bump_offset
 	if m.room == 2 and m.rescued: actor(c, player + Vector2(-u * .35, -u * .12), c.BROTHER, .7)
 	actor(c, player, c.DAD, 1)
 	if m.scarf and not m.rescued:

@@ -11,7 +11,14 @@ const RABBITS = preload("res://assets/lore/three_hares.svg")
 const DEER = preload("res://assets/lore/nine_deer.svg")
 const Painter = preload("res://scripts/mogao_chapter/cave_painter.gd")
 const ROOM_NAMES := ["入窟 · 转桥", "侧窟 · 共耳", "深窟 · 鹿影", "回廊 · 借路", "灯窟 · 接桥", "中央窟"]
+const MoveBufferScript = preload("res://scripts/handlers/move_buffer.gd")
 var model := CaveNetwork.new()
+var input_handler := InputHandler.new()
+var move_buffer = MoveBufferScript.new()
+var bump_count := 0
+var bump_offset := Vector2.ZERO
+var bump_time := -1.0
+var bump_dir := 0
 var heading: Label
 var objective: Label
 var hint: Label
@@ -42,6 +49,9 @@ var light_visual := 0.0
 var painter := Painter.new()
 
 func _ready() -> void:
+	# Browser keydown/keyup arrive in a batch. Without this, a press and its
+	# release in the same frame collapse and the tap never enters the queue.
+	Input.use_accumulated_input = false
 	rescued_presented = model.rescued
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("var s=document.createElement('style');s.id='mogao-cave-viewport';s.textContent='#canvas{position:fixed;inset:0;width:100%!important;height:100%!important}';document.head.appendChild(s);")
@@ -104,6 +114,11 @@ func make_modal() -> void:
 	primary = make_button("继续", modal_primary, column)
 	secondary = make_button("", modal_secondary, column)
 	tertiary = make_button("", modal_tertiary, column)
+	for button in [primary, secondary, tertiary]:
+		button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+		button.z_index = 4
+		button.custom_minimum_size = Vector2(160, 48)
+	primary.z_index = 6
 	overlay.hide()
 
 func rebuild_cranks() -> void:
@@ -237,6 +252,7 @@ func interact() -> void:
 	if model.room == 2 and model.rescued and model.player == model.exit_cell:
 		show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。", "前往三危山", "再看看洞窟")
 	elif model.travel():
+		move_buffer.clear()
 		rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
 		rebuild_cranks(); layout(); refresh(); AudioManager.play_level_start()
 		checkpoint_changed.emit(model.room)
@@ -271,6 +287,9 @@ func pause_game() -> void:
 
 func show_card(next_mode: String, title: String, body: String, first: String, second: String = "", third: String = "") -> void:
 	mode = next_mode; model.paused = true
+	# A popup invalidates the step that was waiting for the animation to finish.
+	move_buffer.clear()
+	input_handler.held.set_blocked(true)
 	card_title.text = title; card_body.text = body
 	primary.text = first; secondary.text = second; tertiary.text = third
 	secondary.visible = not second.is_empty(); tertiary.visible = not third.is_empty()
@@ -286,6 +305,8 @@ func modal_primary() -> void:
 			stopped = true; completed.emit()
 		"reset":
 			model.reset_current(); rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
+			move_buffer.clear()
+			input_handler.held.clear()
 			rebuild_cranks(); close_card(); layout()
 			checkpoint_changed.emit(model.room)
 		"menu": stopped = true; menu_requested.emit()
@@ -313,25 +334,123 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(overlay): pause_game()
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if stopped or not event is InputEventKey or not event.pressed or event.echo: return
-	var key: int = event.physical_keycode if event.physical_keycode else event.keycode
-	if mode != "playing":
+	if stopped or not event is InputEventKey: return
+	var key_event := event as InputEventKey
+	var playing := mode == "playing" and not model.paused
+	var action := input_handler.handle_direction(key_event, playing)
+	if key_event.echo or not key_event.pressed:
+		get_viewport().set_input_as_handled()
+		return
+	var key: int = key_event.physical_keycode if key_event.physical_keycode else key_event.keycode
+	if mode != "playing" or model.paused:
 		if key == KEY_ESCAPE and mode in ["note", "pause", "reset", "menu"]: close_card()
-		get_viewport().set_input_as_handled(); return
+		get_viewport().set_input_as_handled()
+		return
+	if action.type == GameAction.Type.MOVE:
+		_take_direction(action.direction)
+		get_viewport().set_input_as_handled()
+		return
 	match key:
-		KEY_W, KEY_UP: move(Vector2i.UP)
-		KEY_A, KEY_LEFT: move(Vector2i.LEFT)
-		KEY_S, KEY_DOWN: move(Vector2i.DOWN)
-		KEY_D, KEY_RIGHT: move(Vector2i.RIGHT)
 		KEY_SPACE, KEY_E: interact()
 		KEY_Z: undo()
 		KEY_F: show_note()
 		KEY_P, KEY_ESCAPE: pause_game()
 	get_viewport().set_input_as_handled()
 
+
+func _play_bump(direction: int) -> void:
+	bump_count += 1
+	bump_dir = direction
+	bump_time = 0.0
+	var sign := Vector2(MazeGenerator.DX.get(direction, 0), MazeGenerator.DY.get(direction, 0))
+	bump_offset = sign * 3.0
+	AudioManager.play_wall_hit()
+
+
+func _tick_bump(delta: float) -> void:
+	if bump_time < 0.0:
+		return
+	bump_time += delta
+	var out_t := 0.06
+	var back_t := 0.06
+	var sign := Vector2(MazeGenerator.DX.get(bump_dir, 0), MazeGenerator.DY.get(bump_dir, 0)) * 3.0
+	if bump_time >= out_t + back_t:
+		bump_offset = Vector2.ZERO
+		bump_time = -1.0
+	elif bump_time <= out_t:
+		bump_offset = sign * (bump_time / out_t)
+	else:
+		var back := (bump_time - out_t) / back_t
+		bump_offset = sign * (1.0 - back)
+	queue_redraw()
+
+
+func _begin_step(direction: int) -> bool:
+	var offset := _direction_vector(direction)
+	var next := model.player + offset
+	if not model.walkable(next):
+		return false
+	move(offset)
+	return not model.busy.is_empty()
+
+
+func _take_direction(direction: int) -> void:
+	if stopped or mode != "playing" or model.paused:
+		move_buffer.clear()
+		return
+	if model.busy == "step":
+		if not move_buffer.enqueue(direction):
+			_play_bump(direction)
+		return
+	if not model.busy.is_empty():
+		return
+	if not _begin_step(direction):
+		move_buffer.clear()
+		_play_bump(direction)
+
+
+func _direction_vector(direction: int) -> Vector2i:
+	return Vector2i(MazeGenerator.DX[direction], MazeGenerator.DY[direction])
+
+
+func _collect_step_repeat(delta: float) -> void:
+	if stopped or mode != "playing" or model.paused:
+		move_buffer.clear()
+		input_handler.held.set_blocked(true)
+		return
+	input_handler.held.set_blocked(false)
+	if model.busy != "step":
+		return
+	for direction in input_handler.held.pull(delta):
+		if not move_buffer.enqueue(int(direction)):
+			_play_bump(int(direction))
+
+
+func _settle_buffered_step(previous: String) -> void:
+	if stopped or mode != "playing" or model.paused:
+		move_buffer.clear()
+		input_handler.held.set_blocked(true)
+		return
+	if previous != "step" or not model.busy.is_empty():
+		return
+	while move_buffer.pending():
+		var direction := int(move_buffer.take())
+		if direction < 0:
+			continue
+		if not _begin_step(direction):
+			move_buffer.clear()
+			_play_bump(direction)
+			return
+		return
+	var held_dir := int(input_handler.held.current())
+	if held_dir >= 0 and not _begin_step(held_dir):
+		_play_bump(held_dir)
+
 func _process(delta: float) -> void:
 	if stopped: return
 	frame += 1
+	_tick_bump(delta)
+	_collect_step_repeat(delta)
 	var previous := model.busy
 	var was_lit := model.lit()
 	var previous_deer := model.deer_time
@@ -343,6 +462,7 @@ func _process(delta: float) -> void:
 			show_card("rescue", "终于找到哥哥了", "哥哥：“爸爸，我把灯留在路边，怕你找不到。”\n\n爸爸：“看见了。我们一起出去。”\n\n沿上方平台，走向右侧透光的窟口。", "一起走向窟口")
 		refresh()
 		if model.busy.is_empty(): checkpoint_changed.emit(model.room)
+	_settle_buffered_step(previous)
 	if was_lit != model.lit():
 		refresh(); checkpoint_changed.emit(model.room)
 	if previous_deer != model.deer_time: queue_redraw()
