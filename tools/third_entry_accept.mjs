@@ -87,32 +87,45 @@ async function main() {
     const errors = await boot(page, url);
     const card = join(OUT, "settlement.png");
     await page.screenshot({ path: card });
-    await page.mouse.click(640, 560);
-    await page.waitForTimeout(1500);
+    // Card primary sits above 「再看看洞窟」. (640, 560) hits the secondary and only closes the card.
+    await page.mouse.click(640, 512);
+    await page.waitForTimeout(2000);
     const welcome = join(OUT, "welcome.png");
     await page.screenshot({ path: welcome });
     const welcomeText = await ocr(welcome);
-    await page.mouse.click(640, 560);
-    await page.waitForTimeout(600);
-    await page.keyboard.down("w");
+    // Full-screen welcome card; 「走进沙谷」 is the only button, pinned to the bottom.
+    await page.mouse.click(640, 676);
     await page.waitForTimeout(800);
+    const playing = join(OUT, "playing.png");
+    await page.screenshot({ path: playing });
+    await page.keyboard.down("w");
+    await page.waitForTimeout(1200);
     await page.keyboard.up("w");
     await page.waitForTimeout(300);
     const walked = join(OUT, "walked.png");
     await page.screenshot({ path: walked });
+    const playingText = await ocr(playing);
     const walkedText = await ocr(walked);
-    const entered = welcomeText.includes("三危") || welcomeText.includes("沙谷") || welcomeText.includes("弟弟");
-    const spreadText = await run("python3", ["-c", `
-from PIL import Image, ImageStat
-im = Image.open(${JSON.stringify(walked)}).convert("RGB")
-stat = ImageStat.Stat(im)
-print(f"{max(stat.stddev):.2f}")
+    const welcomeOk = (welcomeText.includes("三危") || welcomeText.includes("沙谷") || welcomeText.includes("弟弟"))
+      && !welcomeText.includes("再看看") && !welcomeText.includes("走出莫高");
+    const stats = await run("python3", ["-c", `
+from PIL import Image, ImageChops, ImageStat
+playing = Image.open(${JSON.stringify(playing)}).convert("RGB")
+walked = Image.open(${JSON.stringify(walked)}).convert("RGB")
+center = playing.crop((200, 140, 1080, 560))
+spread = max(ImageStat.Stat(center).stddev)
+diff = ImageChops.difference(playing, walked)
+moved = sum(ImageStat.Stat(diff).mean) / 3
+print(f"{spread:.2f} {moved:.2f}")
 `]);
-    const varied = Number(spreadText.trim()) > 8;
+    const [spreadText, movedText] = stats.trim().split(/\s+/);
+    const rendered = Number(spreadText) > 12;
+    const moved = Number(movedText) > 1.5;
     console.log("WELCOME", welcomeText.replace(/\s+/g, " ").slice(0, 240));
+    console.log("PLAYING", playingText.replace(/\s+/g, " ").slice(0, 240));
     console.log("WALKED", walkedText.replace(/\s+/g, " ").slice(0, 240));
-    console.log("spread", spreadText.trim(), "errors", errors.slice(0, 6));
-    if (!entered || !varied) process.exit(1);
+    console.log("spread", spreadText, "moved", movedText, "errors", errors.slice(0, 6));
+    if (!welcomeOk || !rendered || !moved) process.exit(1);
     console.log("THIRD CHAPTER ENTERED");
   } finally {
     await browser.close();
