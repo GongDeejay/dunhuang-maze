@@ -349,8 +349,9 @@ func turn(index: int = -1) -> void:
 	if mode == "playing" and not stopped and model.turn(index): refresh()
 
 func press_action() -> void:
-	# The mirror button and the space key share this path. It never turns a bridge.
-	if model.room == CaveModel.MIRROR_ROOM:
+	# Away from a door, the mirror button and the space key only turn a mirror.
+	# Standing on 进入鹿影窟 / 进入灯窟 must travel; that click is not a mirror turn.
+	if model.room == CaveModel.MIRROR_ROOM and model.current_door().is_empty():
 		_request_mirror_turn()
 		return
 	interact()
@@ -387,7 +388,7 @@ func _request_mirror_turn() -> void:
 
 func interact() -> void:
 	if stopped or mode != "playing": return
-	if model.room == CaveModel.MIRROR_ROOM:
+	if model.room == CaveModel.MIRROR_ROOM and model.current_door().is_empty():
 		_request_mirror_turn()
 		return
 	if not model.busy.is_empty(): return

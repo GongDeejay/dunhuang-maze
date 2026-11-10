@@ -16,6 +16,7 @@ static func run(t: Node) -> void:
 	_mirror_faces(t)
 	_mirror_room(t)
 	_one_mirror_label(t)
+	_mirror_exit_to_deer(t)
 	_input(t)
 	DataLoader.set_difficulty("normal")
 
@@ -402,6 +403,84 @@ static func _turn_times(t: Node, model: CaveNetwork, id: String) -> void:
 	for _i in times:
 		t.assert_true(model.turn_mirror(), "%s turns from its stand" % id)
 		model.advance(1)
+
+
+static func _mirror_exit_to_deer(t: Node) -> void:
+	var chapter := _solved_mirror_door(t)
+	t.assert_true(chapter.model.lotus_lit() and chapter.model.reached, "solving the mirrors lights the lotus and opens the north cell")
+	t.assert_eq(chapter.model.player, CaveModel.MIRROR_GOAL, "the solved route stands on the deer door")
+	t.assert_true(not chapter.overlay.visible, "the lotus line is a hint, not a card left on top of the buttons")
+	t.assert_eq(chapter.mirror_art.mouse_filter, Control.MOUSE_FILTER_IGNORE, "mirror sprites do not eat the door click")
+	chapter.refresh()
+	t.assert_eq(chapter.action_button.text, "进入鹿影窟", "the button offers the deer cave")
+	t.assert_true(not chapter.action_button.disabled, "进入鹿影窟 is enabled")
+	var spins := int(chapter.model.turns)
+	chapter.action_button.pressed.emit()
+	t.assert_eq(chapter.model.room, 2, "clicking 进入鹿影窟 enters the deer cave")
+	t.assert_eq(chapter.model.player, Vector2i(5, 7), "the door leads to the deer cave landing")
+	t.assert_eq(int(chapter.model.turns), spins, "the door click does not turn a mirror")
+	chapter.free()
+
+	chapter = _solved_mirror_door(t)
+	_press_key(chapter, KEY_SPACE)
+	t.assert_eq(chapter.model.room, 2, "space on the deer door enters")
+	chapter.free()
+
+	chapter = _solved_mirror_door(t)
+	t.assert_true(chapter.model.step(Vector2i.DOWN), "step back off the door")
+	chapter.model.advance(1)
+	_press_key(chapter, KEY_UP)
+	chapter._process(CaveModel.STEP_SECONDS)
+	t.assert_eq(chapter.model.player, CaveModel.MIRROR_GOAL, "walking north steps onto the open door")
+	_press_key(chapter, KEY_SPACE)
+	t.assert_eq(chapter.model.room, 2, "space after walking onto the door enters")
+	chapter.free()
+
+	chapter = _solved_mirror_door(t)
+	chapter.pause_game()
+	chapter.modal_primary()
+	t.assert_eq(chapter.mode, "playing", "continue closes the pause card")
+	t.assert_true(not chapter.overlay.visible, "the pause mask is gone")
+	chapter.refresh()
+	chapter.action_button.pressed.emit()
+	t.assert_eq(chapter.model.room, 2, "entering still works after pause and continue")
+	chapter.free()
+
+	chapter = _solved_mirror_door(t)
+	chapter.model.remember_room()
+	var saved: Dictionary = chapter.model.save_network()
+	var loaded := MogaoChapter.new()
+	t.add_child(loaded)
+	loaded.model.resume_network(CaveModel.MIRROR_ROOM, saved)
+	loaded.mode = "playing"
+	loaded.refresh()
+	t.assert_true(loaded.model.lotus_lit() and loaded.model.reached, "a save keeps the solved mirror cave")
+	t.assert_eq(loaded.action_button.text, "进入鹿影窟", "the loaded door still offers the deer cave")
+	t.assert_true(not loaded.action_button.disabled, "the loaded door button is enabled")
+	loaded.action_button.pressed.emit()
+	t.assert_eq(loaded.model.room, 2, "entering works after loading the save")
+	t.assert_eq(loaded.model.player, Vector2i(5, 7), "the loaded door uses the same landing")
+	loaded.free()
+	chapter.free()
+
+
+static func _solved_mirror_door(t: Node) -> MogaoChapter:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	chapter.model.load_room(CaveModel.MIRROR_ROOM)
+	chapter.mode = "playing"
+	chapter.model.paused = false
+	chapter.rebuild_cranks()
+	_solve_mirrors(t, chapter.model)
+	return chapter
+
+
+static func _press_key(chapter: MogaoChapter, keycode: int) -> void:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.physical_keycode = keycode
+	event.pressed = true
+	chapter._unhandled_key_input(event)
 
 
 static func _solve_mirrors(t: Node, model: CaveNetwork) -> void:
