@@ -688,6 +688,87 @@ static func plank_wait_recovers(t: Node) -> void:
 	chapter.free()
 
 
+static func plank_rapid_taps(t: Node) -> void:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	chapter.model.load_room(3)
+	chapter.rebuild_cranks()
+	chapter.mode = "playing"
+	chapter.model.paused = false
+	chapter.overlay.hide()
+	_tap(chapter, KEY_W, true, false)
+	for _echo in 4:
+		_tap(chapter, KEY_W, true, true)
+		chapter._process(0.02)
+	_tap(chapter, KEY_W, false, false)
+	chapter._process(0.2)
+	t.assert_eq(chapter.model.moves, 1, "echo repeats do not add a plank step")
+	t.assert_eq(chapter.model.player, Vector2i(3, 7), "the real press still steps off the entrance")
+	chapter.model.load_room(3)
+	chapter.model.moves = 0
+	chapter.rebuild_cranks()
+	chapter.input_handler.held.clear()
+	chapter.move_buffer.clear()
+	var route := "UULUULUURRDDRRUULULU"
+	var keys := {"U": KEY_W, "D": KEY_S, "L": KEY_A, "R": KEY_D}
+	var trace := ""
+	for i in route.length():
+		var key: int = keys[route.substr(i, 1)]
+		_tap(chapter, key, true, false)
+		chapter._process(0.05)
+		_tap(chapter, key, false, false)
+		chapter._process(0.06)
+		if chapter.overlay.visible:
+			chapter.close_card()
+		trace += "%s:%s@%s " % [route.substr(i, 1), chapter.model.moves, chapter.model.player]
+	for _drain in 40:
+		if chapter.model.busy.is_empty() and not chapter.move_buffer.pending():
+			break
+		chapter._process(0.05)
+		if chapter.overlay.visible:
+			chapter.close_card()
+	t.assert_eq(chapter.model.moves, 20, "rapid press-release walks all 20 steps %s" % trace)
+	t.assert_eq(chapter.model.plank_count(), 11, "rapid press-release flips all 11 planks")
+	t.assert_true(chapter.model.reached, "rapid press-release opens the rope gate")
+	chapter.free()
+
+
+static func mirror_turn_button(t: Node) -> void:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	chapter.model.load_room(CaveModel.MIRROR_ROOM)
+	chapter.rebuild_cranks()
+	chapter.mode = "playing"
+	chapter.model.player = CaveModel.MIRROR_ENTRY
+	chapter.model.destination = chapter.model.player
+	chapter.refresh()
+	t.assert_eq(chapter.action_button.text, "转动铜镜", "the mirror room action is turn mirror")
+	t.assert_true(not chapter.action_button.disabled, "the turn button can still be clicked away from a mirror")
+	t.assert_true(chapter.action_button.modulate.r < 0.7, "the turn button is gray away from a mirror")
+	chapter.interact()
+	t.assert_eq(chapter.hint.text, "站到铜镜旁边再转", "clicking the gray button says to stand beside a mirror")
+	chapter.model.player = Vector2i(6, 7)
+	chapter.model.destination = chapter.model.player
+	chapter.refresh()
+	t.assert_true(chapter.model.can_turn_mirror(), "standing beside the teaching mirror can turn it")
+	t.assert_true(chapter.action_button.modulate.r > 0.9, "the turn button is lit beside a rotatable mirror")
+	chapter.model.player = Vector2i(0, 2)
+	chapter.model.destination = chapter.model.player
+	chapter.refresh()
+	chapter.interact()
+	t.assert_eq(chapter.hint.text, "这面铜镜嵌在石里，转不动", "the fixed mirror keeps its own hint")
+	chapter.free()
+
+
+static func _tap(chapter: MogaoChapter, keycode: int, pressed: bool, echo: bool) -> void:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.physical_keycode = keycode
+	event.pressed = pressed
+	event.echo = echo
+	chapter._unhandled_key_input(event)
+
+
 static func run(t: Node) -> void:
 	print("\n[TEST] Mogao three distinct cave mechanisms")
 	shared_ear_doors(t)
@@ -699,6 +780,8 @@ static func run(t: Node) -> void:
 	pressure_graph(t)
 	plank_graph(t)
 	plank_hints(t)
+	plank_rapid_taps(t)
+	mirror_turn_button(t)
 	var dark := CaveModel.new(); dark.load_room(4)
 	route(t, dark, "RRU"); dark.turn(); dark.advance(1)
 	t.assert_true(not dark.walkable(Vector2i(3, 4)), "aligned bridge still requires the lamp to reveal its safe path")

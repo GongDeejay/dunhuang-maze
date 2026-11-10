@@ -540,6 +540,8 @@ static func _clock(t: Node) -> void:
 	main._process(1.0)
 	t.assert_true(main.level_elapsed > stamped, "time resumes after the popup closes")
 	t.assert_eq(MeasureText.format_duration(12.0 * 60.0 + 34.0), "用时 12 分 34 秒", "duration reads as minutes and seconds")
+	t.assert_eq(MeasureText.format_duration(29.0 * 60.0 + 50.0), "用时 29 分 50 秒", "two-digit minutes keep the spaces")
+	t.assert_eq(MeasureText.format_duration(60.0), "用时 1 分 0 秒", "a whole minute still has both units")
 	main.move_count = 226
 	main.level_elapsed = 12.0 * 60.0 + 34.0
 	main.first_journey = FirstJourney.new()
@@ -547,6 +549,10 @@ static func _clock(t: Node) -> void:
 	var level_one := _plain(main.journey_card.body_label.text)
 	t.assert_true(level_one.contains("这次走了 226 步"), "level 1 settlement names the steps")
 	t.assert_true(level_one.contains("用时 12 分 34 秒"), "level 1 settlement names the time")
+	main.level_elapsed = 29.0 * 60.0 + 50.0
+	main.move_count = 40
+	main._on_level_completed()
+	t.assert_true(_plain(main.journey_card.body_label.text).replace("\n", "").contains("29 分 50 秒"), "level 1 settlement keeps spaces around a two-digit minute")
 	main.free()
 	var chapter := MogaoChapter.new()
 	t.add_child(chapter)
@@ -569,6 +575,16 @@ static func _clock(t: Node) -> void:
 	var level_two := _plain(chapter.card_body.text).replace("\n", "")
 	t.assert_true(level_two.contains("这次走了 18 步"), "level 2 settlement names the steps")
 	t.assert_true(level_two.contains("用时 1 分 15 秒"), "level 2 settlement names the time")
+	chapter.close_card()
+	chapter.mode = "playing"
+	chapter.level_elapsed = 29.0 * 60.0 + 50.0
+	chapter.model.moves = 18
+	chapter.model.room = 2
+	chapter.model.rescued = true
+	chapter.model.player = chapter.model.exit_cell
+	chapter.interact()
+	var long_time := _plain(chapter.card_body.text).replace("\n", "")
+	t.assert_true(long_time.contains("29 分 50 秒"), "level 2 settlement keeps spaces around a two-digit minute")
 	chapter.free()
 
 

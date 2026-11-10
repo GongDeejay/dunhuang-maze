@@ -246,6 +246,7 @@ func refresh() -> void:
 		cranks[i].angle = model.angle(model.cranks[i].bridge); cranks[i].queue_redraw()
 	undo_button.disabled = locked or model.history.is_empty() or model.reached or model.rescued
 	note_button.disabled = locked
+	action_button.modulate = Color.WHITE
 	action_button.text = "转动栈桥" if model.room == 0 else ("观察压盘" if model.room == 1 else ("放上灯座" if model.lamp_held else "提起灯笼"))
 	action_button.disabled = locked or (not model.can_turn() if model.room == 0 else (model.lamp_action().is_empty() if model.room == 2 else false))
 	if model.room == 3 and not model.reached:
@@ -256,10 +257,13 @@ func refresh() -> void:
 		action_button.disabled = locked or (model.lamp_action().is_empty() and not model.can_turn())
 	if model.room == CaveModel.MIRROR_ROOM:
 		action_button.text = "转动铜镜"
-		action_button.disabled = locked or not model.can_turn_mirror()
+		action_button.disabled = locked
+		if not locked and not model.can_turn_mirror():
+			action_button.modulate = Color(0.45, 0.45, 0.45)
 	if model.reached:
 		action_button.text = "机关已解"
 		action_button.disabled = true
+		action_button.modulate = Color.WHITE
 	if model.room == CaveModel.MIRROR_ROOM:
 		objective.text = "把灯光折到莲花灯座"
 	else:
@@ -365,6 +369,8 @@ func interact() -> void:
 			refresh()
 		elif _beside_fixed_mirror():
 			hint.text = "这面铜镜嵌在石里，转不动"
+		else:
+			hint.text = "站到铜镜旁边再转"
 	elif model.use_lamp(): refresh()
 
 func undo() -> void:
@@ -483,7 +489,8 @@ func _take_direction(direction: int) -> void:
 		move_buffer.clear()
 		return
 	if model.busy == "step":
-		move_buffer.remember(direction)
+		# A press that was released is a real step, even while this one is still moving.
+		move_buffer.enqueue(direction)
 		return
 	if not model.busy.is_empty():
 		return
@@ -522,9 +529,13 @@ func _settle_buffered_step(previous: String) -> void:
 		return
 	if previous != "step" or not model.busy.is_empty():
 		return
-	var direction := int(move_buffer.take())
-	if direction >= 0:
+	while move_buffer.pending():
+		var direction := int(move_buffer.take())
+		if direction < 0:
+			continue
 		move(_direction_vector(direction))
+		if not model.busy.is_empty():
+			return
 
 var mirror_stuck := 0.0
 var mirror_coverage := -1
@@ -822,7 +833,8 @@ func _process(delta: float) -> void:
 	if not _card_holds_play():
 		_settle_visuals(delta)
 	if not model.busy.is_empty():
-		for i in cranks.size(): cranks[i].angle = model.angle(model.cranks[i].bridge); cranks[i].queue_redraw()
+		for i in mini(cranks.size(), model.cranks.size()):
+			cranks[i].angle = model.angle(model.cranks[i].bridge); cranks[i].queue_redraw()
 		queue_redraw()
 	if overlay.visible:
 		var available := get_viewport_rect().size

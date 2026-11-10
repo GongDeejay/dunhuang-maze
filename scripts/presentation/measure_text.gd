@@ -54,7 +54,7 @@ static func layout_text(text: String, width: float, font: Font, font_size: int) 
 		if para.is_empty():
 			lines.append("")
 			continue
-		var wrapped := _wrap_paragraph(_bind_keep_words(bind_units(para)), width, font, font_size)
+		var wrapped := _wrap_paragraph(_bind_keep_words(_protect_durations(bind_units(para))), width, font, font_size)
 		for line in wrapped.split("\n", false):
 			lines.append(line)
 	return "\n".join(lines)
@@ -178,6 +178,57 @@ static func keep_words() -> PackedStringArray:
 		ordered.insert(at, word)
 	_keep_words = PackedStringArray(ordered)
 	return _keep_words
+
+
+static func _protect_durations(text: String) -> String:
+	# "用时 29 分 50 秒" stays one phrase, spaces included, even when the minute has two digits.
+	var chars: Array[String] = []
+	var src: Array[int] = []
+	for i in text.length():
+		if text.unicode_at(i) == 0x2060:
+			continue
+		var ch := text.substr(i, 1)
+		if ch == NO_BREAK_SPACE:
+			ch = " "
+		chars.append(ch)
+		src.append(i)
+	var pieces: PackedStringArray = PackedStringArray()
+	var cursor := 0
+	var i := 0
+	while i < chars.size():
+		if i + 1 < chars.size() and chars[i] == "用" and chars[i + 1] == "时":
+			var k := i + 2
+			var saw_fen := false
+			var saw_miao := false
+			while k < chars.size():
+				var ch: String = chars[k]
+				var code := ch.unicode_at(0)
+				if ch == " " or (code >= 0x30 and code <= 0x39):
+					k += 1
+					continue
+				if ch == "分" and not saw_fen:
+					saw_fen = true
+					k += 1
+					continue
+				if ch == "秒" and saw_fen:
+					saw_miao = true
+					k += 1
+					break
+				break
+			if saw_miao:
+				var start: int = src[i]
+				var end: int = src[k - 1] + 1
+				pieces.append(text.substr(cursor, start - cursor))
+				var phrase := ""
+				for n in range(i, k):
+					phrase += chars[n]
+				pieces.append(_glue(phrase))
+				cursor = end
+				i = k
+				continue
+		i += 1
+	pieces.append(text.substr(cursor))
+	return "".join(pieces)
 
 
 static func _bind_keep_words(text: String) -> String:
