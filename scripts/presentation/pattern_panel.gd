@@ -192,7 +192,10 @@ func _layout() -> void:
 	for button in [same, different]: button.custom_minimum_size.y = 164
 
 func _render() -> void:
-	message.text = MeasureText.bind_units(puzzle.message)
+	var font := message.get_theme_font("font")
+	var width := maxf(40.0, panel.size.x - 48.0)
+	message.autowrap_mode = TextServer.AUTOWRAP_OFF
+	message.text = MeasureText.layout_text(puzzle.message, width, font, 17) if font != null else puzzle.message
 	answers.visible = puzzle.phase == "inspect"
 	leave.text = "返回栈道" if puzzle.completed() else "先离开 · 也能绕路"
 	reference_label.text = "已揭秘 · 近路已经打开" if puzzle.completed() else RabbitLore.text("reference_label")

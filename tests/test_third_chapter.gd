@@ -153,7 +153,7 @@ static func run(suite: Node) -> void:
 	suite.assert_true(not chapter.golden_clue.trail.visible, "animation cannot re-show obsolete outbound guidance")
 	suite.assert_eq(chapter.world.gate.collision_layer, 0, "shortcut collision removed")
 	suite.assert_true(homeward.return_markers.visible and not chapter.world.child_marker.visible, "rescue swaps cave marker for return ribbons")
-	suite.assert_true(chapter.hud.copy.text.contains("小脚印"), "optional discovery receives a short narrative payoff")
+	suite.assert_true(chapter.hud.copy.text.replace("\n", "").contains("小脚印"), "optional discovery receives a short narrative payoff")
 	chapter._on_action("primary")
 	chapter._hurt(999)
 	suite.assert_eq(chapter.mode, "recover", "failure offers local recovery")

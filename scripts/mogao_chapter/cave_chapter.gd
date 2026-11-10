@@ -37,6 +37,14 @@ var cranks: Array[Button] = []
 var modal_layer: CanvasLayer
 var overlay: ColorRect
 var level_elapsed := 0.0
+var mirror_turn_queued := false
+var _card_title_source := ""
+var _card_body_source := ""
+# Lamp, bridge, and mirror waits last 0.7s. Finish one that is still running
+# after a few seconds of real time, so a skipped frame cannot lock the cave.
+var action_limit_msec := 2000
+var action_started_msec := -1
+var visual_since_msec := -1
 var panel: PanelContainer
 var card_title: Label
 var card_body: Label
@@ -200,7 +208,25 @@ func layout() -> void:
 	overlay.size = get_viewport_rect().size
 	panel.position = Vector2(maxf(8, (size.x - 530) / 2), maxf(8, (size.y - 500) / 2))
 	panel.size = Vector2(minf(530, size.x - 16), minf(500, size.y - 16))
+	_fit_card_copy()
 	settle_text.call_deferred(); queue_redraw()
+
+func card_text_width() -> float:
+	return maxf(40.0, panel.size.x - 36.0)
+
+
+func _fit_card_copy() -> void:
+	if card_body == null or panel == null:
+		return
+	var font := card_body.get_theme_font("font")
+	if font == null:
+		font = FONT
+	var width := card_text_width()
+	card_title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	card_body.autowrap_mode = TextServer.AUTOWRAP_OFF
+	card_title.text = MeasureText.layout_text(_card_title_source, width, font, 23)
+	card_body.text = MeasureText.layout_text(_card_body_source, width, font, 18)
+
 
 func settle_text() -> void:
 	for node in [heading, objective, hint]: node.size.y = 0
@@ -315,7 +341,11 @@ func turn(index: int = -1) -> void:
 	if mode == "playing" and not stopped and model.turn(index): refresh()
 
 func interact() -> void:
-	if stopped or mode != "playing" or not model.busy.is_empty(): return
+	if stopped or mode != "playing": return
+	if model.room == CaveModel.MIRROR_ROOM and model.busy == "mirror":
+		mirror_turn_queued = true
+		return
+	if not model.busy.is_empty(): return
 	if model.room == 2 and model.rescued and model.player == model.exit_cell:
 		show_card("finish", "走出莫高窟", "哥哥：“弟弟往三危山去了。”\n\n这次走了 %d 步\n%s\n\n你把围巾交还给哥哥，让他沿安全路线去与妈妈会合。窟口的光里，是下一段寻找。" % [model.moves, MeasureText.format_duration(level_elapsed)], "前往三危山", "再看看洞窟")
 	elif model.travel():
@@ -366,8 +396,10 @@ func show_card(next_mode: String, title: String, body: String, first: String, se
 	mode = next_mode; model.paused = true
 	# A popup invalidates the step that was waiting for the animation to finish.
 	move_buffer.clear()
+	mirror_turn_queued = false
 	input_handler.held.set_blocked(true)
-	card_title.text = MeasureText.bind_units(title); card_body.text = MeasureText.bind_units(body)
+	_card_title_source = title
+	_card_body_source = body
 	primary.text = first; secondary.text = second; tertiary.text = third
 	secondary.visible = not second.is_empty(); tertiary.visible = not third.is_empty()
 	card_scroll.scroll_vertical = 0; overlay.show(); layout(); refresh()
@@ -385,6 +417,8 @@ func modal_primary() -> void:
 		"reset":
 			model.reset_current(); rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
 			_reset_plank_visit()
+			action_started_msec = -1; visual_since_msec = -1
+			move_buffer.clear(); input_handler.held.clear()
 			rebuild_cranks(); close_card(); layout()
 			checkpoint_changed.emit(model.room)
 		"menu": stopped = true; menu_requested.emit()
@@ -474,7 +508,10 @@ func _collect_step_repeat(delta: float) -> void:
 			move(_direction_vector(int(direction)))
 		else:
 			move_buffer.remember(int(direction))
-	if repeats.is_empty():
+	# A held direction used to consume the whole frame. Lamp, bridge, and mirror
+	# waits then never finished while that key was down and a frame lasted at
+	# least one repeat (0.14s). Only a step is consumed by the repeat itself.
+	if repeats.is_empty() or model.busy != "step":
 		model.advance(delta)
 
 
@@ -688,6 +725,67 @@ func _paint_undo_flash() -> void:
 	undo_button.modulate = Color.WHITE.lerp(Color("ffe7b0"), wave)
 
 
+func _card_holds_play() -> bool:
+	return model.paused and overlay != null and overlay.visible and mode != "playing"
+
+
+func _release_stalled_action() -> void:
+	var waiting := not stopped and not model.busy.is_empty()
+	if not waiting or _card_holds_play():
+		action_started_msec = -1
+		return
+	# A pause flag with no card is not a pause the player can leave.
+	if model.paused:
+		model.paused = false
+		mode = "playing"
+	var now := Time.get_ticks_msec()
+	if action_started_msec < 0:
+		action_started_msec = now
+		return
+	if now - action_started_msec < action_limit_msec:
+		return
+	model.advance(CaveModel.TURN_SECONDS, true)
+	action_started_msec = -1
+
+
+func _shown_gate_open(index: int) -> bool:
+	# 共耳: draw the leaf only when the door stays open after you step off.
+	return model.gate_passable(index) if model.room == 1 else model.gate_open(index)
+
+
+func _settle_visuals(delta: float) -> void:
+	var pending := false
+	for i in 2:
+		var before: float = gate_visual[i]
+		var target := 1.0 if _shown_gate_open(i) else 0.0
+		gate_visual[i] = move_toward(before, target, delta * 3)
+		if not is_equal_approx(gate_visual[i], target):
+			pending = true
+		if before != gate_visual[i]:
+			queue_redraw()
+	var old_light := light_visual
+	var light_target := 1.0 if model.lit() else 0.0
+	light_visual = move_toward(light_visual, light_target, delta * 2)
+	if not is_equal_approx(light_visual, light_target):
+		pending = true
+	if old_light != light_visual:
+		queue_redraw()
+	if not pending:
+		visual_since_msec = -1
+		return
+	var now := Time.get_ticks_msec()
+	if visual_since_msec < 0:
+		visual_since_msec = now
+		return
+	if now - visual_since_msec < action_limit_msec:
+		return
+	for i in 2:
+		gate_visual[i] = 1.0 if _shown_gate_open(i) else 0.0
+	light_visual = 1.0 if model.lit() else 0.0
+	visual_since_msec = -1
+	queue_redraw()
+
+
 func _process(delta: float) -> void:
 	if stopped: return
 	if mode == "playing" and not model.paused and not overlay.visible:
@@ -701,6 +799,11 @@ func _process(delta: float) -> void:
 	var previous_flips: Dictionary = model.planks_up.duplicate()
 	var previous_reached := model.reached
 	_collect_step_repeat(delta)
+	_release_stalled_action()
+	if previous == "mirror" and model.busy.is_empty() and mirror_turn_queued:
+		mirror_turn_queued = false
+		if model.turn_mirror():
+			refresh()
 	var plank_settled := previous == "step" and model.busy.is_empty()
 	var plank_changed := model.planks_up.size() != previous_flips.size() or model.reached != previous_reached
 	if previous != model.busy or plank_changed:
@@ -716,16 +819,8 @@ func _process(delta: float) -> void:
 	if was_lit != model.lit():
 		refresh(); checkpoint_changed.emit(model.room)
 	if previous_deer != model.deer_time: queue_redraw()
-	if not model.paused:
-		var old_light := light_visual
-		for i in 2:
-			var before: float = gate_visual[i]
-			# 共耳: draw the leaf only when the door stays open after you step off.
-			var shown_open := model.gate_passable(i) if model.room == 1 else false
-			gate_visual[i] = move_toward(before, 1.0 if shown_open else 0.0, delta * 3)
-			if before != gate_visual[i]: queue_redraw()
-		light_visual = move_toward(light_visual, 1.0 if model.lit() else 0.0, delta * 2)
-		if old_light != light_visual: queue_redraw()
+	if not _card_holds_play():
+		_settle_visuals(delta)
 	if not model.busy.is_empty():
 		for i in cranks.size(): cranks[i].angle = model.angle(model.cranks[i].bridge); cranks[i].queue_redraw()
 		queue_redraw()

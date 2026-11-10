@@ -126,11 +126,14 @@ func _draw_dynamic(canvas: CanvasItem, layout: LayoutProfile, ctx: Dictionary) -
 
 func _draw_log_strip(canvas: CanvasItem, rect: Rect2, combat_log: Array, ui_scale: float = 1.0) -> void:
 	canvas.draw_rect(rect, Color(0.08, 0.07, 0.06, 0.92))
-	var msg := MeasureText.bind_units(str(combat_log[combat_log.size() - 1]))
 	var density := clampf(rect.size.x / 390.0, 1.0, 2.0)
 	var fs := int(clampf(rect.size.y * 0.30, 16.0 * density, 20.0 * density))
-	canvas.draw_multiline_string(ThemeDB.fallback_font, rect.position + Vector2(12.0 * density, fs + 6.0 * density),
-		msg, HORIZONTAL_ALIGNMENT_LEFT, int(rect.size.x - 24.0 * density), fs, 2, Color(0.82, 0.77, 0.68))
+	var font := ThemeDB.fallback_font
+	var msg := MeasureText.layout_text(str(combat_log[combat_log.size() - 1]), maxf(40.0, rect.size.x - 24.0 * density), font, fs)
+	var y := rect.position.y + fs + 6.0 * density
+	for line in msg.split("\n"):
+		canvas.draw_string(font, Vector2(rect.position.x + 12.0 * density, y), line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.82, 0.77, 0.68))
+		y += fs + 4.0
 
 
 func get_inventory_slot_at(global_pos: Vector2, layout: LayoutProfile) -> int:

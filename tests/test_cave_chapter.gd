@@ -366,18 +366,336 @@ static func cave_popup_layer(t: Node) -> void:
 		t.assert_true(layer.layer >= 40, "room %s note draws above the cave sprites" % room_id)
 		t.assert_true(c.mirror_art.get_parent() != layer and c.lamp_halo.get_parent() != layer, "sprites stay off the popup layer")
 	c.show_note()
-	t.assert_eq(c.card_title.text, "镜窟 · 铜镜折光", "reopening the solved mirror cave shows the refraction note")
+	t.assert_eq(c.card_title.text.replace("\n", ""), "镜窟 · 铜镜折光", "reopening the solved mirror cave shows the refraction note")
 	t.assert_true(c.mirror_art.preview_layer.z_index > 0, "mirror preview still stacks above the mirror sprites")
 	t.assert_true((c.overlay.get_parent() as CanvasLayer).layer > c.mirror_art.preview_layer.z_index, "popup layer is above the preview")
 	c.show_card("finish", "走出莫高窟", "这次走了 6 步\n用时 6 分 14 秒", "前往三危山", "再看看洞窟")
 	t.assert_true(c.overlay.visible and c.overlay.get_parent() is CanvasLayer, "settlement uses the same top layer")
 	c.free()
 
+static func mirror_turn_queue(t: Node) -> void:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	t.assert_eq(_mirror_presses(chapter, 2), 2, "two presses during the spin turn the mirror twice")
+	t.assert_eq(chapter.model.busy, "", "the queued turn finishes")
+	t.assert_eq(_mirror_presses(chapter, 3), 2, "a third press during the first spin does not add a third turn")
+	t.assert_eq(chapter.model.busy, "", "three presses still finish after two turns")
+	chapter.free()
+
+
+static func _mirror_presses(chapter: MogaoChapter, count: int) -> int:
+	chapter.model.load_room(CaveModel.MIRROR_ROOM)
+	chapter.model.player = Vector2i(5, 8)
+	chapter.model.destination = chapter.model.player
+	chapter.mirror_turn_queued = false
+	chapter.mode = "playing"
+	chapter.model.paused = false
+	chapter.rebuild_cranks()
+	var start := int(chapter.model.mirror_rot_of("T"))
+	for _i in count:
+		chapter.interact()
+	for _step in 3:
+		chapter._process(0.8)
+	return int(chapter.model.mirror_rot_of("T")) - start
+
+
+static func _key(chapter: MogaoChapter, keycode: int, pressed: bool) -> void:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.physical_keycode = keycode
+	event.pressed = pressed
+	chapter._unhandled_key_input(event)
+
+
+static func _open_lamp(chapter: MogaoChapter) -> void:
+	chapter.model.load_room(4)
+	chapter.model.entry = Vector2i(3, 7)
+	chapter.model.player = CaveModel.STANDS[0]
+	chapter.model.destination = chapter.model.player
+	chapter.model.lamp = CaveModel.STANDS[0]
+	chapter.model.lamp_held = false
+	chapter.model.paused = false
+	chapter.mode = "playing"
+	chapter.overlay.hide()
+	chapter.rebuild_cranks()
+	chapter.refresh()
+
+
+static func _turn_bridge(t: Node, chapter: MogaoChapter) -> void:
+	chapter.input_handler.held.clear()
+	chapter.model.player = Vector2i(5, 5)
+	chapter.model.destination = chapter.model.player
+	t.assert_true(chapter.model.busy.is_empty(), "the cave is idle before the bridge turns")
+	t.assert_true(chapter.model.can_turn(), "the bridge crank accepts a turn after the wait")
+	t.assert_true(chapter.model.turn(), "the bridge can be turned")
+	chapter._process(0.8)
+	t.assert_eq(chapter.model.bridges[0].pose, 1, "the bridge finishes its turn")
+	t.assert_eq(chapter.model.busy, "", "the turn does not stay in the wait")
+
+
+static func lamp_wait_recovers(t: Node) -> void:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	# Old save: lamp already on the left stand, plus a stray wait field.
+	var saved: Dictionary = {
+		"version": 3,
+		"shortcut": false,
+		"secret": false,
+		"entry": [3, 7],
+		"rooms": {
+			"4": {
+				"player": [1, 5], "box": [-9, -9], "lamp": [1, 5], "held": false,
+				"deer": true, "deer_time": -1, "rescued": false, "reached": false,
+				"scarf": true, "latch": false, "poses": [0], "moves": 12, "turns": 0,
+				"busy": "lamp",
+			},
+		},
+	}
+	chapter.model.busy = "lamp"
+	chapter.model.paused = true
+	chapter.model.resume_network(4, saved)
+	chapter.rebuild_cranks()
+	chapter.mode = "playing"
+	chapter.refresh()
+	t.assert_eq(chapter.model.busy, "", "an old lamp-cave save drops an in-progress wait")
+	t.assert_true(not chapter.model.paused and chapter.model.lit(), "the saved lamp is placed and the cave is unpaused")
+	t.assert_true(chapter.hint.text != "灯光正在安定下来……", "loading does not restore the settling hint")
+	_turn_bridge(t, chapter)
+
+	# Pause mid-wait, then continue. The bridge must turn afterwards.
+	_open_lamp(chapter)
+	chapter.model.lamp_held = true
+	t.assert_true(chapter.model.use_lamp(), "placing the lamp starts its wait")
+	chapter.pause_game()
+	chapter.action_started_msec = Time.get_ticks_msec() - chapter.action_limit_msec - 50
+	var frozen := chapter.model.progress
+	chapter._process(5.0)
+	t.assert_eq(chapter.model.busy, "lamp", "a visible pause keeps the lamp wait")
+	t.assert_eq(chapter.model.progress, frozen, "a visible pause does not force-settle the lamp")
+	chapter.close_card()
+	chapter._process(0.8)
+	t.assert_true(chapter.model.busy.is_empty() and chapter.model.lit(), "continuing finishes the lamp and leaves it on the stand")
+	_turn_bridge(t, chapter)
+
+	# The reported picture: light already on the stand, wait still saying it is settling.
+	_open_lamp(chapter)
+	t.assert_true(chapter.model.lit() and chapter.model.use_lamp(), "picking the placed lamp up starts the wait")
+	chapter.refresh()
+	var pose: int = int(chapter.model.bridges[0].pose)
+	chapter.interact()
+	t.assert_eq(chapter.hint.text, "灯光正在安定下来……", "the lamp wait is the settling hint")
+	t.assert_eq(chapter.action_button.text, "转动栈桥", "the wait relabels the action as a bridge turn")
+	t.assert_true(chapter.action_button.disabled, "the wait locks the bridge button")
+	t.assert_eq(chapter.model.bridges[0].pose, pose, "clicking the bridge button during the wait does nothing")
+	t.assert_eq(chapter.model.busy, "lamp", "the click leaves the wait in place")
+	chapter.action_limit_msec = 0
+	chapter.action_started_msec = 0
+	chapter._process(0.0)
+	chapter.action_limit_msec = 2000
+	t.assert_true(chapter.model.busy.is_empty() and chapter.model.lamp_held, "a stalled lamp wait force-settles")
+	chapter.refresh()
+	t.assert_true(chapter.hint.text != "灯光正在安定下来……", "settling clears the stuck hint")
+	t.assert_true(chapter.model.use_lamp(), "the lamp can be put back on the stand")
+	chapter._process(0.8)
+	t.assert_true(chapter.model.lit() and chapter.model.busy.is_empty(), "the lamp is placed again and idle")
+	_turn_bridge(t, chapter)
+
+	# Held direction plus a slow frame used to skip advance entirely.
+	_open_lamp(chapter)
+	t.assert_true(chapter.model.use_lamp(), "held-key case starts the lamp wait")
+	_key(chapter, KEY_D, true)
+	for _i in 4:
+		chapter._process(0.2)
+	_key(chapter, KEY_D, false)
+	t.assert_eq(chapter.model.busy, "", "a held direction no longer freezes the lamp wait")
+	t.assert_true(chapter.model.lamp_held, "the pick still finishes while the key is held")
+	t.assert_true(chapter.model.use_lamp() and chapter.model.busy == "lamp", "the lamp can be placed after the held-key wait")
+	chapter._process(0.8)
+	_turn_bridge(t, chapter)
+
+	# Reset this cave while the wait is on screen.
+	_open_lamp(chapter)
+	t.assert_true(chapter.model.use_lamp(), "reset case starts the lamp wait")
+	chapter.show_card("reset", "重置这一窟？", "只重置当前洞窟的机关和位置，之前通过的洞窟不受影响。", "确认重置", "继续思考")
+	chapter.modal_primary()
+	t.assert_eq(chapter.model.busy, "", "reset clears the lamp wait")
+	t.assert_true(chapter.mode == "playing" and not chapter.model.paused and not chapter.overlay.visible, "reset returns to the cave")
+	t.assert_eq(chapter.model.player, Vector2i(3, 7), "reset returns the player to the cave entrance")
+	t.assert_eq(chapter.model.lamp, Vector2i(3, 6), "reset puts the lamp back at its start")
+	t.assert_true(chapter.hint.text != "灯光正在安定下来……", "reset clears the settling hint")
+	_turn_bridge(t, chapter)
+
+	# A pause flag with no card (the blur path failed to show one) must not lock the wait.
+	_open_lamp(chapter)
+	t.assert_true(chapter.model.use_lamp(), "hidden pause starts the lamp wait")
+	chapter.model.paused = true
+	chapter.mode = "playing"
+	chapter.overlay.hide()
+	chapter._process(0.0)
+	chapter._process(0.8)
+	t.assert_true(not chapter.model.paused and chapter.model.busy.is_empty() and chapter.model.lamp_held, "a pause with no card cannot lock the lamp")
+	t.assert_true(chapter.model.use_lamp(), "the lamp can be replaced after the hidden pause")
+	chapter._process(0.8)
+	_turn_bridge(t, chapter)
+
+	# Mirror wait uses the same lock. A zero-delta stall and a held key both recover.
+	chapter.model.load_room(CaveModel.MIRROR_ROOM)
+	chapter.model.player = Vector2i(5, 8)
+	chapter.model.destination = chapter.model.player
+	chapter.model.paused = false
+	chapter.mode = "playing"
+	chapter.rebuild_cranks()
+	var start := int(chapter.model.mirror_rot_of("T"))
+	t.assert_true(chapter.model.turn_mirror(), "mirror wait can start")
+	chapter.action_limit_msec = 0
+	chapter.action_started_msec = 0
+	chapter._process(0.0)
+	chapter.action_limit_msec = 2000
+	t.assert_eq(chapter.model.busy, "", "a stalled mirror wait force-settles")
+	t.assert_eq(int(chapter.model.mirror_rot_of("T")), start + 1, "the stalled mirror turn still applies")
+	t.assert_true(chapter.model.turn_mirror(), "another mirror turn can start")
+	_key(chapter, KEY_D, true)
+	chapter._process(0.8)
+	_key(chapter, KEY_D, false)
+	t.assert_eq(chapter.model.busy, "", "a held key does not freeze the mirror")
+	t.assert_eq(int(chapter.model.mirror_rot_of("T")), start + 2, "the held-key mirror turn applies")
+	t.assert_true(chapter.model.turn_mirror(), "the mirror can be turned again after the wait")
+	chapter.free()
+
+	# Shared-ear leaves do not use the action wait. A stalled frame still catches up,
+	# and a plate the player is standing on does not become a door.
+	var ears := MogaoChapter.new()
+	t.add_child(ears)
+	ears.model.load_room(1)
+	ears.model.box = CaveModel.PLATE
+	ears.model.player = Vector2i(2, 2)
+	ears.model.destination = ears.model.player
+	ears.gate_visual = [0.0, 0.0]
+	ears.action_limit_msec = 0
+	ears.visual_since_msec = 0
+	ears._process(0.0)
+	t.assert_eq(ears.model.busy, "", "shared-ear plates do not enter an action wait")
+	t.assert_true(ears.door_leaf_open(0) and ears.door_leaf_open(1), "a stalled shared-ear door catches up to the crate")
+	t.assert_true(ears.model.step(Vector2i.RIGHT), "the caught-up shared door can be walked")
+	ears._process(0.3)
+	t.assert_eq(ears.model.player, Vector2i(3, 2), "the player finishes stepping through the shared door")
+	t.assert_eq(ears.model.busy, "", "the shared-ear step does not stay locked")
+	ears.model.load_room(1)
+	ears.model.player = CaveModel.PLATE
+	ears.model.destination = ears.model.player
+	ears.model.box = Vector2i(2, 4)
+	ears.gate_visual = [1.0, 1.0]
+	ears.action_limit_msec = 0
+	ears.visual_since_msec = 0
+	ears._process(0.0)
+	t.assert_true(not ears.door_leaf_open(0) and not ears.door_leaf_open(1), "body weight does not keep the shared door drawn open")
+	t.assert_true(not ears.model.step(Vector2i.UP), "the fallback does not open a door held only by the player")
+	ears.free()
+
+
+static func plank_wait_recovers(t: Node) -> void:
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	chapter.model.load_room(3)
+	chapter.model.player = CaveModel.PLANK_DEMO
+	chapter.model.destination = chapter.model.player
+	chapter.mode = "playing"
+	chapter.overlay.hide()
+	chapter.model.paused = false
+	t.assert_true(chapter.model.step(Vector2i.UP), "leaving the demo plank starts the step wait")
+	t.assert_eq(chapter.model.busy, "step", "the plank step uses the shared wait")
+	chapter.action_limit_msec = 0
+	chapter.action_started_msec = 0
+	chapter._process(0.0)
+	chapter.action_limit_msec = 2000
+	t.assert_eq(chapter.model.busy, "", "a stalled plank step force-settles")
+	t.assert_eq(chapter.model.player, Vector2i(3, 6), "the stalled plank step still lands")
+	t.assert_true(chapter.model.planks_up.has(CaveModel.PLANK_DEMO), "finishing the wait flips the plank that was left")
+
+	chapter.model.load_room(3)
+	chapter.model.player = CaveModel.PLANK_DEMO
+	chapter.model.destination = chapter.model.player
+	t.assert_true(chapter.model.step(Vector2i.UP), "held-key plank step starts")
+	_key(chapter, KEY_D, true)
+	chapter._process(0.2)
+	_key(chapter, KEY_D, false)
+	chapter._process(0.3)
+	t.assert_eq(chapter.model.busy, "", "a held direction does not leave the plank step stuck")
+	t.assert_true(chapter.model.planks_up.has(CaveModel.PLANK_DEMO), "the held-key step still flips the demo plank")
+
+	chapter.model.load_room(3)
+	chapter.model.player = CaveModel.PLANK_DEMO
+	chapter.model.destination = chapter.model.player
+	chapter.model.entry = CaveModel.PLANK_WEST
+	t.assert_true(chapter.model.step(Vector2i.UP), "reset case starts a plank step")
+	chapter.show_card("reset", "重置这一窟？", "只重置当前洞窟的机关和位置，之前通过的洞窟不受影响。", "确认重置", "继续思考")
+	chapter.modal_primary()
+	t.assert_eq(chapter.model.busy, "", "reset clears the plank wait")
+	t.assert_eq(chapter.model.player, CaveModel.PLANK_ENTRY, "reset still returns to entrance E")
+	t.assert_true(chapter.model.planks_up.is_empty(), "reset still flattens the planks")
+
+	chapter.model.load_room(3)
+	chapter.model.player = Vector2i(2, 5)
+	chapter.model.destination = chapter.model.player
+	chapter.model.planks_up[Vector2i(2, 4)] = true
+	chapter.model.planks_up[CaveModel.PLANK_DEMO] = true
+	chapter.model.moves = 7
+	chapter.model.shortcut = false
+	chapter.model.reached = false
+	var saved: Dictionary = chapter.model.save_network()
+	t.assert_eq(int(saved.get("version", 0)), 4, "the plank save stays version 4")
+	saved["rooms"]["3"]["busy"] = "step"
+	chapter.model.busy = "step"
+	chapter.model.paused = true
+	chapter.model.progress = 0.4
+	chapter.model.resume_network(3, saved)
+	t.assert_eq(chapter.model.busy, "", "a version 4 save drops an in-progress wait")
+	t.assert_true(not chapter.model.paused, "a version 4 save does not stay paused")
+	t.assert_eq(chapter.model.progress, 0.0, "a version 4 save drops wait progress")
+	t.assert_true(chapter.model.planks_up.has(Vector2i(2, 4)) and chapter.model.planks_up.has(CaveModel.PLANK_DEMO), "version 4 still restores the flipped planks")
+	t.assert_eq(chapter.model.player, Vector2i(2, 5), "version 4 still restores the plank position")
+	t.assert_eq(chapter.model.moves, 7, "version 4 still restores the move count")
+	t.assert_true(not chapter.model.reached, "an unsolved version 4 save stays unsolved")
+
+	chapter.model.reached = true
+	chapter.model.shortcut = true
+	var solved: Dictionary = chapter.model.save_network()
+	chapter.model.busy = "lamp"
+	chapter.model.resume_network(3, solved)
+	t.assert_true(chapter.model.reached and chapter.model.shortcut_open(), "a solved version 4 save stays nailed and the shortcut stays open")
+	t.assert_eq(chapter.model.busy, "", "a solved version 4 save also drops a stray wait")
+	t.assert_true(chapter.model.planks_up.is_empty(), "a solved version 4 save stays a nailed passage")
+
+	var ears := MogaoChapter.new()
+	t.add_child(ears)
+	ears.model.load_room(1)
+	ears.mode = "playing"
+	ears.overlay.hide()
+	var start: Vector2i = ears.model.player
+	var stepped := false
+	for direction in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		if ears.model.step(direction):
+			stepped = true
+			break
+	t.assert_true(stepped and ears.model.busy == "step", "shared-ear movement uses the same step wait")
+	ears.action_limit_msec = 0
+	ears.action_started_msec = 0
+	ears._process(0.0)
+	ears.action_limit_msec = 2000
+	t.assert_eq(ears.model.busy, "", "a stalled shared-ear step force-settles")
+	t.assert_true(ears.model.player != start, "the stalled shared-ear step still moves")
+	ears.free()
+	chapter.free()
+
+
 static func run(t: Node) -> void:
 	print("\n[TEST] Mogao three distinct cave mechanisms")
 	shared_ear_doors(t)
 	reset_confirm(t)
 	cave_popup_layer(t)
+	mirror_turn_queue(t)
+	lamp_wait_recovers(t)
+	plank_wait_recovers(t)
 	pressure_graph(t)
 	plank_graph(t)
 	plank_hints(t)

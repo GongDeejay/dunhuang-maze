@@ -73,7 +73,6 @@ func open(points: Array[Vector2i], studied: bool) -> void:
 	sketch.points = points
 	sketch.studied = studied
 	sketch.gate_button.text = "石门 ✓" if studied else "石门 ◇"
-	copy.text = MeasureText.bind_units(TravelLore.text("roadbook", "reveal" if studied else "prompt"))
 	visible = true
 	consumed = epoch
 	scroll.scroll_vertical = 0
@@ -88,6 +87,12 @@ func _layout() -> void:
 	sketch.custom_minimum_size.y = 175 if vp.y < 450 else 230
 	sketch.queue_redraw()
 	consumed = epoch
+	if copy != null and sketch != null:
+		var font := copy.get_theme_font("font")
+		var width := maxf(40.0, panel.size.x - 28.0)
+		copy.autowrap_mode = TextServer.AUTOWRAP_OFF
+		var source := TravelLore.text("roadbook", "reveal" if sketch.studied else "prompt")
+		copy.text = MeasureText.layout_text(source, width, font, 17) if font != null else source
 
 func _trace() -> void:
 	if not visible or consumed == epoch: return

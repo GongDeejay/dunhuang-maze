@@ -296,8 +296,10 @@ func step(direction: Vector2i) -> bool:
 	busy = "step"; progress = 0
 	return true
 
-func advance(delta: float) -> void:
-	if paused: return
+func advance(delta: float, force: bool = false) -> void:
+	# A visible pause card freezes the wait. force finishes a wait that has
+	# already run on too long, even if that card flag was left behind.
+	if paused and not force: return
 	if bank_lit() and deer_time >= 0:
 		deer_time = minf(DEER_SECONDS + .8, deer_time + maxf(delta, 0))
 	if busy.is_empty(): return

@@ -2,6 +2,7 @@ class_name JourneyCard
 extends CanvasLayer
 
 const MeasureText = preload("res://scripts/presentation/measure_text.gd")
+const GAME_FONT = preload("res://assets/fonts/NotoSansSC-GameSubset.ttf")
 ## Readable, dismissible story beats. Main suspends gameplay while this is open.
 
 signal dismissed
@@ -14,6 +15,8 @@ var fragment_rects: Array[TextureRect] = []
 var single_art: TextureRect
 var caption: Label
 var continue_button: Button
+var _title_source := ""
+var _body_source := ""
 
 func _ready() -> void:
 	layer = 120
@@ -40,12 +43,12 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 18)
 	panel.add_child(box)
 	title_label = Label.new()
-	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title_label.add_theme_font_size_override("font_size", 24)
 	title_label.add_theme_color_override("font_color", Color("efd78e"))
 	box.add_child(title_label)
 	body_label = Label.new()
-	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	body_label.add_theme_font_size_override("font_size", 18)
 	body_label.add_theme_color_override("font_color", Color("efe6d3"))
 	box.add_child(body_label)
@@ -85,8 +88,8 @@ func _ready() -> void:
 
 func open_card(card: Dictionary) -> void:
 	if card.is_empty(): return
-	title_label.text = MeasureText.bind_units(str(card.title))
-	body_label.text = MeasureText.bind_units(str(card.body))
+	_title_source = str(card.title)
+	_body_source = str(card.body)
 	continue_button.text = card.get("button", "继续")
 	_apply_art(card)
 	visible = true
@@ -126,11 +129,25 @@ func _apply_art(card: Dictionary) -> void:
 		caption.visible = false
 
 
+func text_width() -> float:
+	return maxf(40.0, panel.size.x - 44.0)
+
+
 func _layout() -> void:
 	var vp := get_viewport().get_visible_rect().size
 	shade.size = vp
 	panel.size = Vector2(minf(520, vp.x - 32), 0)
 	panel.position = Vector2((vp.x - panel.size.x) * 0.5, maxf(8, (vp.y - panel.size.y) * 0.5))
+	_apply_copy()
+
+
+func _apply_copy() -> void:
+	var font := body_label.get_theme_font("font")
+	if font == null:
+		font = GAME_FONT
+	var width := text_width()
+	title_label.text = MeasureText.layout_text(_title_source, width, font, 24)
+	body_label.text = MeasureText.layout_text(_body_source, width, font, 18)
 
 func close() -> void:
 	visible = false

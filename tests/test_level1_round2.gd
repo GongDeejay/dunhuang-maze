@@ -20,6 +20,8 @@ static func run(t: Node) -> void:
 	_mobile(t)
 	_play(t)
 	_measures(t)
+	_popup_layout(t)
+	_camp_pictures(t)
 	_roadbook_log(t)
 	_clock(t)
 	_beacon_hint(t)
@@ -282,6 +284,70 @@ static func _skin(t: Node, main, journey: FirstJourney) -> void:
 	t.assert_eq(paused.handle(held, ctx).type, GameAction.Type.NONE, "pause ignores H")
 
 
+static func _popup_layout(t: Node) -> void:
+	var mom := "“你没事，太好了！孩子们往莫高窟那边去了。”\n妈妈帮你包扎，恢复 4 点体力，并指出右侧通往营地的旧路。\n捷径已经打开。先一起到营地，再去找孩子们。"
+	var mirror := "灯固定在西南角，光沿直线走。\n铜镜亮金的一面是正面：光照上来，会顺着红箭头拐出去；打到深青绿的背面，或逆着箭头照来，光就停住。\n带石座的那面嵌在石里，转不动；另外三面站在旁边就能转。转错可以撤销。\n把光引到莲花灯座上，北面窟门的光帘才会散开，通向鹿影窟。\n\n本关为壁画幻境；机关为游戏虚构。"
+	for size in [Vector2i(1280, 720), Vector2i(844, 390)]:
+		var host := SubViewport.new()
+		host.size = size
+		host.disable_3d = true
+		t.add_child(host)
+		var card := JourneyCard.new()
+		host.add_child(card)
+		card.open_card({"title": "终于找到妈妈了", "body": mom, "button": "一起回营地"})
+		_assert_lines(t, card.body_label.text, "mom popup %s" % size)
+		var chapter := MogaoChapter.new()
+		host.add_child(chapter)
+		chapter.model.load_room(CaveModel.MIRROR_ROOM)
+		chapter.show_note()
+		_assert_lines(t, chapter.card_body.text, "mirror popup %s" % size)
+		host.free()
+
+
+static func _assert_lines(t: Node, text: String, label: String) -> void:
+	var plain := _plain(text)
+	var lines := plain.split("\n")
+	for i in lines.size():
+		var line: String = lines[i]
+		if line.is_empty():
+			continue
+		t.assert_true(not "。，、！？；：」』）".contains(line.substr(0, 1)), "%s line starts with punctuation: %s" % [label, line])
+		if i + 1 < lines.size() and not lines[i + 1].is_empty():
+			var tail := line.substr(line.length() - 1, 1)
+			var head := lines[i + 1].substr(0, 1)
+			var digit := tail >= "0" and tail <= "9"
+			var unit := "点下片格秒分步伤%".contains(head) or lines[i + 1].begins_with("HP")
+			t.assert_true(not (digit and unit), "%s breaks after a number: %s / %s" % [label, line, lines[i + 1]])
+
+
+static func _camp_pictures(t: Node) -> void:
+	for pictures in [2, 3]:
+		SaveManager.clear_save()
+		var main = MainScript.new()
+		t.add_child(main)
+		main.game.start_game()
+		main._new_game(0)
+		main.journey_card.close()
+		var journey: FirstJourney = main.first_journey
+		journey.mural_found = true
+		journey.fragments[1] = true
+		journey.caravan_found = true
+		journey.fragments[2] = true
+		if pictures == 3:
+			journey.stele_found = true
+			journey.fragments[3] = true
+		main._on_level_completed()
+		var word := "两" if pictures == 2 else "三"
+		var body := _plain(main.journey_card.body_label.text).replace("\n", "")
+		t.assert_true(body.contains("这%s片画" % word), "camp card with %d pictures says so" % pictures)
+		var shown := 0
+		for rect in main.journey_card.fragment_rects:
+			if rect.visible:
+				shown += 1
+		t.assert_eq(shown, pictures, "camp card shows %d thumbnails" % pictures)
+		main.free()
+
+
 static func _roadbook_log(t: Node) -> void:
 	SaveManager.clear_save()
 	var main = MainScript.new()
@@ -456,7 +522,7 @@ static func _clock(t: Node) -> void:
 	chapter.model.rescued = true
 	chapter.model.player = chapter.model.exit_cell
 	chapter.interact()
-	var level_two := _plain(chapter.card_body.text)
+	var level_two := _plain(chapter.card_body.text).replace("\n", "")
 	t.assert_true(level_two.contains("这次走了 18 步"), "level 2 settlement names the steps")
 	t.assert_true(level_two.contains("用时 1 分 15 秒"), "level 2 settlement names the time")
 	chapter.free()
