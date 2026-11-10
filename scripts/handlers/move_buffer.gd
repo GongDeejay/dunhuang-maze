@@ -1,8 +1,9 @@
 class_name MoveBuffer
 extends RefCounted
-## One replaceable direction, plus a queue for taps that each have to happen.
-## remember() is the single slot (a later press replaces it).
-## enqueue() keeps every press, so a released key can be pressed again during a step.
+## remember() keeps one direction for the attack cooldown; a later press replaces it.
+## enqueue() stores taps that have not started moving. At most MAX_PENDING_STEPS.
+
+const MAX_PENDING_STEPS := 24
 
 var _direction := -1
 var _pending := false
@@ -14,8 +15,15 @@ func remember(direction: int) -> void:
 	_pending = true
 
 
-func enqueue(direction: int) -> void:
+func enqueue(direction: int) -> bool:
+	if _queue.size() >= MAX_PENDING_STEPS:
+		return false
 	_queue.append(direction)
+	return true
+
+
+func pending_count() -> int:
+	return _queue.size()
 
 
 func pending() -> bool:

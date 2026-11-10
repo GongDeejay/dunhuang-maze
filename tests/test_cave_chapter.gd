@@ -319,7 +319,7 @@ static func reset_confirm(t: Node) -> void:
 	c._process(0.05)
 	t.assert_eq(c.primary.text, "确认重置", "the reset card offers confirm")
 	t.assert_eq(c.primary.action_mode, BaseButton.ACTION_MODE_BUTTON_PRESS, "confirm fires on press, not on a release that can miss")
-	var hit := _front_at(c.overlay, c.primary.get_global_rect().get_center())
+	var hit := _front_at(c.panel, c.primary.get_global_rect().get_center())
 	t.assert_eq(hit, c.primary, "nothing covers the confirm-reset button")
 	c.modal_primary()
 	t.assert_eq(c.mode, "playing", "one confirm closes the reset card")
@@ -378,8 +378,20 @@ static func mirror_turn_queue(t: Node) -> void:
 	t.add_child(chapter)
 	t.assert_eq(_mirror_presses(chapter, 2), 2, "two presses during the spin turn the mirror twice")
 	t.assert_eq(chapter.model.busy, "", "the queued turn finishes")
-	t.assert_eq(_mirror_presses(chapter, 3), 2, "a third press during the first spin does not add a third turn")
-	t.assert_eq(chapter.model.busy, "", "three presses still finish after two turns")
+	t.assert_eq(_mirror_presses(chapter, 3), 3, "a third press during the spin stays in the queue")
+	t.assert_eq(chapter.model.busy, "", "three presses finish as three turns")
+	chapter.model.load_room(CaveModel.MIRROR_ROOM)
+	chapter.model.player = Vector2i(5, 8)
+	chapter.model.destination = chapter.model.player
+	chapter.mode = "playing"
+	chapter.interact()
+	for _i in MoveBuffer.MAX_PENDING_STEPS:
+		chapter.interact()
+	t.assert_eq(chapter.mirror_turns_pending, MoveBuffer.MAX_PENDING_STEPS, "mirror turns stop at the same cap")
+	var bumps: int = chapter.bump_count
+	chapter.interact()
+	t.assert_eq(chapter.mirror_turns_pending, MoveBuffer.MAX_PENDING_STEPS, "one more mirror press does not lengthen the queue")
+	t.assert_true(chapter.bump_count > bumps, "a mirror press past the cap shakes")
 	chapter.free()
 
 
@@ -387,16 +399,16 @@ static func _mirror_presses(chapter: MogaoChapter, count: int) -> int:
 	chapter.model.load_room(CaveModel.MIRROR_ROOM)
 	chapter.model.player = Vector2i(5, 8)
 	chapter.model.destination = chapter.model.player
-	chapter.mirror_turn_queued = false
+	chapter.mirror_turns_pending = 0
 	chapter.mode = "playing"
 	chapter.model.paused = false
 	chapter.rebuild_cranks()
-	var start := int(chapter.model.mirror_rot_of("T"))
+	var start := int(chapter.model.turns)
 	for _i in count:
 		chapter.interact()
-	for _step in 3:
+	for _step in count + 1:
 		chapter._process(0.8)
-	return int(chapter.model.mirror_rot_of("T")) - start
+	return int(chapter.model.turns) - start
 
 
 static func _key(chapter: MogaoChapter, keycode: int, pressed: bool) -> void:
@@ -704,32 +716,88 @@ static func plank_rapid_taps(t: Node) -> void:
 	chapter._process(0.2)
 	t.assert_eq(chapter.model.moves, 1, "echo repeats do not add a plank step")
 	t.assert_eq(chapter.model.player, Vector2i(3, 7), "the real press still steps off the entrance")
+	for gap in [0.015, 0.08, 0.125]:
+		chapter.model.load_room(3)
+		chapter.model.moves = 0
+		chapter.rebuild_cranks()
+		chapter.input_handler.held.clear()
+		chapter.move_buffer.clear()
+		chapter.bump_count = 0
+		chapter.mode = "playing"
+		chapter.overlay.hide()
+		var route := "UULUULUURRDDRRUULULU"
+		var keys := {"U": KEY_W, "D": KEY_S, "L": KEY_A, "R": KEY_D}
+		for i in route.length():
+			var key: int = keys[route.substr(i, 1)]
+			_tap(chapter, key, true, false)
+			_tap(chapter, key, false, false)
+			chapter._process(gap)
+			if chapter.overlay.visible:
+				chapter.close_card()
+		for _drain in 80:
+			if chapter.model.busy.is_empty() and not chapter.move_buffer.pending():
+				break
+			chapter._process(0.05)
+			if chapter.overlay.visible:
+				chapter.close_card()
+		t.assert_eq(chapter.model.moves, 20, "the 20-step route finishes at %dms" % int(gap * 1000))
+		t.assert_eq(chapter.model.plank_count(), 11, "all 11 planks flip at %dms" % int(gap * 1000))
+		t.assert_true(chapter.model.reached, "the rope gate opens at %dms" % int(gap * 1000))
+	# Mashing into the south wall stops on the first wall and drops the rest.
 	chapter.model.load_room(3)
 	chapter.model.moves = 0
-	chapter.rebuild_cranks()
-	chapter.input_handler.held.clear()
 	chapter.move_buffer.clear()
-	var route := "UULUULUURRDDRRUULULU"
-	var keys := {"U": KEY_W, "D": KEY_S, "L": KEY_A, "R": KEY_D}
-	var trace := ""
-	for i in route.length():
-		var key: int = keys[route.substr(i, 1)]
+	chapter.input_handler.held.clear()
+	chapter.bump_count = 0
+	for _i in 6:
+		_tap(chapter, KEY_S, true, false)
+		_tap(chapter, KEY_S, false, false)
+		chapter._process(0.02)
+	for _drain in 8:
+		chapter._process(CaveModel.STEP_SECONDS)
+	t.assert_eq(chapter.model.player, CaveModel.PLANK_ENTRY, "the first wall stops the plank run")
+	t.assert_eq(chapter.model.moves, 0, "wall mashes do not move")
+	t.assert_true(not chapter.move_buffer.pending(), "the wall clears the plank queue")
+	t.assert_true(chapter.bump_count >= 1, "the wall shakes")
+	# Leave the demo, then a queued step back onto the flipped board drops the rest.
+	chapter.model.load_room(3)
+	chapter.move_buffer.clear()
+	chapter.input_handler.held.clear()
+	chapter.bump_count = 0
+	_tap(chapter, KEY_W, true, false)
+	_tap(chapter, KEY_W, false, false)
+	chapter._process(CaveModel.STEP_SECONDS)
+	_tap(chapter, KEY_W, true, false)
+	_tap(chapter, KEY_W, false, false)
+	chapter._process(0.02)
+	var queued := 0
+	for _extra in 4:
+		_tap(chapter, KEY_S, true, false)
+		_tap(chapter, KEY_S, false, false)
+		queued += 1
+	for _drain in 8:
+		chapter._process(CaveModel.STEP_SECONDS)
+	t.assert_eq(chapter.model.player, Vector2i(3, 6), "a flipped plank stops the run")
+	t.assert_true(not chapter.move_buffer.pending(), "hitting a flipped plank clears the queue")
+	t.assert_true(chapter.bump_count >= 1, "a flipped plank shakes")
+	# The stuck hint drops keys that were already queued.
+	chapter.model.load_room(3)
+	chapter.move_buffer.clear()
+	chapter.input_handler.held.clear()
+	var dead := "UULUURUU"
+	for i in dead.length():
+		var key: int = {"U": KEY_W, "L": KEY_A, "R": KEY_D}[dead.substr(i, 1)]
 		_tap(chapter, key, true, false)
-		chapter._process(0.05)
 		_tap(chapter, key, false, false)
-		chapter._process(0.06)
-		if chapter.overlay.visible:
-			chapter.close_card()
-		trace += "%s:%s@%s " % [route.substr(i, 1), chapter.model.moves, chapter.model.player]
-	for _drain in 40:
-		if chapter.model.busy.is_empty() and not chapter.move_buffer.pending():
-			break
-		chapter._process(0.05)
-		if chapter.overlay.visible:
-			chapter.close_card()
-	t.assert_eq(chapter.model.moves, 20, "rapid press-release walks all 20 steps %s" % trace)
-	t.assert_eq(chapter.model.plank_count(), 11, "rapid press-release flips all 11 planks")
-	t.assert_true(chapter.model.reached, "rapid press-release opens the rope gate")
+		chapter._process(CaveModel.STEP_SECONDS)
+	_tap(chapter, KEY_W, true, false)
+	chapter._process(0.02)
+	for _extra in 3:
+		_tap(chapter, KEY_W, false, false)
+		_tap(chapter, KEY_W, true, false)
+	chapter._process(CaveModel.STEP_SECONDS)
+	t.assert_true("剩下的翻板连不成一条路了" in chapter.hint.text, "the dead route shows the stuck hint")
+	t.assert_true(not chapter.move_buffer.pending(), "the stuck hint clears the queue")
 	chapter.free()
 
 
@@ -769,8 +837,40 @@ static func _tap(chapter: MogaoChapter, keycode: int, pressed: bool, echo: bool)
 	chapter._unhandled_key_input(event)
 
 
+static func reset_buttons(t: Node) -> void:
+	var c := MogaoChapter.new()
+	t.add_child(c)
+	c.model.load_room(3)
+	c.rebuild_cranks()
+	c.pause_game()
+	t.assert_true(c.secondary.visible, "pause in the unsolved plank cave shows reset")
+	t.assert_eq(c.secondary.text, "重置这一窟", "pause offers to reset this cave")
+	t.assert_true(c.secondary.size.y >= 48.0, "the reset button has a real hit area")
+	t.assert_true(c.secondary.position.y >= c.primary.position.y + c.primary.size.y - 1.0, "reset sits on its own row under continue")
+	t.assert_true(c.tertiary.position.y >= c.secondary.position.y + c.secondary.size.y - 1.0, "home sits on its own row under reset")
+	var hit := _front_at(c.panel, c.secondary.get_global_rect().get_center())
+	t.assert_eq(hit, c.secondary, "nothing covers the reset button")
+	t.assert_eq(c.secondary.action_mode, BaseButton.ACTION_MODE_BUTTON_PRESS, "reset fires on press")
+	t.assert_eq(c.tertiary.text, "返回首页", "pause still offers the menu")
+	t.assert_true(c.tertiary.get_global_rect().position.y > c.secondary.get_global_rect().position.y, "home sits below reset, it does not replace it")
+	c.modal_secondary()
+	t.assert_eq(c.primary.text, "确认重置", "the confirm button is present")
+	t.assert_eq(c.primary.action_mode, BaseButton.ACTION_MODE_BUTTON_PRESS, "confirm reset fires on press")
+	var confirm := _front_at(c.panel, c.primary.get_global_rect().get_center())
+	t.assert_eq(confirm, c.primary, "nothing covers confirm reset")
+	c.model.player = Vector2i(2, 4)
+	c.model.destination = c.model.player
+	c.model.planks_up[Vector2i(2, 4)] = true
+	c.modal_primary()
+	t.assert_eq(c.model.player, CaveModel.PLANK_ENTRY, "confirm reset returns to the plank entrance")
+	t.assert_true(c.model.planks_up.is_empty(), "confirm reset lays the planks flat")
+	t.assert_eq(c.mode, "playing", "confirm reset closes the card")
+	c.free()
+
+
 static func run(t: Node) -> void:
 	print("\n[TEST] Mogao three distinct cave mechanisms")
+	reset_buttons(t)
 	shared_ear_doors(t)
 	reset_confirm(t)
 	cave_popup_layer(t)

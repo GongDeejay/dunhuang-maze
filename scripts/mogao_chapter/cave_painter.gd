@@ -94,6 +94,8 @@ func paint_actors(c: Control, canvas: CanvasItem = null) -> void:
 	var m: CaveModel = c.model
 	var u: float = c.unit
 	var player: Vector2 = c.point(m.visual_player())
+	if "bump_offset" in c:
+		player += c.bump_offset
 	if m.room == 2 and m.rescued: actor(c, player + Vector2(-u * .35, -u * .12), c.BROTHER, .7, draw)
 	actor(c, player, c.DAD, 1, draw)
 	if m.scarf and not m.rescued:
