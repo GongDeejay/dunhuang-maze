@@ -20,6 +20,7 @@ static func run(t: Node) -> void:
 	_mobile(t)
 	_play(t)
 	_measures(t)
+	_keep_words(t)
 	_popup_layout(t)
 	_camp_pictures(t)
 	_roadbook_log(t)
@@ -282,6 +283,49 @@ static func _skin(t: Node, main, journey: FirstJourney) -> void:
 	held.pressed = true
 	held.keycode = KEY_H
 	t.assert_eq(paused.handle(held, ctx).type, GameAction.Type.NONE, "pause ignores H")
+
+
+static func _keep_words(t: Node) -> void:
+	var font := load("res://assets/fonts/NotoSansSC-GameSubset.ttf") as FontFile
+	font.allow_system_fallback = false
+	var words := MeasureText.keep_words()
+	var shortcut := -1
+	var cave := -1
+	for i in words.size():
+		if words[i] == "栈道捷径":
+			shortcut = i
+		elif words[i] == "栈道窟":
+			cave = i
+	t.assert_true(shortcut >= 0 and cave > shortcut, "栈道捷径 is matched before the shorter 栈道窟")
+	var missing := ""
+	var seen := {}
+	for word in words:
+		for i in word.length():
+			var code := word.unicode_at(i)
+			if seen.has(code):
+				continue
+			seen[code] = true
+			if not font.has_char(code):
+				missing += word.substr(i, 1)
+	t.assert_eq(missing, "", "keep words are missing web font glyphs: %s" % missing)
+	var prefix := "北面通向"
+	var sentence := prefix + "鹿影窟。"
+	var width := font.get_string_size(prefix + "鹿", HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 0.5
+	t.assert_true(font.get_string_size(prefix + "鹿影", HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x > width, "the boundary cuts through 鹿影窟")
+	t.assert_true(font.get_string_size("鹿影窟。", HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x <= width + 0.01, "鹿影窟 still fits on a line of its own")
+	var wrapped := MeasureText.layout_text(sentence, width, font, 18)
+	t.assert_eq(_plain(wrapped).replace("\n", ""), sentence, "the deer-cave sentence keeps every character")
+	var intact := false
+	for line in _plain(wrapped).split("\n"):
+		if line.contains("鹿影窟"):
+			intact = true
+	t.assert_true(intact, "鹿影窟 stays together: %s" % _plain(wrapped))
+	_assert_lines(t, wrapped, "deer cave boundary")
+	var narrow := font.get_string_size("栈", HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 0.5
+	var overlong := MeasureText.layout_text("栈道捷径。", narrow, font, 18)
+	t.assert_eq(_plain(overlong).replace("\n", ""), "栈道捷径。", "an overlong name falls back to characters")
+	t.assert_true(_plain(overlong).split("\n").size() > 1 and _plain(overlong).split("\n").size() <= 8, "an overlong name breaks by character and stops")
+	_assert_lines(t, overlong, "overlong keep word")
 
 
 static func _popup_layout(t: Node) -> void:
