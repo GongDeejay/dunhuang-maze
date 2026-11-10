@@ -22,6 +22,7 @@ const ROOM_NAMES := {
 	7: "镜窟 · 折光",
 }
 const MoveBufferScript = preload("res://scripts/handlers/move_buffer.gd")
+const MirrorPainterScript = preload("res://scripts/mogao_chapter/mirror_painter.gd")
 var model := CaveNetwork.new()
 var input_handler := InputHandler.new()
 var move_buffer = MoveBufferScript.new()
@@ -42,6 +43,9 @@ var modal_layer: CanvasLayer
 var overlay: ColorRect
 var level_elapsed := 0.0
 var mirror_turns_pending := 0
+var mirror_hint_lock := 0.0
+var mirror_hint_text := ""
+var mirror_label_cell := Vector2i(-999, -999)
 var _card_title_source := ""
 var _card_body_source := ""
 # Lamp, bridge, and mirror waits last 0.7s. Finish one that is still running
@@ -84,7 +88,13 @@ func _ready() -> void:
 	heading = make_label("莫高窟", 25, Color("f5dba8"))
 	objective = make_label("", 18, Color("eee1c8"))
 	hint = make_label("", 16, Color("e1c49a"))
-	action_button = make_button("转动栈桥", interact)
+	action_button = make_button("转动栈桥", press_action)
+	# Crank buttons are drawn later and used to sit on top of this one. A click
+	# on the gray mirror button then turned whatever crank was underneath.
+	action_button.focus_mode = Control.FOCUS_NONE
+	action_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	action_button.z_index = 5
+	action_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 	undo_button = make_button("撤销", undo)
 	note_button = make_button("窟图", show_note)
 	pause_button = make_button("暂停", pause_game)
@@ -278,8 +288,13 @@ func refresh() -> void:
 		action_button.disabled = locked or (model.lamp_action().is_empty() and not model.can_turn())
 	if model.room == CaveModel.MIRROR_ROOM:
 		action_button.text = "转动铜镜"
-		action_button.disabled = locked
-		if not locked and not model.can_turn_mirror():
+		# Stay clickable while the mirror spins, and while the player is not
+		# beside one. Disabling it dropped the click, or let it fall through
+		# to a crank that turns a bridge.
+		var mirror_spinning := model.busy == "mirror"
+		action_button.disabled = stopped or mode != "playing" or (not model.busy.is_empty() and not mirror_spinning)
+		action_button.modulate = Color.WHITE
+		if not action_button.disabled and not mirror_spinning and not model.can_turn_mirror():
 			action_button.modulate = Color(0.45, 0.45, 0.45)
 	if model.reached:
 		action_button.text = "机关已解"
@@ -356,6 +371,8 @@ func refresh() -> void:
 		var plank_line := _plank_hint_text()
 		if not plank_line.is_empty():
 			hint.text = plank_line
+	if mirror_hint_lock > 0.0:
+		hint.text = mirror_hint_text
 	settle_text.call_deferred(); queue_redraw()
 
 func move(direction: Vector2i) -> void:
@@ -365,13 +382,47 @@ func move(direction: Vector2i) -> void:
 func turn(index: int = -1) -> void:
 	if mode == "playing" and not stopped and model.turn(index): refresh()
 
-func interact() -> void:
-	if stopped or mode != "playing": return
-	if model.room == CaveModel.MIRROR_ROOM and model.busy == "mirror":
+func press_action() -> void:
+	# The mirror button and the space key share this path. It never turns a bridge.
+	if model.room == CaveModel.MIRROR_ROOM:
+		_request_mirror_turn()
+		return
+	interact()
+
+func _pin_mirror_hint(text: String) -> void:
+	mirror_hint_text = text
+	mirror_hint_lock = 2.0
+	hint.text = text
+
+func _clear_mirror_hint() -> void:
+	mirror_hint_lock = 0.0
+	mirror_hint_text = ""
+
+func _request_mirror_turn() -> void:
+	if stopped or mode != "playing" or model.paused or model.room != CaveModel.MIRROR_ROOM:
+		return
+	if model.busy == "mirror":
 		if mirror_turns_pending >= MoveBuffer.MAX_PENDING_STEPS:
 			_play_bump(0)
 		else:
 			mirror_turns_pending += 1
+		return
+	if not model.busy.is_empty():
+		return
+	if model.can_turn_mirror():
+		if model.turn_mirror():
+			refresh()
+		return
+	if _beside_fixed_mirror():
+		_pin_mirror_hint("这面铜镜嵌在石里，转不动")
+		return
+	# Gray button: no bridge, no mirror, no door. The hint is the whole result.
+	_pin_mirror_hint("站到铜镜旁边再转")
+
+func interact() -> void:
+	if stopped or mode != "playing": return
+	if model.room == CaveModel.MIRROR_ROOM:
+		_request_mirror_turn()
 		return
 	if not model.busy.is_empty(): return
 	if model.room == 2 and model.rescued and model.player == model.exit_cell:
@@ -379,6 +430,7 @@ func interact() -> void:
 	elif model.travel():
 		move_buffer.clear()
 		mirror_turns_pending = 0
+		_clear_mirror_hint()
 		rescued_presented = model.rescued; gate_visual = [0.0, 0.0]; light_visual = 0
 		_reset_plank_visit()
 		rebuild_cranks(); layout(); refresh(); AudioManager.play_level_start()
@@ -390,13 +442,6 @@ func interact() -> void:
 	elif model.room == 0: turn()
 	elif model.room in [1, 3]: show_note()
 	elif model.room == 4 and model.lamp_action().is_empty(): turn()
-	elif model.room == CaveModel.MIRROR_ROOM:
-		if model.turn_mirror():
-			refresh()
-		elif _beside_fixed_mirror():
-			hint.text = "这面铜镜嵌在石里，转不动"
-		else:
-			hint.text = "站到铜镜旁边再转"
 	elif model.use_lamp(): refresh()
 
 func undo() -> void:
@@ -429,6 +474,7 @@ func show_card(next_mode: String, title: String, body: String, first: String, se
 	# A popup invalidates the step that was waiting for the animation to finish.
 	move_buffer.clear()
 	mirror_turns_pending = 0
+	_clear_mirror_hint()
 	input_handler.held.set_blocked(true)
 	_card_title_source = title
 	_card_body_source = body
@@ -453,6 +499,7 @@ func modal_primary() -> void:
 			action_started_msec = -1; visual_since_msec = -1
 			move_buffer.clear(); input_handler.held.clear()
 			mirror_turns_pending = 0
+			_clear_mirror_hint()
 			rebuild_cranks(); close_card(); layout()
 			checkpoint_changed.emit(model.room)
 		"menu": stopped = true; menu_requested.emit()
@@ -649,6 +696,8 @@ func _beside_fixed_mirror() -> bool:
 
 
 func _tick_mirror_feedback(delta: float) -> void:
+	if mirror_hint_lock > 0.0:
+		mirror_hint_lock = maxf(0.0, mirror_hint_lock - delta)
 	if model.room != CaveModel.MIRROR_ROOM or mode != "playing":
 		return
 	if model.back_flash > 0.0:
@@ -682,7 +731,18 @@ func _tick_mirror_feedback(delta: float) -> void:
 		mirror_note_time = maxf(0.0, mirror_note_time - delta)
 		if mirror_note_time == 0.0:
 			mirror_note = ""
-	if mirror_stuck >= 80.0:
+	var labels: Array = MirrorPainterScript.turn_labels(model)
+	var next_label := Vector2i(-999, -999)
+	if not labels.is_empty():
+		next_label = labels[0]["cell"]
+	if next_label != mirror_label_cell:
+		mirror_label_cell = next_label
+		if next_label != Vector2i(-999, -999):
+			model.back_flash = 0.45
+			model.back_flash_cell = next_label
+	if mirror_hint_lock > 0.0:
+		hint.text = mirror_hint_text
+	elif mirror_stuck >= 80.0:
 		hint.text = "光只会顺着红箭头拐出去。"
 	elif mirror_stuck >= 40.0:
 		hint.text = "铜镜背面不照光。"

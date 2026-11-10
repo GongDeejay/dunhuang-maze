@@ -868,8 +868,80 @@ static func reset_buttons(t: Node) -> void:
 	c.free()
 
 
+static func mirror_button_and_repeat(t: Node) -> void:
+	var c := MogaoChapter.new()
+	t.add_child(c)
+	c.model.load_room(CaveModel.MIRROR_ROOM)
+	c.rebuild_cranks()
+	c.mode = "playing"
+	c.model.paused = false
+	c.refresh()
+	t.assert_eq(c.action_button.text, "转动铜镜", "the mirror room action is turn mirror")
+	t.assert_true(not c.action_button.disabled, "the gray mirror button still receives the click")
+	t.assert_true(c.action_button.modulate.r < 0.7, "the button is gray away from a mirror")
+	var rot := int(c.model.mirror_rot_of("T"))
+	var turns := int(c.model.turns)
+	c.action_button.pressed.emit()
+	c._process(0.05)
+	t.assert_eq(c.hint.text, "站到铜镜旁边再转", "the gray button only shows the hint")
+	t.assert_eq(int(c.model.mirror_rot_of("T")), rot, "the gray button does not turn a mirror")
+	t.assert_eq(int(c.model.turns), turns, "the gray button does not turn a bridge")
+	t.assert_eq(c.model.busy, "", "the gray button starts no mechanism")
+	for gap in [0.5, 1.5]:
+		c.model.load_room(CaveModel.MIRROR_ROOM)
+		c.model.player = Vector2i(5, 8)
+		c.model.destination = c.model.player
+		c.model.paused = false
+		c.mode = "playing"
+		c.mirror_turns_pending = 0
+		c.rebuild_cranks()
+		c.refresh()
+		var start := int(c.model.turns)
+		c.action_button.pressed.emit()
+		c._process(gap)
+		if gap < CaveModel.TURN_SECONDS:
+			t.assert_eq(c.model.busy, "mirror", "the first turn is still playing at %ss" % gap)
+			t.assert_true(not c.action_button.disabled, "the button stays clickable during the spin")
+		c.press_action()
+		for _i in 10:
+			c._process(0.2)
+		t.assert_eq(int(c.model.turns) - start, 2, "two presses %ss apart both turn the mirror" % gap)
+		t.assert_eq(c.mirror_turns_pending, 0, "the queued turn is consumed at %ss" % gap)
+	c.model.load_room(CaveModel.MIRROR_ROOM)
+	c.model.player = Vector2i(5, 8)
+	c.model.destination = c.model.player
+	c.mode = "playing"
+	c.model.paused = false
+	c.mirror_turns_pending = 0
+	var shared := int(c.model.turns)
+	var event := InputEventKey.new()
+	event.keycode = KEY_SPACE
+	event.physical_keycode = KEY_SPACE
+	event.pressed = true
+	c._unhandled_key_input(event)
+	c._process(0.5)
+	c.action_button.pressed.emit()
+	for _i in 10:
+		c._process(0.2)
+	t.assert_eq(int(c.model.turns) - shared, 2, "space and the button share one turn queue")
+	c.model.load_room(CaveModel.MIRROR_ROOM)
+	c.model.player = Vector2i(5, 8)
+	c.model.destination = c.model.player
+	c.mode = "playing"
+	c.model.paused = false
+	c.mirror_turns_pending = 0
+	c.action_button.pressed.emit()
+	c._process(0.1)
+	c.action_button.pressed.emit()
+	t.assert_true(c.mirror_turns_pending > 0, "a click during the spin is remembered")
+	c.show_note()
+	t.assert_eq(c.mirror_turns_pending, 0, "a popup clears the remembered turn")
+	c.free()
+
+
 static func run(t: Node) -> void:
 	print("\n[TEST] Mogao three distinct cave mechanisms")
+	mirror_button_and_repeat(t)
 	reset_buttons(t)
 	shared_ear_doors(t)
 	reset_confirm(t)

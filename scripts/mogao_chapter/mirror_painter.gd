@@ -112,19 +112,32 @@ static func segment_hits_rect(a: Vector2, b: Vector2, rect: Rect2) -> bool:
 	return false
 
 
-static func _draw_turn_label(canvas: CanvasItem, host) -> void:
-	var info: Dictionary = struck_turn(host.model)
+## At most one label: the mirror the light is stopped on, ignoring where the player stands.
+static func turn_labels(model) -> Array:
+	var info: Dictionary = struck_turn(model)
 	if not info.get("ok", false):
+		return []
+	return [{"cell": info["from"], "k": int(info["k"]), "text": "这面镜还要转%d下" % int(info["k"])}]
+
+
+static func _draw_turn_label(canvas: CanvasItem, host) -> void:
+	var labels: Array = turn_labels(host.model)
+	if labels.size() != 1:
 		return
-	var text := "这面镜还要转%d下" % int(info["k"])
+	var info: Dictionary = labels[0]
+	var text := str(info["text"])
 	var font_size := 16
 	var text_size := MogaoChapter.FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-	var mirror: Vector2 = host.point(info["from"])
+	var mirror: Vector2 = host.point(info["cell"])
 	var unit: float = host.unit
 	var blocked: Array = [
 		Rect2(host.point(CaveModel.MIRROR_LAMP) - Vector2(unit, unit * 1.1), Vector2(unit * 2.0, unit * 2.0)),
 		Rect2(host.point(CaveModel.MIRROR_LOTUS) - Vector2(unit * 0.8, unit * 0.9), Vector2(unit * 1.6, unit * 1.8)),
 	]
+	for def in CaveModel.MIRROR_DEFS:
+		if def["cell"] == info["cell"]:
+			continue
+		blocked.append(mirror_sprite_rect(host.point(def["cell"]), unit).grow(4.0))
 	var label := snug_label_rect(mirror, unit, text_size, blocked)
 	var baseline := label.position.y + MogaoChapter.FONT.get_ascent(font_size)
 	canvas.draw_string(MogaoChapter.FONT, Vector2(label.position.x, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color("f5dba8"))

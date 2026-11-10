@@ -15,6 +15,7 @@ static func run(t: Node) -> void:
 	_rewards(t)
 	_mirror_faces(t)
 	_mirror_room(t)
+	_one_mirror_label(t)
 	_input(t)
 	DataLoader.set_difficulty("normal")
 
@@ -326,6 +327,34 @@ static func _mirror_room(t: Node) -> void:
 	var legacy := CaveNetwork.new()
 	legacy.resume_network(CaveModel.MIRROR_ROOM, {"version": 2, "rooms": {"7": {"mirror_rot": 2, "reached": true, "player": [3, 0]}}, "entry": [3, 8]})
 	t.assert_true(legacy.reached and legacy.lotus_lit(), "a solved version 2 save migrates onto the solution facings")
+
+
+static func _one_mirror_label(t: Node) -> void:
+	var model := CaveNetwork.new()
+	model.load_room(CaveModel.MIRROR_ROOM)
+	var labels: Array = Painter.turn_labels(model)
+	t.assert_eq(labels.size(), 1, "only the mirror the light is stopped on is labeled")
+	t.assert_eq(labels[0]["cell"], _def_cell("T"), "the opening label hangs on T")
+	model.player = Vector2i(0, 2)
+	model.destination = model.player
+	var stood: Array = Painter.turn_labels(model)
+	t.assert_eq(stood.size(), 1, "standing elsewhere still shows one label")
+	t.assert_eq(stood[0]["cell"], _def_cell("T"), "the label does not follow the player")
+	model.mirror_rots["T"] = _def_rot("T", "solution_rot")
+	var nxt: Array = Painter.turn_labels(model)
+	t.assert_eq(nxt.size(), 1, "the light on the next mirror is still a single label")
+	t.assert_eq(nxt[0]["cell"], _def_cell("A"), "the label moves to the mirror the light now stops on")
+	var chapter := MogaoChapter.new()
+	t.add_child(chapter)
+	chapter.model.load_room(CaveModel.MIRROR_ROOM)
+	chapter._tick_mirror_feedback(0.05)
+	t.assert_eq(chapter.model.back_flash_cell, _def_cell("T"), "the labeled mirror flashes")
+	t.assert_true(chapter.model.back_flash > 0.0, "the flash is visible")
+	chapter.model.mirror_rots["T"] = _def_rot("T", "solution_rot")
+	chapter._tick_mirror_feedback(0.05)
+	t.assert_eq(chapter.mirror_label_cell, _def_cell("A"), "the chapter tracks the single labeled mirror")
+	t.assert_eq(chapter.model.back_flash_cell, _def_cell("A"), "the flash follows the light to the next mirror")
+	chapter.free()
 
 
 static func _preview_label_clears_mirror(t: Node, seg: Dictionary) -> void:
